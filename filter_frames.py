@@ -62,30 +62,24 @@ radius_threshold_px = radius_threshold/px_size
 # xy = np.column_stack((np.transpose(x),np.transpose(y)))
 # discard_yn = np.ones((len(x),))
 
-
 # for i in tqdm(range(len(x))):
 #     if frames[i]>0 and frames[i]<np.max(frames):
 #         idx_frame_minus_1 = np.where(frames == (frames[i]-1))
 #         idx_frame_plus_1 = np.where(frames == (frames[i]+1))
-        
 #         if len(idx_frame_minus_1[0]) > 0 and len(idx_frame_plus_1[0]) > 0:
 #             distance_frame_minus_1 = distance.cdist(np.reshape(xy[i,:],(1,2)), 
 #                                                     xy[idx_frame_minus_1[0],:], 'euclidean')
 #             distance_frame_minus_1 = np.sort(distance_frame_minus_1)
-            
 #             distance_frame_plus_1 = distance.cdist(np.reshape(xy[i,:],(1,2)), 
-#                                                     xy[idx_frame_plus_1[0],:], 'euclidean')
+#                                                    xy[idx_frame_plus_1[0],:], 'euclidean')
 #             distance_frame_plus_1 = np.sort(distance_frame_plus_1)
-            
 #             if distance_frame_minus_1[0,0] < radius_threshold_px and distance_frame_plus_1[0,0] < radius_threshold_px:
 #                 discard_yn[i] = 0
-
-                
 
 # end1 = time.time()
 # print('Time of filtering step (s):', end1-start)
 
-
+r_th_sq = (radius_threshold/px_size)**2
 start = time.time()
 
 frames = np.array(data['frame'])
@@ -102,52 +96,52 @@ for idxframe in tqdm(range(1, len(framejump)-2)):
         f_slice = slice(framejump[idxframe], framejump[idxframe+1])
         prev_slice = slice(framejump[idxframe-1], framejump[idxframe])
         next_slice = slice(framejump[idxframe+1], framejump[idxframe+2])
-        distance_prev = distance.cdist(xy[f_slice], xy[prev_slice], 'euclidean')
-        distance_next = distance.cdist(xy[f_slice], xy[next_slice], 'euclidean')
-        has_prev = np.any(distance_prev < radius_threshold_px, axis=1)
-        has_next = np.any(distance_next < radius_threshold_px, axis=1)
+        distance_prev = distance.cdist(xy[f_slice], xy[prev_slice], 'sqeuclidean')
+        distance_next = distance.cdist(xy[f_slice], xy[next_slice], 'sqeuclidean')
+        has_prev = np.any(distance_prev < r_th_sq, axis=1)
+        has_next = np.any(distance_next < r_th_sq, axis=1)
         discard_yn[f_slice][np.logical_and(has_prev, has_next)] = 0
 
 end1 = time.time()
 print('Time of filtering step nuevo (s):', end1-start)
 
 
-# start = time.time()
+start = time.time()
 
-# frames = np.array(data['frame'])
-# x = np.array(data['x'])
-# y = np.array(data['y'])
-# xy = np.column_stack((np.transpose(x),np.transpose(y)))
-# discard_ynbis = np.ones((len(x),))
+frames = np.array(data['frame'])
+x = np.array(data['x'])
+y = np.array(data['y'])
+xy = np.column_stack((np.transpose(x),np.transpose(y)))
+discard_ynbis = np.ones((len(x),))
 
-# framejump = np.nonzero(np.diff(frames,prepend=-np.inf, append=np.inf)!=0)[0]
-# for idxframe in tqdm(range(1, len(framejump)-2)):
-#     prevframe = frames[framejump[idxframe-1]]
-#     nextframe = frames[framejump[idxframe+1]]
-#     frame = frames[framejump[idxframe]]
-#     if frame - 1 == prevframe:
-#         idx_frame_minus_1 = np.arange(framejump[idxframe-1], framejump[idxframe])
-#     else:
-#         idx_frame_minus_1 = np.empty((0,))
-#     if frame + 1 == nextframe:
-#         idx_frame_plus_1 = np.arange(framejump[idxframe+1], framejump[idxframe+2])
-#     else:
-#         idx_frame_plus_1 = np.empty((0,))
-#     if len(idx_frame_minus_1) > 0 and len(idx_frame_plus_1) > 0:
-#         for i in range(framejump[idxframe], framejump[idxframe+1]):
-#             distance_frame_minus_1 = distance.cdist(np.reshape(xy[i,:],(1,2)), xy[idx_frame_minus_1,:], 'euclidean')
-#             distance_frame_minus_1 = np.sort(distance_frame_minus_1)
-#             distance_frame_plus_1 = distance.cdist(np.reshape(xy[i,:],(1,2)), xy[idx_frame_plus_1,:], 'euclidean')
-#             distance_frame_plus_1 = np.sort(distance_frame_plus_1)
-#             if distance_frame_minus_1[0,0] < radius_threshold_px and distance_frame_plus_1[0,0] < radius_threshold_px:
-#                 discard_ynbis[i] = 0
+framejump = np.nonzero(np.diff(frames,prepend=-np.inf, append=np.inf)!=0)[0]
+for idxframe in tqdm(range(1, len(framejump)-2)):
+    prevframe = frames[framejump[idxframe-1]]
+    nextframe = frames[framejump[idxframe+1]]
+    frame = frames[framejump[idxframe]]
+    if frame - 1 == prevframe:
+        idx_frame_minus_1 = np.arange(framejump[idxframe-1], framejump[idxframe])
+    else:
+        idx_frame_minus_1 = np.empty((0,))
+    if frame + 1 == nextframe:
+        idx_frame_plus_1 = np.arange(framejump[idxframe+1], framejump[idxframe+2])
+    else:
+        idx_frame_plus_1 = np.empty((0,))
+    if len(idx_frame_minus_1) > 0 and len(idx_frame_plus_1) > 0:
+        for i in range(framejump[idxframe], framejump[idxframe+1]):
+            distance_frame_minus_1 = distance.cdist(np.reshape(xy[i,:],(1,2)), xy[idx_frame_minus_1,:], 'euclidean')
+            distance_frame_minus_1 = np.sort(distance_frame_minus_1)
+            distance_frame_plus_1 = distance.cdist(np.reshape(xy[i,:],(1,2)), xy[idx_frame_plus_1,:], 'euclidean')
+            distance_frame_plus_1 = np.sort(distance_frame_plus_1)
+            if distance_frame_minus_1[0,0] < radius_threshold_px and distance_frame_plus_1[0,0] < radius_threshold_px:
+                discard_ynbis[i] = 0
 
-# end1 = time.time()
-# print('Time of filtering step bis (s):', end1-start)
+end1 = time.time()
+print('Time of filtering step bis (s):', end1-start)
 
-# print(np.all(discard_ynbis == discard_yn))
+print(np.all(discard_ynbis == discard_yn))
 
-
+exit(1)
 idx_to_discard = np.where(discard_yn == 1)
 
 data_filtered = data.drop(labels=idx_to_discard[0], axis=0)

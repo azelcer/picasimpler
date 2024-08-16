@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "picasimpler"
+version = "0.1.0"
+description = ""
+authors = ["Andres Zelcer <45225345+azelcer@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+scipy = "^1.13.0"
+numpy = "^1.0.1"
+numba = "^0.60.0"
+h5py = "^3.11.0"
+matplotlib = "^3.9.2"
+pandas = "^2.2.2"
+pyyaml = "^6.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -17,6 +17,7 @@ import pathlib as _pathlib
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
+_lgr.setLevel(_lgn.INFO)
 
 filename = _pathlib.Path("/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5")
 
@@ -64,9 +65,10 @@ def filter_data(data: pd.DataFrame, radius_threshold: float, px_size: float) -> 
         has_prev = np.any(distance_prev < r_th_sq, axis=1)
         has_next = np.any(distance_next < r_th_sq, axis=1)
         discard_yn[f_slice][np.logical_and(has_prev, has_next)] = 0
+    idx_to_discard = np.where(discard_yn == 1)[0]
     end = _time.time()
-    _lgr.info('Time of filtering step: %s s', end-start)
-    idx_to_discard = np.where(discard_yn == 1)
+    _lgr.info('Time of filtering step: %s s. %s of %s (%.2f%%) localizations discarded',
+              end-start, len(idx_to_discard), len(xy), 100*len(idx_to_discard)/len(xy))
     return idx_to_discard
 
 
@@ -75,6 +77,7 @@ def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndar
 
     We use fixed a N0 for all the image now.
     """
+    start = _time.time()
     # N0 = _calculate_N0(data, params)
     max_photons = np.max(data['photons'])
     min_alpha = 1 - (np.min(data['photons']) / max_photons)
@@ -83,49 +86,8 @@ def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndar
     if N0 < max_photons:
         _lgr.warning("Some location intensities are above z=0 intensity")
     rv = df * np.log(alpha/(data['photons']/N0 - (1 - alpha)))
+    _lgr.info('Time of Z calculation step: %s s', _time.time()-start)
     return rv
-
-
-def df_to_sarray(df):
-    """
-    Convert a pandas DataFrame object to a numpy structured array.
-    Also, for every column of a str type, convert it into
-    a 'bytes' str literal of length = max(len(col)).
-
-    :param df: the data frame to convert
-    :return: a numpy structured array representation of df
-    """
-
-    def make_col_type(col_type, col):
-        try:
-            if 'numpy.object_' in str(col_type.type):
-                maxlens = col.dropna().str.len()
-                if maxlens.any():
-                    maxlen = maxlens.max().astype(int) 
-                    col_type = ('S%s' % maxlen, 1)
-                else:
-                    col_type = 'f2'
-            return col.name, col_type
-        except:
-            print(col.name, col_type, col_type.type, type(col))
-            raise
-    v = df.values
-    types = df.dtypes
-    numpy_struct_types = [make_col_type(types[col], df.loc[:, col]) for col in df.columns]
-    dtype = np.dtype(numpy_struct_types)
-    z = np.zeros(v.shape[0], dtype)
-    for (i, k) in enumerate(z.dtype.names):
-        # This is in case you have problems with the encoding, remove the if branch if not
-        try:
-            if dtype[i].str.startswith('|S'):
-                z[k] = df[k].str.encode('latin').astype('S')
-            else:
-                z[k] = v[:, i]
-        except:
-            print(k, v[:, i])
-            raise
-
-    return z, dtype
 
 
 if __name__ == '__main__':
@@ -133,29 +95,26 @@ if __name__ == '__main__':
 
     with pd.HDFStore(filename, 'r') as store:
         data = store['locs']
-
     yaml_file = filename.with_suffix('.yaml')
     with open(yaml_file, "r") as info_file:
         info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
-    # px_size = 133 # nm
     px_size = info[1]['Pixelsize']
     radius_threshold = 75  # nm
     idx_to_discard = filter_data(data, radius_threshold, px_size)
-    data_filtered = data.drop(labels=idx_to_discard[0], axis=0)
+    data_filtered = data.drop(labels=idx_to_discard, axis=0)
     data_filtered = data_filtered.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
     _lgr.info("minimum alpha is: %s", 1 - (np.min(data['photons']) / np.max(data['photons'])))
     z = calculate_z(data_filtered, 0.95, 100, np.max(data['photons']))
     data_filtered['z'] = z
-    # save data of info
-    sa, saType = df_to_sarray(data_filtered)
-    # Open/create the HDF5 file
+
     out_file = filename.with_stem(filename.stem + '_frames_filtered')
-    f = h5py.File(out_file, 'a')
-    # Save the structured array
-    f.create_dataset('locs', data=sa, dtype=saType)
-    f.close()
-    with open(filename.with_suffix('.yaml').with_stem(filename.stem + '_frames_filtered'), "w") as file:
-        yaml.dump_all(info, file, default_flow_style=False)
+    try:
+        with pd.HDFStore(out_file, 'a') as f:
+            f['locs'] = data_filtered
+        with open(filename.with_suffix('.yaml').with_stem(filename.stem + '_frames_filtered'), "w") as file:
+            yaml.dump_all(info, file, default_flow_style=False)
+    except ValueError:
+        _lgr.error("No puedo grabar, el archivo ya existe o algo así")
     end = _time.time()
     _lgr.info('Script total time: %s s', end - start)

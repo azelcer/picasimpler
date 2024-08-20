@@ -10,14 +10,15 @@ import numpy as np
 from scipy.spatial import distance
 import h5py
 import yaml
-import time
+import time as _time
 from tqdm import tqdm
 import logging as _lgn
+import pathlib as _pathlib
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
 
-filename = "/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5"
+filename = _pathlib.Path("/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5")
 
 
 # angle = 67.5
@@ -30,10 +31,14 @@ filename = "/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5"
 # NA = 1.42
 
 
-def filter_data(data, radius_threshold, px_size) -> np.ndarray:
-    """Filter localizations according to SIMPLER criteria."""
+def filter_data(data: pd.DataFrame, radius_threshold: float, px_size: float) -> np.ndarray:
+    """Filter localizations according to SIMPLER criteria.
+    Returns
+    -------
+        Array of indices of records to discard
+    """
     r_th_sq = (radius_threshold/px_size)**2
-    start = time.time()
+    start = _time.time()
     frames = np.array(data['frame'])
     xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
     discard_yn = np.ones((len(xy),), dtype=np.uint64)
@@ -59,16 +64,16 @@ def filter_data(data, radius_threshold, px_size) -> np.ndarray:
         has_prev = np.any(distance_prev < r_th_sq, axis=1)
         has_next = np.any(distance_next < r_th_sq, axis=1)
         discard_yn[f_slice][np.logical_and(has_prev, has_next)] = 0
-    end = time.time()
-    print('Time of filtering step nuevo (s):', end-start)
+    end = _time.time()
+    _lgr.info('Time of filtering step: %s s', end-start)
     idx_to_discard = np.where(discard_yn == 1)
     return idx_to_discard
 
 
-def calculate_z(data, alpha, df, N0) -> np.ndarray:
+def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndarray:
     """Calculate z according to SIMPLER criteria.
 
-    We use fixed N0 for now.
+    We use fixed a N0 for all the image now.
     """
     # N0 = _calculate_N0(data, params)
     max_photons = np.max(data['photons'])
@@ -124,11 +129,12 @@ def df_to_sarray(df):
 
 
 if __name__ == '__main__':
-    start = time.time()
+    start = _time.time()
+
     with pd.HDFStore(filename, 'r') as store:
         data = store['locs']
 
-    yaml_file = filename[:-5] + ".yaml"
+    yaml_file = filename.with_suffix('.yaml')
     with open(yaml_file, "r") as info_file:
         info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
     # px_size = 133 # nm
@@ -138,17 +144,18 @@ if __name__ == '__main__':
     data_filtered = data.drop(labels=idx_to_discard[0], axis=0)
     data_filtered = data_filtered.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
-    print("minimum alpha is:", 1 - (np.min(data['photons']) / np.max(data['photons'])))
+    _lgr.info("minimum alpha is: %s", 1 - (np.min(data['photons']) / np.max(data['photons'])))
     z = calculate_z(data_filtered, 0.95, 100, np.max(data['photons']))
     data_filtered['z'] = z
     # save data of info
     sa, saType = df_to_sarray(data_filtered)
     # Open/create the HDF5 file
-    f = h5py.File(filename[:-5]+'_frames_filtered.hdf5', 'a')
+    out_file = filename.with_stem(filename.stem + '_frames_filtered')
+    f = h5py.File(out_file, 'a')
     # Save the structured array
     f.create_dataset('locs', data=sa, dtype=saType)
     f.close()
-    with open(filename[:-5]+'_frames_filtered.yaml', "w") as file:
+    with open(filename.with_suffix('.yaml').with_stem(filename.stem + '_frames_filtered'), "w") as file:
         yaml.dump_all(info, file, default_flow_style=False)
-    end = time.time()
-    print('Script total time (s):', end - start)
+    end = _time.time()
+    _lgr.info('Script total time: %s s', end - start)

@@ -14,6 +14,8 @@ import time as _time
 from tqdm import tqdm
 import logging as _lgn
 import pathlib as _pathlib
+import warnings as _warnings
+from sklearn.cluster import DBSCAN as _DBSCAN
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
@@ -85,9 +87,52 @@ def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndar
         _lgr.warning("Some location intensities are below non-evanescent excitation expected intensity")
     if N0 < max_photons:
         _lgr.warning("Some location intensities are above z=0 intensity")
-    rv = df * np.log(alpha/(data['photons']/N0 - (1 - alpha)))
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore")
+        rv = df * np.log(alpha/(data['photons']/N0 - (1 - alpha)))
     _lgr.info('Time of Z calculation step: %s s', _time.time()-start)
     return rv
+
+
+def cluster_xy_positions(data: pd.DataFrame, dist_threshold: float,
+                         px_size: float) -> np.ndarray:
+    """Clusters locations for origami claibration."""
+    start = _time.time()
+    eps = (dist_threshold/px_size)**2
+    xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
+    rv = _DBSCAN(eps=eps, min_samples=4, metric='sqeuclidean', n_jobs=-1).fit(xy)
+    _lgr.info('clusters found: %s', len(set(rv.labels_) - {-1}))
+    _lgr.info('locations assigned: %s out of %s', len(rv.core_sample_indices_), len(xy))
+    _lgr.info('Time of clustering: %s s', _time.time()-start)
+    return rv
+
+
+def clusters_centers(cluster: _DBSCAN, data):
+    """Calculate clusters means."""
+    labels = set(cluster.labels_) - {-1}
+    centers = np.ndarray((len(labels), 2))
+    xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
+    for idx, l in enumerate(labels):
+        centers[idx] = np.average(xy[cluster.labels_ == l], axis=0)
+    return centers
+
+
+def fake_origami_data():
+    """Distribuye los origamis en un cuadrado (para probar)"""
+    D = 100  # distancia entre origamis
+    L = 100  # número de origamis por lado
+    N = L*L  # number of origamis
+    f_dist = 30  # distancia entre marcas en el origami
+    d = 100  # nm
+    alpha = 0.95
+    ANG_MAX = np.radians(30)
+    # Angle of each origami to the normal
+    angles = np.random.random(N) * ANG_MAX
+    # Direction of tilt with X axe
+    dirs = np.random.random(N) * np.pi * 2
+    # Posiciones
+    vertices = np.linspace(D, D * L, L)
+    x, y = np.meshgrid(vertices, vertices, indexing='ij')
 
 
 if __name__ == '__main__':
@@ -107,7 +152,8 @@ if __name__ == '__main__':
     _lgr.info("minimum alpha is: %s", 1 - (np.min(data['photons']) / np.max(data['photons'])))
     z = calculate_z(data_filtered, 0.95, 100, np.max(data['photons']))
     data_filtered['z'] = z
-
+    cluster_threshold = 30/5  # la distancia si está 100% acostado es 30
+    cluster = cluster_xy_positions(data_filtered, cluster_threshold, px_size)
     out_file = filename.with_stem(filename.stem + '_frames_filtered')
     try:
         with pd.HDFStore(out_file, 'a') as f:
@@ -118,3 +164,10 @@ if __name__ == '__main__':
         _lgr.error("No puedo grabar, el archivo ya existe o algo así")
     end = _time.time()
     _lgr.info('Script total time: %s s', end - start)
+    x = data_filtered['x'][cluster.core_sample_indices_]
+    y = data_filtered['y'][cluster.core_sample_indices_]
+    import matplotlib.pyplot as plt
+    plt.scatter(x, y, s=1)
+    centros = clusters_centers(cluster, data_filtered)
+    plt.figure("dos")
+    plt.scatter(centros[:, 0], centros[:, 1], s=1)

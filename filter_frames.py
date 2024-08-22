@@ -119,31 +119,59 @@ def clusters_centers(cluster: _DBSCAN, data):
 
 def fake_origami_data():
     """Distribuye los origamis en un cuadrado (para probar)"""
-    D = 100  # distancia entre origamis
+    D = 200  # distancia entre origamis
     D_F = 30  # distancia entre fluoroforos
-    L = 100  # número de origamis por lado
+    L = 10  # número de origamis por lado
     N = L*L  # number of origamis
-    f_dist = 30  # distancia entre marcas en el origami
-    d = 100  # nm
-    alpha = 0.95
-    ANG_MAX = np.radians(30)
+    ANG_MAX = np.radians(20)
     # Angle of each origami to the normal
     angles = np.random.random(N) * ANG_MAX
     # Direction of tilt with X axe
     rotations = np.random.random(N) * np.pi * 2
     # Posiciones
     vertices = np.linspace(D, D * L, L)
+    # centros de cada origami
     x_c, y_c = np.meshgrid(vertices, vertices, indexing='ij')
     x_c = x_c.ravel()
     y_c = y_c.ravel()
+    # posicion relativa de cada fluoroforo, debería ser 1-3 y 2-4
     pos_vec = np.arange(1, 5, dtype=np.float64) * D_F
-    rot_vec = np.column_stack((np.cos(rotations), np.sin(rotations), ))
-    f_c = (np.sin(angles)[:, np.newaxis] * pos_vec)[:,:,np.newaxis] * rot_vec[:,np.newaxis,:]
-    f_c = f_c.reshape((4*9,2))
-    plt.scatter(f_c[:,0].ravel()+x_c[:,np.newaxis], f_c[:,1].ravel()+y_c[:,np.newaxis])
+    # rotación de cada origami
+    rot_x = np.cos(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]
+    rot_y = np.sin(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]
+    z = np.cos(angles)[:, np.newaxis] * pos_vec
+    x = rot_x + x_c[:, np.newaxis]
+    y = rot_y + y_c[:, np.newaxis]
+
+    d = 100  # nm
+    alpha = 0.95
+    N0 = 15000
+    # Todo: meter probabilidad acá
+    rng = np.random.default_rng()
+    # Acá hay una sola localización pero con ruido: hacer unas 50 con ruido en x y en y
+    I = N0 * (np.exp(-(z.ravel()+rng.normal(0, 5, z.size))/d) + (1-alpha))
+    # I = N0*(alpha * rng.exponential(d/z.ravel()) + (1 - alpha))
+    # Esto da N0 * z/d mustras promedio
+    # n_frames = 15000
+    # I = rng.exponential(d/z.ravel(), (n_frames, z.size)).sum(axis=0)#+ (1-alpha))
+    # I = rng.poisson(d/z.ravel(), (n_frames, z.size)).sum(axis=0)
+    # print(I)
+    # print(I.max())
+    import matplotlib.pyplot as plt
+    # plt.scatter(x.ravel(), y.ravel(), s=1)
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.scatter(x.ravel(), y.ravel(), #z.ravel(), c =
+               I/max(I)*255)
+    plt.figure()
+    plt.scatter(z.ravel(), I)
 
 
 if __name__ == '__main__':
+    fake_origami_data()
+    
+    
+if False:
     start = _time.time()
 
     with pd.HDFStore(filename, 'r') as store:

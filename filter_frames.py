@@ -120,6 +120,7 @@ def clusters_centers(cluster: _DBSCAN, data):
 def fake_origami_data():
     """Distribuye los origamis en un cuadrado (para probar)"""
     D = 100  # distancia entre origamis
+    D_F = 30  # distancia entre fluoroforos
     L = 100  # número de origamis por lado
     N = L*L  # number of origamis
     f_dist = 30  # distancia entre marcas en el origami
@@ -129,10 +130,17 @@ def fake_origami_data():
     # Angle of each origami to the normal
     angles = np.random.random(N) * ANG_MAX
     # Direction of tilt with X axe
-    dirs = np.random.random(N) * np.pi * 2
+    rotations = np.random.random(N) * np.pi * 2
     # Posiciones
     vertices = np.linspace(D, D * L, L)
-    x, y = np.meshgrid(vertices, vertices, indexing='ij')
+    x_c, y_c = np.meshgrid(vertices, vertices, indexing='ij')
+    x_c = x_c.ravel()
+    y_c = y_c.ravel()
+    pos_vec = np.arange(1, 5, dtype=np.float64) * D_F
+    rot_vec = np.column_stack((np.cos(rotations), np.sin(rotations), ))
+    f_c = (np.sin(angles)[:, np.newaxis] * pos_vec)[:,:,np.newaxis] * rot_vec[:,np.newaxis,:]
+    f_c = f_c.reshape((4*9,2))
+    plt.scatter(f_c[:,0].ravel()+x_c[:,np.newaxis], f_c[:,1].ravel()+y_c[:,np.newaxis])
 
 
 if __name__ == '__main__':
@@ -171,3 +179,4 @@ if __name__ == '__main__':
     centros = clusters_centers(cluster, data_filtered)
     plt.figure("dos")
     plt.scatter(centros[:, 0], centros[:, 1], s=1)
+    fake_origami_data()

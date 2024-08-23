@@ -16,12 +16,61 @@ import logging as _lgn
 import pathlib as _pathlib
 import warnings as _warnings
 from sklearn.cluster import DBSCAN as _DBSCAN
+import matplotlib.pyplot as plt
+
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
 
 filename = _pathlib.Path("/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5")
+
+
+
+
+def df_to_sarray(df):
+    """
+    Convert a pandas DataFrame object to a numpy structured array.
+    Also, for every column of a str type, convert it into
+    a 'bytes' str literal of length = max(len(col)).
+    :param df: the data frame to convert
+    :return: a numpy structured array representation of df
+    """
+
+    def make_col_type(col_type, col):
+        try:
+            if 'numpy.object_' in str(col_type.type):
+                maxlens = col.dropna().str.len()
+                if maxlens.any():
+                    maxlen = maxlens.max().astype(int) 
+                    col_type = ('S%s' % maxlen, 1)
+                else:
+                    col_type = 'f2'
+            return col.name, col_type
+        except:
+            print(col.name, col_type, col_type.type, type(col))
+            raise
+
+    v = df.values
+    types = df.dtypes
+    numpy_struct_types = [make_col_type(types[col], df.loc[:, col]) for col in df.columns]
+    dtype = np.dtype(numpy_struct_types)
+    z = np.zeros(v.shape[0], dtype)
+    for (i, k) in enumerate(z.dtype.names):
+        # This is in case you have problems with the encoding, remove the if branch if not
+        try:
+            if dtype[i].str.startswith('|S'):
+                z[k] = df[k].str.encode('latin').astype('S')
+            else:
+                z[k] = v[:, i]
+        except:
+            print(k, v[:, i])
+            raise
+
+    return z, dtype
+
+
+
 
 
 # angle = 67.5
@@ -119,11 +168,13 @@ def clusters_centers(cluster: _DBSCAN, data):
 
 def fake_origami_data():
     """Distribuye los origamis en un cuadrado (para probar)"""
-    D = 200  # distancia entre origamis
+    D = 100  # distancia entre origamis
     D_F = 30  # distancia entre fluoroforos
     L = 10  # número de origamis por lado
     N = L*L  # number of origamis
-    ANG_MAX = np.radians(20)
+    N_FLUO = 4
+    pos_noise = 5./133
+    ANG_MAX = np.radians(25)
     # Angle of each origami to the normal
     angles = np.random.random(N) * ANG_MAX
     # Direction of tilt with X axe
@@ -135,7 +186,7 @@ def fake_origami_data():
     x_c = x_c.ravel()
     y_c = y_c.ravel()
     # posicion relativa de cada fluoroforo, debería ser 1-3 y 2-4
-    pos_vec = np.arange(1, 5, dtype=np.float64) * D_F
+    pos_vec = np.arange(1, N_FLUO+1, dtype=np.float64) * D_F
     # rotación de cada origami
     rot_x = np.cos(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]
     rot_y = np.sin(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]
@@ -155,22 +206,50 @@ def fake_origami_data():
     # n_frames = 15000
     # I = rng.exponential(d/z.ravel(), (n_frames, z.size)).sum(axis=0)#+ (1-alpha))
     # I = rng.poisson(d/z.ravel(), (n_frames, z.size)).sum(axis=0)
-    # print(I)
     # print(I.max())
-    import matplotlib.pyplot as plt
     # plt.scatter(x.ravel(), y.ravel(), s=1)
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-    ax.scatter(x.ravel(), y.ravel(), #z.ravel(), c =
-               I/max(I)*255)
-    plt.figure()
-    plt.scatter(z.ravel(), I)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(projection='3d')
+    # ax.scatter(x.ravel(), y.ravel(), #z.ravel(), c =
+    #            I/max(I)*255)
+    # plt.figure()
+    # plt.scatter(z.ravel(), I)
+    loc_per_fluo = 50
+    total_fluorophores = L * L * N_FLUO  # despues hacer dos pares
+    n_registers = total_fluorophores* loc_per_fluo
+    # Index(['frame', 'x', 'y', 'photons', 'sx', 'sy', 'bg', 'lpx', 'lpy',
+           # 'ellipticity', 'net_gradient', 'x_pick_rot', 'y_pick_rot', 'group'],
+    xdf = np.ndarray((n_registers,), dtype=np.float32)
+    ydf = np.ndarray((n_registers,), dtype=np.float32)
+    zdf = np.ndarray((n_registers,), dtype=np.float32)
+    photons = np.ndarray((n_registers,), dtype=np.float32)
+    bg = np.zeros(n_registers, dtype=np.float32)
+    frames = np.ndarray((n_registers,), dtype=np.uint32)
+    sx = 5.
+    sy = 5.
+    for i in range(loc_per_fluo):
+        slc = slice(i * total_fluorophores, (i+1) * total_fluorophores)
+        xdf[slc] = (x.ravel() + rng.normal(0, sx, total_fluorophores))/133
+        ydf[slc] = (y.ravel() + rng.normal(0, sy, total_fluorophores))/133
+        zdf[slc] = (z.ravel() + rng.normal(0, 5, total_fluorophores))/133
+        photons[slc] = N0 * (np.exp(-(z.ravel()+rng.normal(0, 5, z.size))/d) + (1-alpha))
+        frames[slc] = i
+    sx = np.full((n_registers,), sx, dtype=np.float32)
+    sy = np.full((n_registers,), sy, dtype=np.float32)
+    lp_ = np.full((n_registers,), 0.01, dtype=np.float32)
+    rv = pd.DataFrame({'frame': frames, 'x': xdf, 'y': ydf, 'photons': photons,
+                       'sx': sx, 'sy':sy, 'bg': bg, 'lpx': lp_, 'lpy': lp_,
+                       'ellipticity': lp_, 'net_gradient': lp_, 'x_pick_rot': lp_,
+                       'y_pick_rot': lp_, 'group': np.zeros(n_registers, dtype=np.int32),
+                       'z': zdf})
+    sa, saType = df_to_sarray(rv)
+    with h5py.File('/tmp/data.hdf5', 'a') as f:
+        f.create_dataset('locs', data=sa, dtype=saType)
+    print(n_registers, i)
 
 
 if __name__ == '__main__':
     fake_origami_data()
-    
-    
 if False:
     start = _time.time()
 
@@ -187,17 +266,19 @@ if False:
                                               col_level=0)
     _lgr.info("minimum alpha is: %s", 1 - (np.min(data['photons']) / np.max(data['photons'])))
     z = calculate_z(data_filtered, 0.95, 100, np.max(data['photons']))
-    data_filtered['z'] = z
+    # data_filtered['z'] = z
     cluster_threshold = 30/5  # la distancia si está 100% acostado es 30
     cluster = cluster_xy_positions(data_filtered, cluster_threshold, px_size)
     out_file = filename.with_stem(filename.stem + '_frames_filtered')
+    sa, saType = df_to_sarray(data_filtered)
     try:
-        with pd.HDFStore(out_file, 'a') as f:
-            f['locs'] = data_filtered
+        with h5py.File(out_file, 'a') as f:
+            f.create_dataset('locs', data=sa, dtype=saType)
         with open(filename.with_suffix('.yaml').with_stem(filename.stem + '_frames_filtered'), "w") as file:
             yaml.dump_all(info, file, default_flow_style=False)
     except ValueError:
         _lgr.error("No puedo grabar, el archivo ya existe o algo así")
+        raise
     end = _time.time()
     _lgr.info('Script total time: %s s', end - start)
     x = data_filtered['x'][cluster.core_sample_indices_]
@@ -207,4 +288,4 @@ if False:
     centros = clusters_centers(cluster, data_filtered)
     plt.figure("dos")
     plt.scatter(centros[:, 0], centros[:, 1], s=1)
-    fake_origami_data()
+    # fake_origami_data()

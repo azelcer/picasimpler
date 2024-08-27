@@ -1,22 +1,29 @@
 # -*- coding: utf-8 -*-
 """
+Functions to process and calibrate SIMPLER measurements.
+
+The functions are expected to interface with the sofware Picasso, as it is
+widely used for SML. Nevertheless, the functions are general enough to be
+used with other software with minumum effort.
+
 
 @author: aszalai, azelcer
 """
 
 import pandas as pd
 import numpy as np
-# import matplotlib.pyplot as plt
 from scipy.spatial import distance
 import h5py
 import yaml
+import logging as _lgn
+import warnings as _warnings
+from sklearn.cluster import DBSCAN as _DBSCAN, KMeans as _KMeans
+# The following imports are used only for development.
+import pathlib as _pathlib
+import matplotlib.pyplot as plt
 import time as _time
 from tqdm import tqdm
-import logging as _lgn
-import pathlib as _pathlib
-import warnings as _warnings
-from sklearn.cluster import DBSCAN as _DBSCAN
-import matplotlib.pyplot as plt
+from tools import fake_origami_data
 
 
 _lgn.basicConfig()
@@ -24,8 +31,6 @@ _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
 
 filename = _pathlib.Path("/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5")
-
-
 
 
 def df_to_sarray(df):
@@ -144,8 +149,8 @@ def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndar
 
 
 def cluster_xy_positions(data: pd.DataFrame, dist_threshold: float,
-                         px_size: float) -> np.ndarray:
-    """Clusters locations for origami claibration."""
+                         px_size: float) -> (_DBSCAN, np.ndarray):
+    """Clusters locations for origami calibration."""
     start = _time.time()
     eps = (dist_threshold/px_size)**2
     xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
@@ -153,103 +158,82 @@ def cluster_xy_positions(data: pd.DataFrame, dist_threshold: float,
     _lgr.info('clusters found: %s', len(set(rv.labels_) - {-1}))
     _lgr.info('locations assigned: %s out of %s', len(rv.core_sample_indices_), len(xy))
     _lgr.info('Time of clustering: %s s', _time.time()-start)
-    return rv
+    return rv, xy
 
 
-def clusters_centers(cluster: _DBSCAN, data):
-    """Calculate clusters means."""
-    labels = set(cluster.labels_) - {-1}
-    centers = np.ndarray((len(labels), 2))
-    xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
-    for idx, l in enumerate(labels):
-        centers[idx] = np.average(xy[cluster.labels_ == l], axis=0)
+def N_clusters(origamis: _DBSCAN, data: pd.DataFrame) -> list[_KMeans]:
+    """Subcluster each cluster by N.
+
+    Uses k-means
+    """
+    N_FLUO = 4  # fluoroforos por origami
+    labels = set(origamis.labels_) - {-1}
+    markers = [_KMeans(N_FLUO).fit(  # TODO: avoid convertion to array
+        np.array(data['photons'][cluster.labels_ == l]).reshape(-1, 1))
+               for l in labels]
+    return markers
+
+
+# def clusters_centers(cluster: _DBSCAN, data):
+#     """Calculate clusters means."""
+#     labels = set(cluster.labels_) - {-1}
+#     centers = np.ndarray((len(labels), 2))
+#     xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
+#     for idx, l in enumerate(labels):
+#         centers[idx] = np.average(xy[cluster.labels_ == l], axis=0)
+#     return centers
+
+
+def xy_from_N(clusters: list[_KMeans], positions: list[np.ndarray]) -> np.ndarray:
+    """Calculate subclusters xy mean positions."""
+    N_FLUO = 4
+    centers = np.ndarray((len(clusters), N_FLUO, 2))
+    for idx, (c, p) in enumerate(zip(clusters, positions)):
+        labels = set(c.labels_) - {-1}
+        centers[idx] = [np.average(p[c.labels_ == l], axis=0) for l in labels]
     return centers
 
 
-def fake_origami_data():
-    """Distribuye los origamis en un cuadrado (para probar)"""
-    D = 100  # distancia entre origamis
-    D_F = 30  # distancia entre fluoroforos
-    L = 10  # número de origamis por lado
-    N = L*L  # number of origamis
-    N_FLUO = 4
-    pos_noise = 5./133
-    ANG_MAX = np.radians(25)
-    # Angle of each origami to the normal
-    angles = np.random.random(N) * ANG_MAX
-    # Direction of tilt with X axe
-    rotations = np.random.random(N) * np.pi * 2
-    # Posiciones
-    vertices = np.linspace(D, D * L, L)
-    # centros de cada origami
-    x_c, y_c = np.meshgrid(vertices, vertices, indexing='ij')
-    x_c = x_c.ravel()
-    y_c = y_c.ravel()
-    # posicion relativa de cada fluoroforo, debería ser 1-3 y 2-4
-    pos_vec = np.arange(1, N_FLUO+1, dtype=np.float64) * D_F
-    # rotación de cada origami
-    rot_x = np.cos(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]
-    rot_y = np.sin(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]
-    z = np.cos(angles)[:, np.newaxis] * pos_vec
-    x = rot_x + x_c[:, np.newaxis]
-    y = rot_y + y_c[:, np.newaxis]
+def calibrate_origami(data):
+    # encontrar muestras colocalizadas (con un radio apto angulos)
+    origamis, all_positions = cluster_xy_positions(data, dist_threshold=30, px_size=133)
+    n_clus = N_clusters(origamis, data)
+    # Verificar calidad de clusters y filtrar
+    ...
+    cluster_labels = set(cluster.labels_) - {-1}
+    cluster_filters = [(cluster.labels_ == l) for l in cluster_labels]
+    xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
+    clustered_xy = [np.array(xy[cf]) for cf in cluster_filters]
 
-    d = 100  # nm
-    alpha = 0.95
-    N0 = 15000
-    # Todo: meter probabilidad acá
-    rng = np.random.default_rng()
-    # Acá hay una sola localización pero con ruido: hacer unas 50 con ruido en x y en y
-    I = N0 * (np.exp(-(z.ravel()+rng.normal(0, 5, z.size))/d) + (1-alpha))
-    # I = N0*(alpha * rng.exponential(d/z.ravel()) + (1 - alpha))
-    # Esto da N0 * z/d mustras promedio
-    # n_frames = 15000
-    # I = rng.exponential(d/z.ravel(), (n_frames, z.size)).sum(axis=0)#+ (1-alpha))
-    # I = rng.poisson(d/z.ravel(), (n_frames, z.size)).sum(axis=0)
-    # print(I.max())
-    # plt.scatter(x.ravel(), y.ravel(), s=1)
-    # fig = plt.figure()
-    # ax = fig.add_subplot(projection='3d')
-    # ax.scatter(x.ravel(), y.ravel(), #z.ravel(), c =
-    #            I/max(I)*255)
-    # plt.figure()
-    # plt.scatter(z.ravel(), I)
-    loc_per_fluo = 50
-    total_fluorophores = L * L * N_FLUO  # despues hacer dos pares
-    n_registers = total_fluorophores* loc_per_fluo
-    # Index(['frame', 'x', 'y', 'photons', 'sx', 'sy', 'bg', 'lpx', 'lpy',
-           # 'ellipticity', 'net_gradient', 'x_pick_rot', 'y_pick_rot', 'group'],
-    xdf = np.ndarray((n_registers,), dtype=np.float32)
-    ydf = np.ndarray((n_registers,), dtype=np.float32)
-    zdf = np.ndarray((n_registers,), dtype=np.float32)
-    photons = np.ndarray((n_registers,), dtype=np.float32)
-    bg = np.zeros(n_registers, dtype=np.float32)
-    frames = np.ndarray((n_registers,), dtype=np.uint32)
-    sx = 5.
-    sy = 5.
-    for i in range(loc_per_fluo):
-        slc = slice(i * total_fluorophores, (i+1) * total_fluorophores)
-        xdf[slc] = (x.ravel() + rng.normal(0, sx, total_fluorophores))/133
-        ydf[slc] = (y.ravel() + rng.normal(0, sy, total_fluorophores))/133
-        zdf[slc] = (z.ravel() + rng.normal(0, 5, total_fluorophores))/133
-        photons[slc] = N0 * (np.exp(-(z.ravel()+rng.normal(0, 5, z.size))/d) + (1-alpha))
-        frames[slc] = i
-    sx = np.full((n_registers,), sx, dtype=np.float32)
-    sy = np.full((n_registers,), sy, dtype=np.float32)
-    lp_ = np.full((n_registers,), 0.01, dtype=np.float32)
-    rv = pd.DataFrame({'frame': frames, 'x': xdf, 'y': ydf, 'photons': photons,
-                       'sx': sx, 'sy':sy, 'bg': bg, 'lpx': lp_, 'lpy': lp_,
-                       'ellipticity': lp_, 'net_gradient': lp_, 'x_pick_rot': lp_,
-                       'y_pick_rot': lp_, 'group': np.zeros(n_registers, dtype=np.int32),
-                       'z': zdf})
-    sa, saType = df_to_sarray(rv)
-    with h5py.File('/tmp/data.hdf5', 'a') as f:
-        f.create_dataset('locs', data=sa, dtype=saType)
-    print(n_registers, i)
+    # Ver el ángulo y dirección en XY con ese corrimiento sacar el ángulo.
+    vec, _ = _np.linalg.lstsq(_np.vstack([shifts, _np.ones(points)]).T,
+                              response, rcond=None)[0]
+    matrix_intercept, matrix_slope = np.matmul(np.matmul(np.linalg.inv(np.matmul(X.T,X)), X.T), y)
+    print("slope = ", 1/vec)
+    print("nmpp z = ", _np.sum(1./vec**2)**.5)
+    # watch out order
+    print("Angle(rad) = ", _np.arctan2(vec[1], vec[0]))
 
 
 if __name__ == '__main__':
-    fake_origami_data()
+    data = fake_origami_data()
+    cluster_threshold = 30/5  # la distancia si está 100% acostado es 30
+    px_size = 133
+    cluster, xy = cluster_xy_positions(data, cluster_threshold, px_size)
+    n_clus = N_clusters(cluster, data)
+    cluster_labels = set(cluster.labels_) - {-1}
+    cluster_filters = [(cluster.labels_ == l) for l in cluster_labels]
+    clustered_xy = [np.array(xy[cf]) for cf in cluster_filters]
+    # for origami, points in zip(n_clus, clustered_xy):
+    centers = xy_from_N(n_clus, clustered_xy)
+    for c in centers:
+        X = np.column_stack((np.ones_like(c[:, 0]), c[:, 0]))
+        pend = np.matmul(np.matmul(np.linalg.inv(np.matmul(X.T, X)), X.T), c[:, 1])
+        print(pend)
+    # print(centers)
+    # print(n_clus[0].)
+    # print([len(set(n_cl.labels_)) for n_cl in n_clus])
+    # print([n_cl.cluster_centers_ for n_cl in n_clus])
 if False:
     start = _time.time()
 

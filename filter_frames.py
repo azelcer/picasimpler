@@ -38,6 +38,7 @@ def df_to_sarray(df):
     Convert a pandas DataFrame object to a numpy structured array.
     Also, for every column of a str type, convert it into
     a 'bytes' str literal of length = max(len(col)).
+
     :param df: the data frame to convert
     :return: a numpy structured array representation of df
     """
@@ -47,7 +48,7 @@ def df_to_sarray(df):
             if 'numpy.object_' in str(col_type.type):
                 maxlens = col.dropna().str.len()
                 if maxlens.any():
-                    maxlen = maxlens.max().astype(int) 
+                    maxlen = maxlens.max().astype(int)
                     col_type = ('S%s' % maxlen, 1)
                 else:
                     col_type = 'f2'
@@ -75,9 +76,6 @@ def df_to_sarray(df):
     return z, dtype
 
 
-
-
-
 # angle = 67.5
 # alpha = 0.9
 # lambdaex = 532
@@ -90,6 +88,7 @@ def df_to_sarray(df):
 
 def filter_data(data: pd.DataFrame, radius_threshold: float, px_size: float) -> np.ndarray:
     """Filter localizations according to SIMPLER criteria.
+
     Returns
     -------
         Array of indices of records to discard
@@ -217,23 +216,31 @@ def calibrate_origami(data):
 
 if __name__ == '__main__':
     data = fake_origami_data()
+    t = _time.time()
     cluster_threshold = 30/5  # la distancia si está 100% acostado es 30
     px_size = 133
+    # Encontrar todas las localizaciones del mismo origami
     cluster, xy = cluster_xy_positions(data, cluster_threshold, px_size)
+    # Ahora encontrar sublocalizaciones con el mismo N (z)
     n_clus = N_clusters(cluster, data)
+    # Esto debería hacerse dentro de alguna funcion
     cluster_labels = set(cluster.labels_) - {-1}
     cluster_filters = [(cluster.labels_ == l) for l in cluster_labels]
     clustered_xy = [np.array(xy[cf]) for cf in cluster_filters]
     # for origami, points in zip(n_clus, clustered_xy):
-    centers = xy_from_N(n_clus, clustered_xy)
-    for c in centers:
-        X = np.column_stack((np.ones_like(c[:, 0]), c[:, 0]))
-        pend = np.matmul(np.matmul(np.linalg.inv(np.matmul(X.T, X)), X.T), c[:, 1])
-        print(pend)
+    centers = xy_from_N(n_clus, clustered_xy)  # centers es array(n_origami, 4, 2)
+    for c, clus in zip(centers, n_clus):
+        c = c[np.argsort(clus.cluster_centers_, None)]
+        # dist = difernecia entre centros proyextados en la linea
+        # X = np.column_stack((np.ones_like(c[:, 0]), c[:, 0]))
+        # _, pend = np.matmul(np.matmul(np.linalg.inv(np.matmul(X.T, X)), X.T), c[:, 1])
+        # print(pend)
+        plt.plot(*zip(*c))
     # print(centers)
     # print(n_clus[0].)
     # print([len(set(n_cl.labels_)) for n_cl in n_clus])
     # print([n_cl.cluster_centers_ for n_cl in n_clus])
+    print(_time.time() - t)
 if False:
     start = _time.time()
 

@@ -42,7 +42,6 @@ def fake_origami_data():
     angles = np.random.random(N) * ANG_MAX
     # Direction of tilt with X axe
     rotations = np.random.random(N) * np.pi * 2
-    # print(rotations)
     # Posiciones
     vertices = np.linspace(D, D * L, L)
     # centros de cada origami

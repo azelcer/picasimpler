@@ -223,13 +223,7 @@ def calibrate_origami(data):
     clustered_xy = [np.array(xy[cf]) for cf in cluster_filters]
 
     # Ver el ángulo y dirección en XY con ese corrimiento sacar el ángulo.
-    vec, _ = _np.linalg.lstsq(_np.vstack([shifts, _np.ones(points)]).T,
-                              response, rcond=None)[0]
-    matrix_intercept, matrix_slope = np.matmul(np.matmul(np.linalg.inv(np.matmul(X.T,X)), X.T), y)
-    print("slope = ", 1/vec)
-    print("nmpp z = ", _np.sum(1./vec**2)**.5)
-    # watch out order
-    print("Angle(rad) = ", _np.arctan2(vec[1], vec[0]))
+    ...
 
 
 if __name__ == '__main__X':
@@ -247,6 +241,7 @@ if __name__ == '__main__X':
     clustered_xy = [np.array(xy[cf]) for cf in cluster_filters]
     # for origami, points in zip(n_clus, clustered_xy):
     centers = xy_from_N(n_clus, clustered_xy)  # centers es array(n_origami, 4, 2)
+    plt.figure("Falsos origamis")
     for c, clus in zip(centers, n_clus):
         c = c[np.argsort(clus.cluster_centers_, None)]
         # dist = difernecia entre centros proyextados en la linea
@@ -287,14 +282,13 @@ if True:
             yaml.dump_all(info, file, default_flow_style=False)
     except ValueError:
         _lgr.error("No puedo grabar, el archivo ya existe o algo así")
-        raise
+        # raise
     end = _time.time()
     _lgr.info('Script total time: %s s', end - start)
-    x = data_filtered['x'][cluster.core_sample_indices_]
-    y = data_filtered['y'][cluster.core_sample_indices_]
-    import matplotlib.pyplot as plt
+    x = data_filtered['x'][cluster[0].core_sample_indices_]
+    y = data_filtered['y'][cluster[0].core_sample_indices_]
+    plt.figure("centros")
     plt.scatter(x, y, s=1)
-    centros = clusters_centers(cluster, data_filtered)
-    plt.figure("dos")
-    plt.scatter(centros[:, 0], centros[:, 1], s=1)
-    # fake_origami_data()
+    # centros = clusters_centers(cluster, data_filtered)
+    # plt.figure("dos")
+    # plt.scatter(centros[:, 0], centros[:, 1], s=1)

@@ -18,6 +18,7 @@ import yaml
 import logging as _lgn
 import warnings as _warnings
 from sklearn.cluster import DBSCAN as _DBSCAN, KMeans as _KMeans
+from scipy.ndimage import map_coordinates
 # The following imports are used only for development.
 import pathlib as _pathlib
 import matplotlib.pyplot as plt
@@ -127,6 +128,23 @@ def filter_data(data: pd.DataFrame, radius_threshold: float, px_size: float) -> 
     return idx_to_discard
 
 
+def get_intensity(int_map: np.ndarray, locations: np.ndarray, px_size: float):
+    """Return excitation intensity (N0) at location point.
+
+    Parameters
+    ----------
+    int_map: 2D numpy.ndarray
+        Excitation intensity at each point
+    locations: numpy.ndarray[n, 2]
+        list of x,y locations
+        WARNING: ver localización del 0, 0  en las localizaciones y el mapa
+    px_size: float
+        pixel size to map locations to indices
+    """
+    px_locations = (locations / px_size) - .5  # Ojo extrapolación y localización del 0
+    return map_coordinates(int_map, [px_locations[:, 0], px_locations[:,1]], mode='nearest')
+    
+
 def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndarray:
     """Calculate z according to SIMPLER criteria.
 
@@ -214,7 +232,7 @@ def calibrate_origami(data):
     print("Angle(rad) = ", _np.arctan2(vec[1], vec[0]))
 
 
-if __name__ == '__main__':
+if __name__ == '__main__X':
     data = fake_origami_data()
     t = _time.time()
     cluster_threshold = 30/5  # la distancia si está 100% acostado es 30
@@ -241,7 +259,7 @@ if __name__ == '__main__':
     # print([len(set(n_cl.labels_)) for n_cl in n_clus])
     # print([n_cl.cluster_centers_ for n_cl in n_clus])
     print(_time.time() - t)
-if False:
+if True:
     start = _time.time()
 
     with pd.HDFStore(filename, 'r') as store:

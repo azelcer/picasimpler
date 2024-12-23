@@ -6,7 +6,7 @@ authors = ["Andres Zelcer <45225345+azelcer@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 scipy = "^1.11.2"
 numpy = "^1.24.3"
 numba = "^0.58.0"

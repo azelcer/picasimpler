@@ -23,7 +23,7 @@ from scipy.ndimage import map_coordinates
 import pathlib as _pathlib
 import matplotlib.pyplot as plt
 import time as _time
-from tqdm import tqdm
+# from tqdm import tqdm
 from tools import fake_origami_data
 
 
@@ -32,6 +32,8 @@ _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
 
 filename = _pathlib.Path("/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5")
+filename = _pathlib.Path("/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_100mW_bufferC_gain100_1_MMStack_Pos0.ome_locs.hdf5")
+filename = _pathlib.Path("/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_300mW_bufferC_gain50_50ms_highTIRF_2_MMStack_Pos0.ome_locs.hdf5")
 
 
 def df_to_sarray(df):
@@ -90,29 +92,39 @@ def df_to_sarray(df):
 def filter_data(data: pd.DataFrame, radius_threshold: float, px_size: float) -> np.ndarray:
     """Filter localizations according to SIMPLER criteria.
 
+    Parameters
+    ----------
+        data: pandas.DataFrame
+            Data as obtained from picasso
+        radius_threshold: float
+            Maximun radius in nm for two succesive localizations to be considered
+            the same
+        px_size: float
+            Pixel size, in nm
+
     Returns
     -------
         Array of indices of records to discard
     """
-    r_th_sq = (radius_threshold/px_size)**2
+    r_th_sq = (radius_threshold / px_size)**2
     start = _time.time()
     frames = np.array(data['frame'])
     xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
     discard_yn = np.ones((len(xy),), dtype=np.uint64)
     framejump = np.nonzero(np.diff(frames, prepend=-np.inf, append=np.inf) != 0)[0]
     distance_next = None
-    for idxframe in tqdm(range(1, len(framejump)-2)):
-        prevframe = frames[framejump[idxframe-1]]
-        nextframe = frames[framejump[idxframe+1]]
+    for idxframe in range(1, len(framejump) - 2):
+        prevframe = frames[framejump[idxframe - 1]]
+        nextframe = frames[framejump[idxframe + 1]]
         frame = frames[framejump[idxframe]]
         if (frame + 1 != nextframe):
             distance_next = None
             continue
         if (frame - 1 != prevframe):
             continue
-        f_slice = slice(framejump[idxframe], framejump[idxframe+1])
-        prev_slice = slice(framejump[idxframe-1], framejump[idxframe])
-        next_slice = slice(framejump[idxframe+1], framejump[idxframe+2])
+        f_slice = slice(framejump[idxframe], framejump[idxframe + 1])
+        prev_slice = slice(framejump[idxframe - 1], framejump[idxframe])
+        next_slice = slice(framejump[idxframe + 1], framejump[idxframe + 2])
         if distance_next is not None:
             distance_prev = distance_next.T
         else:
@@ -124,7 +136,7 @@ def filter_data(data: pd.DataFrame, radius_threshold: float, px_size: float) -> 
     idx_to_discard = np.where(discard_yn == 1)[0]
     end = _time.time()
     _lgr.info('Time of filtering step: %s s. %s of %s (%.2f%%) localizations discarded',
-              end-start, len(idx_to_discard), len(xy), 100*len(idx_to_discard)/len(xy))
+              end - start, len(idx_to_discard), len(xy), 100 * len(idx_to_discard) / len(xy))
     return idx_to_discard
 
 
@@ -142,8 +154,8 @@ def get_intensity(int_map: np.ndarray, locations: np.ndarray, px_size: float):
         pixel size to map locations to indices
     """
     px_locations = (locations / px_size) - .5  # Ojo extrapolación y localización del 0
-    return map_coordinates(int_map, [px_locations[:, 0], px_locations[:,1]], mode='nearest')
-    
+    return map_coordinates(int_map, [px_locations[:, 0], px_locations[:, 1]], mode='nearest')
+
 
 def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndarray:
     """Calculate z according to SIMPLER criteria.
@@ -160,21 +172,28 @@ def calculate_z(data: pd.DataFrame, alpha: float, df: float, N0: int) -> np.ndar
         _lgr.warning("Some location intensities are above z=0 intensity")
     with _warnings.catch_warnings():
         _warnings.simplefilter("ignore")
-        rv = df * np.log(alpha/(data['photons']/N0 - (1 - alpha)))
-    _lgr.info('Time of Z calculation step: %s s', _time.time()-start)
+        rv = df * np.log(alpha / (data['photons'] / N0 - (1 - alpha)))
+    _lgr.info('Time of Z calculation step: %s s', _time.time() - start)
     return rv
 
 
-def cluster_xy_positions(data: pd.DataFrame, dist_threshold: float,
-                         px_size: float) -> (_DBSCAN, np.ndarray):
-    """Clusters locations for origami calibration."""
+def cluster_xy_positions(
+        data: pd.DataFrame,
+        dist_threshold: float,
+        px_size: float,
+        min_N=15,
+        ) -> (_DBSCAN, np.ndarray):
+    """Clusters locations for origami calibration.
+
+    So far all results are contained on the DBscan ibject
+    """
     start = _time.time()
-    eps = (dist_threshold/px_size)**2
+    eps = (dist_threshold / px_size)**2
     xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
-    rv = _DBSCAN(eps=eps, min_samples=4, metric='sqeuclidean', n_jobs=-1).fit(xy)
+    rv = _DBSCAN(eps=eps, min_samples=min_N, metric='sqeuclidean', n_jobs=-1).fit(xy)
     _lgr.info('clusters found: %s', len(set(rv.labels_) - {-1}))
     _lgr.info('locations assigned: %s out of %s', len(rv.core_sample_indices_), len(xy))
-    _lgr.info('Time of clustering: %s s', _time.time()-start)
+    _lgr.info('Time of clustering: %s s', _time.time() - start)
     return rv, xy
 
 
@@ -183,11 +202,14 @@ def N_clusters(origamis: _DBSCAN, data: pd.DataFrame) -> list[_KMeans]:
 
     Uses k-means
     """
+    t0 = _time.time()
     N_FLUO = 4  # fluoroforos por origami
     labels = set(origamis.labels_) - {-1}
-    markers = [_KMeans(N_FLUO).fit(  # TODO: avoid convertion to array
-        np.array(data['photons'][cluster.labels_ == l]).reshape(-1, 1))
-               for l in labels]
+    markers = [
+        _KMeans(N_FLUO).fit(  # TODO: avoid convertion to array
+            np.array(data['photons'][cluster.labels_ == _]).reshape(-1, 1))
+        for _ in labels]
+    _lgr.info("Intensity clustered %s XY clusters in %s seconds", len(markers), _time.time() - t0)
     return markers
 
 
@@ -207,7 +229,7 @@ def xy_from_N(clusters: list[_KMeans], positions: list[np.ndarray]) -> np.ndarra
     centers = np.ndarray((len(clusters), N_FLUO, 2))
     for idx, (c, p) in enumerate(zip(clusters, positions)):
         labels = set(c.labels_) - {-1}
-        centers[idx] = [np.average(p[c.labels_ == l], axis=0) for l in labels]
+        centers[idx] = [np.average(p[c.labels_ == _], axis=0) for _ in labels]
     return centers
 
 
@@ -218,7 +240,7 @@ def calibrate_origami(data):
     # Verificar calidad de clusters y filtrar
     ...
     cluster_labels = set(cluster.labels_) - {-1}
-    cluster_filters = [(cluster.labels_ == l) for l in cluster_labels]
+    cluster_filters = [(cluster.labels_ == _) for _ in cluster_labels]
     xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
     clustered_xy = [np.array(xy[cf]) for cf in cluster_filters]
 
@@ -226,18 +248,25 @@ def calibrate_origami(data):
     ...
 
 
-if __name__ == '__main__X':
+if __name__ == '__main__':
+    ...
+
+if False:
     data = fake_origami_data()
     t = _time.time()
-    cluster_threshold = 30/5  # la distancia si está 100% acostado es 30
+    cluster_threshold = 40 / 5  # la distancia si está 100% acostado es 30
     px_size = 133
     # Encontrar todas las localizaciones del mismo origami
     cluster, xy = cluster_xy_positions(data, cluster_threshold, px_size)
+
+    for lbl in set(cluster.labels_):
+        plt.scatter(*zip(*xy[cluster.labels_ == lbl]))
+
     # Ahora encontrar sublocalizaciones con el mismo N (z)
     n_clus = N_clusters(cluster, data)
     # Esto debería hacerse dentro de alguna funcion
     cluster_labels = set(cluster.labels_) - {-1}
-    cluster_filters = [(cluster.labels_ == l) for l in cluster_labels]
+    cluster_filters = [(cluster.labels_ == _) for _ in cluster_labels]
     clustered_xy = [np.array(xy[cf]) for cf in cluster_filters]
     # for origami, points in zip(n_clus, clustered_xy):
     centers = xy_from_N(n_clus, clustered_xy)  # centers es array(n_origami, 4, 2)
@@ -254,6 +283,7 @@ if __name__ == '__main__X':
     # print([len(set(n_cl.labels_)) for n_cl in n_clus])
     # print([n_cl.cluster_centers_ for n_cl in n_clus])
     print(_time.time() - t)
+
 if True:
     start = _time.time()
 
@@ -271,8 +301,15 @@ if True:
     _lgr.info("minimum alpha is: %s", 1 - (np.min(data['photons']) / np.max(data['photons'])))
     z = calculate_z(data_filtered, 0.95, 100, np.max(data['photons']))
     # data_filtered['z'] = z
-    cluster_threshold = 30/5  # la distancia si está 100% acostado es 30
-    cluster = cluster_xy_positions(data_filtered, cluster_threshold, px_size)
+    cluster_threshold = 30  # la distancia si está 100% acostado es 30
+    cluster, xy = cluster_xy_positions(data_filtered, cluster_threshold, px_size)
+    plt.figure("coloreados")
+    cluster_lbls = set(set(cluster.labels_) - {-1})
+    centers = np.empty((2, len(cluster_lbls), ))
+    for idx, lbl in enumerate(cluster_lbls):
+        _x, _y = tuple(zip(*xy[cluster.labels_ == lbl]))
+        plt.scatter(_x, _y)
+        centers[:, idx] = (np.average(_x), np.average(_y))
     out_file = filename.with_stem(filename.stem + '_frames_filtered')
     sa, saType = df_to_sarray(data_filtered)
     try:
@@ -285,10 +322,14 @@ if True:
         # raise
     end = _time.time()
     _lgr.info('Script total time: %s s', end - start)
-    x = data_filtered['x'][cluster[0].core_sample_indices_]
-    y = data_filtered['y'][cluster[0].core_sample_indices_]
-    plt.figure("centros")
-    plt.scatter(x, y, s=1)
     # centros = clusters_centers(cluster, data_filtered)
     # plt.figure("dos")
     # plt.scatter(centros[:, 0], centros[:, 1], s=1)
+    n_clus = N_clusters(cluster, data_filtered)
+    plt.figure("centros")
+    plt.scatter(*centers, s=1)
+
+    plt.figure("todos")
+    x = data_filtered['x'][cluster.core_sample_indices_]
+    y = data_filtered['y'][cluster.core_sample_indices_]
+    plt.scatter(x, y, s=1)

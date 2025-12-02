@@ -21,16 +21,16 @@ _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
 
 
-def fake_origami_data():
+def fake_origami_data(L: int = 11):
     """Crea info falsa con origamis en un cuadrado (para probar)"""
     # Estos son parametros que podrian ser variables
     # Caracteristicas de los origamis
     D = 100  # distancia entre origamis
     D_F = 30  # distancia entre fluoroforos
-    L = 5  # número de origamis por lado
-    N = L*L  # number of origamis
+    # L = 10  # número de origamis por lado
+    N = L * L  # number of origamis
     N_FLUO = 4  # fluoroforos por origami
-    ANG_MAX = np.radians(25)  # Angulo maximo entre origami y sustrato
+    ANG_MAX = np.radians(10)  # Angulo maximo entre origami y sustrato
     # Parametros para simpler
     d = 100  # nm
     alpha = 0.95
@@ -49,7 +49,7 @@ def fake_origami_data():
     x_c = x_c.ravel()
     y_c = y_c.ravel()
     # posicion relativa de cada fluoroforo, debería ser 1-3 y 2-4
-    pos_vec = np.arange(1, N_FLUO+1, dtype=np.float64) * D_F
+    pos_vec = np.arange(1, N_FLUO + 1, dtype=np.float64) * D_F
     # rotación de cada origami
     rot_x = np.cos(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]
     rot_y = np.sin(rotations)[:, np.newaxis] * pos_vec * np.sin(angles)[:, np.newaxis]

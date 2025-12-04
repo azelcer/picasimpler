@@ -143,12 +143,12 @@ class DataPlotWidget(QFrame):
     def set_data(self, new_data: SIMPLERData):
         # borrar todo
         # actualizar
-        # FIXME: cambiar este acceso feo, ses sólo para arrancar a dibujar
+        # FIXME: cambiar este acceso feo, es sólo para arrancar a dibujar
         data = new_data.data
         x = data["x"]
         y = data["y"]
         # Meter transformacion a µm
-        p = self._plot.plot(x, y, pen=None, symbol="x", symbolSize=4, pxMode=True) # default True == son pixeles
+        p = self._plot.plot(x, y, pen=None, symbol="o", symbolSize=.20, pxMode=True) # default True == son pixeles
         # p.setDownsampling(ds=100, auto=True, method="peak")
 
 

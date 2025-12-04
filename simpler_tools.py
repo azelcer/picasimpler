@@ -49,6 +49,8 @@ def df_to_sarray(df):
 
     :param df: the data frame to convert
     :return: a numpy structured array representation of df
+    
+    TODO: Heredado. Revisar y ver si hace falta
     """
 
     def make_col_type(col_type, col):
@@ -291,7 +293,11 @@ class SimplerAnalysisParameters:
 
 
 class SIMPLERData:
-    """Manages and processes SIMPLER data obtained from PICASSO."""
+    """Manages and processes SIMPLER data obtained from PICASSO.
+
+    Meter threads despues para que todo lo que sea mas o menos lento (hasta la carga es lenta)
+    funcione en bckg y con callbacks
+    """
 
     def __init__(
         self,
@@ -315,6 +321,21 @@ class SIMPLERData:
 
     def get_unfilterred_data(self):
         return self.data
+
+    def calculate_z(self, params: SimplerAnalysisParameters):
+        if len(self._filtered_data) == 0:
+            _lgr.warning("No hay data para calcular Z")
+            return
+        z = calculate_z(self._filtered_data, params.alpha, params.df, params.N0)
+        self._filtered_data["z"] = z 
+
+    def cluster_origamis(self, max_dist: float):
+        ...
+        # max_dist podría calcularse con un helper que de la distancia maxima en funcion del angulo.
+        cluster, xy = cluster_xy_positions(
+            data_filtered, cluster_threshold, px_size
+        )
+        
 
 if True:
     start = _time.time()

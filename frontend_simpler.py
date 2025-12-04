@@ -3,7 +3,7 @@
 """
 import numpy as _np
 import pathlib as _pathlib
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QAbstractTableModel
 from PyQt5.QtWidgets import (
     QGroupBox,
     QMainWindow,
@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QBoxLayout,
     QWidget,
+    QTableView,
 )
 from PyQt5 import QtGui as _QtGui
 import pyqtgraph as _pg
@@ -84,6 +85,31 @@ def create_labeled_int(name: str, external_layout: QBoxLayout,
     return sb
 
 
+class SIMPLERTableModel(QAbstractTableModel):
+    def __init__(self, data):
+        super().__init__()
+        self._data = data
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            # See below for the nested-list data structure.
+            # .row() indexes into the outer list,
+            # .column() indexes into the sub-list
+            return str(self._data.data.iloc[index.row(), index.column()])
+
+    def rowCount(self, index):
+        return self._data.data.shape[0]
+
+    def columnCount(self, index):
+        return self._data.data.shape[1]
+
+    def headerData(self, section: int, orientation: Qt.Orientation, role: Qt.DisplayRole):
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Orientation.Vertical:
+                return str(section)
+            return str(self._data.data.columns[section])
+
+
 class SimplerWidget(QFrame):
 
     apply_signal = pyqtSignal(SimplerAnalysisParameters)
@@ -114,7 +140,56 @@ class SimplerWidget(QFrame):
             self._alpha_sb.value(),
             self._dF_sb.value(),
             self._N0_sb.value(),
+        )
+
+
+class SimplerCalibrationWidget(QFrame):
+
+    apply_signal = pyqtSignal(SimplerAnalysisParameters)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_GUI()
+
+    def freeze(self):
+        self.setEnabled(False)
+
+    def thaw(self):
+        self.setEnabled(True)
+
+    def _init_GUI(self):
+        layout = QVBoxLayout()
+        self._dist_sb = create_labeled_float("Max dist / nm", layout, 10, 1, 1)
+        # self._alpha_sb = create_labeled_float("\u03B1<sub>F</sub>", layout, 10, 1, 1)
+        # self._dF_sb = create_labeled_float("d<sub>F</sub> / nm", layout, 10, 1, 1)
+        # self._N0_sb = create_labeled_int("N<sub>0</sub>", layout, 10000,)
+        self._clusterize_button = QPushButton("Clusterize", self)
+        layout.addWidget(self._clusterize_button)
+        self.setLayout(layout)
+
+    def get_analysis_parameters(self) -> SimplerAnalysisParameters:
+        return SimplerAnalysisParameters(
+            self._dist_sb.value(),
+            self._alpha_sb.value(),
+            self._dF_sb.value(),
+            self._N0_sb.value(),
             )
+
+
+class DataTableWidget(QFrame):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_GUI()
+
+    def _init_GUI(self):
+        layout = QVBoxLayout(self)
+        self.setLayout(layout)
+        self._table = QTableView(self)
+        layout.addWidget(self._table)
+
+    def set_data(self, data):
+        self._table.setModel(SIMPLERTableModel(data))
 
 
 class DataPlotWidget(QFrame):
@@ -189,8 +264,12 @@ class Frontend(QMainWindow):
         cw.setLayout(central_layout)
         self._SIMPLER_widget = SimplerWidget(self)
         self._plot_widget = DataPlotWidget()
+        self._table_widget = DataTableWidget(self)
+        lower_layout = QHBoxLayout()
+        lower_layout.addWidget(self._plot_widget)
+        lower_layout.addWidget(self._table_widget)
         central_layout.addWidget(self._SIMPLER_widget)
-        central_layout.addWidget(self._plot_widget)
+        central_layout.addLayout(lower_layout)
         self.setCentralWidget(cw)
         return
 
@@ -224,6 +303,7 @@ class Frontend(QMainWindow):
         """Load a file."""
         self._data = SIMPLERData(fname)
         self._plot_widget.set_data(self._data)
+        self._table_widget.set_data(self._data)
 
     @pyqtSlot(_QtGui.QCloseEvent)
     def closeEvent(self, event):

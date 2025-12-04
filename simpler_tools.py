@@ -311,7 +311,7 @@ class SIMPLERData:
             yaml_file_name = file_name.with_suffix(".yaml")
         with open(yaml_file_name, "r") as info_file:
             self.info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
-        self.pixel_size = info[1]["Pixelsize"]
+        self.pixel_size = self.info[1]["Pixelsize"]
         self._filtered_data = np.empty_like(self.data)
 
     def filter_data(self, params: SimplerAnalysisParameters):
@@ -335,9 +335,8 @@ class SIMPLERData:
         cluster, xy = cluster_xy_positions(
             data_filtered, cluster_threshold, px_size
         )
-        
 
-if True:
+if __name__ == "__main__":
     start = _time.time()
 
     with pd.HDFStore(filename, "r") as store:

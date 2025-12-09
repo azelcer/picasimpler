@@ -10,10 +10,10 @@ used with other software with minumum effort.
 @author: aszalai, azelcer
 """
 from dataclasses import dataclass
-import pandas as pd
-import numpy as np
-from scipy.spatial import distance
 import h5py
+import numpy as np
+from numpy.lib.recfunctions import append_fields
+from scipy.spatial import distance
 import yaml
 import logging as _lgn
 import warnings as _warnings
@@ -41,55 +41,34 @@ filename = _pathlib.Path(
 )
 
 
-def df_to_sarray(df):
-    """
-    Convert a pandas DataFrame object to a numpy structured array.
-    Also, for every column of a str type, convert it into
-    a 'bytes' str literal of length = max(len(col)).
-
-    :param df: the data frame to convert
-    :return: a numpy structured array representation of df
-    
-    TODO: Heredado. Revisar y ver si hace falta
-    """
-
-    def make_col_type(col_type, col):
-        try:
-            if "numpy.object_" in str(col_type.type):
-                maxlens = col.dropna().str.len()
-                if maxlens.any():
-                    maxlen = maxlens.max().astype(int)
-                    col_type = ("S%s" % maxlen, 1)
-                else:
-                    col_type = "f2"
-            return col.name, col_type
-        except:
-            print(col.name, col_type, col_type.type, type(col))
-            raise
-
-    v = df.values
-    types = df.dtypes
-    numpy_struct_types = [
-        make_col_type(types[col], df.loc[:, col]) for col in df.columns
-    ]
-    dtype = np.dtype(numpy_struct_types)
-    z = np.zeros(v.shape[0], dtype)
-    for i, k in enumerate(z.dtype.names):
-        # This is in case you have problems with the encoding, remove the if branch if not
-        try:
-            if dtype[i].str.startswith("|S"):
-                z[k] = df[k].str.encode("latin").astype("S")
-            else:
-                z[k] = v[:, i]
-        except:
-            print(k, v[:, i])
-            raise
-
-    return z, dtype
+# No fuzz aboutstrings
+def _h5py_dataset2ndarray(ds: h5py.Dataset) -> np.ndarray:
+    # new_dtype_list = arr.dtype.descr + [('score', 'f4')]
+    dt = ds.dtype
+    rv = np.array(ds)
+    fields_to_add = []
+    if 'z' in dt.names:
+        _lgr.info("ya tiene z")
+    else:
+        fields_to_add.append(("z", '<f4', np.nan,))
+    fields_to_add.append(("valid", '?', False,))
+    if fields_to_add:
+        # names, dtypes, fill_v = zip(*fields_to_add)
+        # print(names, dtypes, fill_v)
+        # rv = append_fields(rv, names, [[],]*len(names), dtypes, fill_value=fill_v, usemask=False)
+        # https://stackoverflow.com/questions/25427197/numpy-how-to-add-a-column-to-an-existing-structured-array
+        n_dt = dt.descr + [(name, dtype) for name, dtype, _ in fields_to_add]
+        n_rv = np.empty((rv.shape[0],), dtype=n_dt)
+        for name in dt.names:
+            n_rv[name] = rv[name]
+        for name, _, value in fields_to_add:
+            n_rv[name] = value
+        rv = n_rv
+    return rv
 
 
 def filter_data(
-    data: pd.DataFrame, radius_threshold: float, px_size: float
+    data: np.ndarray, radius_threshold: float, px_size: float
 ) -> np.ndarray:
     """Filter localizations according to SIMPLER criteria.
 
@@ -174,7 +153,7 @@ def get_intensity(int_map: np.ndarray, locations: np.ndarray, px_size: float):
 
 
 def calculate_z(
-    data: pd.DataFrame, alpha: float, df: float, N0: int
+    data: np.ndarray, alpha: float, df: float, N0: int
 ) -> np.ndarray:
     """Calculate z according to SIMPLER criteria.
 
@@ -198,7 +177,7 @@ def calculate_z(
 
 
 def cluster_xy_positions(
-    data: pd.DataFrame,
+    data: np.ndarray,
     dist_threshold: float,
     px_size: float,
     min_N=15,
@@ -223,7 +202,7 @@ def cluster_xy_positions(
     return rv, xy
 
 
-def N_clusters(origamis: _DBSCAN, data: pd.DataFrame) -> list[_KMeans]:
+def N_clusters(origamis: _DBSCAN, data: np.ndarray) -> list[_KMeans]:
     """Subcluster each cluster by N.
 
     Uses k-means
@@ -305,8 +284,8 @@ class SIMPLERData:
         yaml_file_name: str | _pathlib.Path | None = None,
     ):
         file_name = _pathlib.Path(file_name)
-        with pd.HDFStore(file_name, "r") as store:
-            self.data = store["locs"]
+        with h5py.File(file_name, "r") as store:
+            self.data = _h5py_dataset2ndarray(store["locs"])
         if not yaml_file_name:
             yaml_file_name = file_name.with_suffix(".yaml")
         with open(yaml_file_name, "r") as info_file:
@@ -316,11 +295,20 @@ class SIMPLERData:
 
     def filter_data(self, params: SimplerAnalysisParameters):
         idx_to_discard = filter_data(self.data, params.max_dist, self.pixel_size)
+        data_filter = np.ones((self.data.shape[0],), dtype=bool)
+        data_filter[idx_to_discard] = False
         self._out_idx = idx_to_discard
-        self._filtered_data = self.data.drop(labels=idx_to_discard, axis=0)
+        self.data["valid"] = data_filter
+        self._filtered_data = self.data[data_filter]
 
     def get_unfilterred_data(self):
         return self.data
+
+    def get_filterred_data(self):
+        return self._filtered_data
+
+    def get_column_names(self):
+        return self.data.dtype.names
 
     def calculate_z(self, params: SimplerAnalysisParameters):
         if len(self._filtered_data) == 0:
@@ -336,27 +324,30 @@ class SIMPLERData:
             data_filtered, cluster_threshold, px_size
         )
 
+
 if __name__ == "__main__":
     start = _time.time()
-
-    with pd.HDFStore(filename, "r") as store:
-        data = store["locs"]
+    with h5py.File(filename, "r") as store:
+        data = _h5py_dataset2ndarray(store["locs"])
     yaml_file = filename.with_suffix(".yaml")
     with open(yaml_file, "r") as info_file:
         info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
     px_size = info[1]["Pixelsize"]
     radius_threshold = 75  # nm
     idx_to_discard = filter_data(data, radius_threshold, px_size)
-    data_filtered = data.drop(labels=idx_to_discard, axis=0)
-    data_filtered = data_filtered.reset_index(
-        level=None, drop=True, inplace=False, col_level=0
-    )
+    data_filter = np.ones((data.shape[0],), dtype=bool)
+    data_filter[idx_to_discard] = False
+    data_filtered = data[data_filter]
+    # data_filtered = data_filtered.reset_index(
+    #     level=None, drop=True, inplace=False, col_level=0
+    # )
     _lgr.info(
         "minimum alpha is: %s",
         1 - (np.min(data["photons"]) / np.max(data["photons"])),
     )
     z = calculate_z(data_filtered, 0.95, 100, np.max(data["photons"]))
-if False:    
+
+if False:
     # data_filtered['z'] = z
     cluster_threshold = 30  # la distancia si está 100% acostado es 30
     cluster, xy = cluster_xy_positions(

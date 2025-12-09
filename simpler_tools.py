@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import h5py
 import numpy as np
 from numpy.lib.recfunctions import append_fields
-from scipy.spatial import distance
+from scipy.spatial import distance, KDTree
 import yaml
 import logging as _lgn
 import warnings as _warnings
@@ -74,8 +74,8 @@ def filter_data(
 
     Parameters
     ----------
-        data: pandas.DataFrame
-            Data as obtained from picasso
+        data: numpy.ndarray
+            Structured array as obtained from picasso
         radius_threshold: float
             Maximun radius in nm for two succesive localizations to be considered
             the same
@@ -129,6 +129,43 @@ def filter_data(
         100 * len(idx_to_discard) / len(xy),
     )
     return idx_to_discard
+
+
+def remove_unespecific(
+    data: np.ndarray, radius_threshold: float, px_size: float
+) -> np.ndarray:
+    """Filter localizations that seem to be non-specific adsorption.
+
+    Parameters
+    ----------
+        data: numpy.ndarray
+            Structured array as obtained from picasso
+        radius_threshold: float
+            Maximun radius in nm for two localizations to be considered
+            the same
+        px_size: float
+            Pixel size, in nm
+
+    Returns
+    -------
+        Array of booleans with indices of records to keep in True
+    """
+    r_th = radius_threshold / px_size
+    start = _time.time()
+    xy = np.column_stack((np.transpose(data["x"]), np.transpose(data["y"])))
+    kdt = KDTree(xy)
+    rv = kdt.query(xy, [2,], distance_upper_bound=r_th)[0]
+    rv = rv.reshape(rv.shape[0]) != np.inf
+    end = _time.time()
+    n_discarded = len(rv) - rv.sum()
+    _lgr.info(
+        "Time of unespecific filtering step: %s s. %s of %s (%.2f%%) localizations discarded",
+        end - start,
+        n_discarded,
+        len(xy),
+        100 * n_discarded / len(xy),
+    )
+    return rv
 
 
 def get_intensity(int_map: np.ndarray, locations: np.ndarray, px_size: float):
@@ -334,6 +371,7 @@ if __name__ == "__main__":
         info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
     px_size = info[1]["Pixelsize"]
     radius_threshold = 75  # nm
+    idx_unes = remove_unespecific(data, radius_threshold, px_size)
     idx_to_discard = filter_data(data, radius_threshold, px_size)
     data_filter = np.ones((data.shape[0],), dtype=bool)
     data_filter[idx_to_discard] = False

@@ -41,6 +41,39 @@ filename = _pathlib.Path(
 )
 
 
+class FluoEvent:
+    def __init__(self, run_list: tuple[int, int]):  # frame, loc
+        chk_diff = [_[0] for _ in run_list]
+        if not np.all(np.diff(chk_diff) == 1):
+            raise ValueError(f"Frames no consecutivos: {run_list}")
+        self._initial_frame = run_list[0][0]
+        self._final_frame = run_list[-1][0]
+        self._localization_list = [_[1] for _ in run_list]
+        # self._center = np.average()
+
+    def __repr__(self):
+        # print(self.__dir__())
+        return f"{self.__class__.__name__}(f{self._initial_frame}-f{self._final_frame})"
+
+    def calculate_center(self, data: np.ndarray):
+        """Calculate center."""
+        df = data[self._localization_list]
+        self._center = (np.average(df["x"]), np.average(df["y"]),)
+        self._desv = (np.std(df["x"]), np.std(df["y"]),)
+
+    @property
+    def center(self):
+        return self._center
+
+    @property
+    def std(self):
+        return self._desv
+
+    @property
+    def length(self):
+        return self._final_frame - self._initial_frame
+
+
 # No fuzz aboutstrings
 def _h5py_dataset2ndarray(ds: h5py.Dataset) -> np.ndarray:
     # new_dtype_list = arr.dtype.descr + [('score', 'f4')]
@@ -166,6 +199,86 @@ def remove_unespecific(
         100 * n_discarded / len(xy),
     )
     return rv
+
+
+def group_events(
+    data: np.ndarray, radius_threshold: float, px_size: float
+) -> np.ndarray:
+    """Group localizations by events.
+
+    Discards events of lenght 1
+
+    Parameters
+    ----------
+        data: numpy.ndarray
+            Structured array as obtained from picasso
+        radius_threshold: float
+            Maximun radius in nm for two succesive localizations to be considered
+            the same
+        px_size: float
+            Pixel size, in nm
+
+    Returns
+    -------
+        List of events
+    """
+    runs = []
+    r_th_sq = (radius_threshold / px_size) ** 2
+    start = _time.time()
+    frames = np.array(data["frame"])
+    xy = np.column_stack((np.transpose(data["x"]), np.transpose(data["y"])))
+    framejump = np.nonzero(
+        np.diff(frames, prepend=-np.inf, append=np.inf) != 0
+    )[0]
+    runs = []
+    prev_run = [[] for _ in range(framejump[1] - framejump[0])]
+    for idxframe in range(0, len(framejump) - 2):
+        nextframe = frames[framejump[idxframe + 1]]
+        start_frame_idx = framejump[idxframe]
+        frame = frames[start_frame_idx]
+        # FIXME: implementar esto
+        # if frame + 1 != nextframe:  # there are empty frames
+        #     # flush
+        #     continue
+        f_slice = slice(start_frame_idx, framejump[idxframe + 1])
+        next_slice = slice(framejump[idxframe + 1], framejump[idxframe + 2])
+        next_run = [[] for _ in range(next_slice.stop - next_slice.start)]
+        distance_next = distance.cdist(
+            xy[f_slice], xy[next_slice], "sqeuclidean"
+        ) < r_th_sq
+        # next_neighbours = distance_next.sum(axis=0)
+        this_neighbours = distance_next.sum(axis=1)
+        if any(this_neighbours > 1):
+            print("Ambiguedad en frame", idxframe)
+        # primero cerremos las anteriores
+        for idx, lista in enumerate(prev_run):  # los indices de prev_run
+            if lista:
+                if this_neighbours[idx]:  # todo: calcular una sola vez
+                    next_run[np.argmax(distance_next[idx])] = lista
+                else:
+                    lista.append((frame, start_frame_idx + idx,))  # pegar loc actual
+                    runs.append(FluoEvent(lista))
+        for idx, s in enumerate(this_neighbours):
+            # print(f"la localización {start_frame_idx+idx} ({data[f_slice][idx]})"
+            #       f"{'si' if s else 'no'} tiene vecinos")
+            if s:
+                next_run[np.argmax(distance_next[idx])].append((frame, start_frame_idx + idx,))
+        prev_run = next_run
+    for idx, lista in enumerate(prev_run):  # los indices de prev_run
+        if lista:
+            lista.append((nextframe, framejump[idxframe + 1] + idx,))  # pegar loc actual
+            runs.append(FluoEvent(lista))
+    for r in runs:
+        r.calculate_center(data)
+    end = _time.time()
+    _lgr.info(
+        "Time of filtering step: %s s. %s runs found with %s (%.2f%%) localizations",
+        end - start,
+        len(runs),
+        sum(_.length for _ in runs),
+        sum(_.length for _ in runs) / len(data) * 100
+    )
+    return runs
 
 
 def get_intensity(int_map: np.ndarray, locations: np.ndarray, px_size: float):
@@ -372,18 +485,19 @@ if __name__ == "__main__":
     px_size = info[1]["Pixelsize"]
     radius_threshold = 75  # nm
     idx_unes = remove_unespecific(data, radius_threshold, px_size)
+    runs = group_events(data, 2, px_size)
     idx_to_discard = filter_data(data, radius_threshold, px_size)
     data_filter = np.ones((data.shape[0],), dtype=bool)
     data_filter[idx_to_discard] = False
     data_filtered = data[data_filter]
-    # data_filtered = data_filtered.reset_index(
-    #     level=None, drop=True, inplace=False, col_level=0
-    # )
     _lgr.info(
         "minimum alpha is: %s",
         1 - (np.min(data["photons"]) / np.max(data["photons"])),
     )
     z = calculate_z(data_filtered, 0.95, 100, np.max(data["photons"]))
+
+    plt.scatter(*zip(*(_.center for _ in runs)))
+    plt.scatter(*zip(*((_["x"], _["y"]) for _ in data)), marker='.')
 
 if False:
     # data_filtered['z'] = z

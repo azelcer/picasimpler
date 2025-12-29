@@ -25,7 +25,7 @@ from scipy.ndimage import map_coordinates
 import pathlib as _pathlib
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-from matplotlib.collections import PatchCollection
+from matplotlib.collections import PatchCollection, EllipseCollection
 import time as _time
 
 
@@ -75,7 +75,7 @@ class FluoEvent:
 
     @property
     def length(self):
-        return self._final_frame - self._initial_frame
+        return self._final_frame - self._initial_frame + 1
 
 
 # No fuzz aboutstrings
@@ -207,7 +207,7 @@ def remove_unespecific(
 
 def group_events(
     data: np.ndarray, radius_threshold: float, px_size: float
-) -> np.ndarray:
+) -> list[FluoEvent]:
     """Group localizations by events.
 
     Discards events of lenght 1
@@ -226,7 +226,6 @@ def group_events(
     -------
         List of events
     """
-    runs = []
     r_th_sq = (radius_threshold / px_size) ** 2
     start = _time.time()
     frames = np.array(data["frame"])
@@ -234,18 +233,19 @@ def group_events(
     framejump = np.nonzero(
         np.diff(frames, prepend=-np.inf, append=np.inf) != 0
     )[0]
-    runs = []
+    runs: list[FluoEvent] = []
     prev_run = [[] for _ in range(framejump[1] - framejump[0])]
     for idxframe in range(0, len(framejump) - 2):
         nextframe = frames[framejump[idxframe + 1]]
         start_frame_idx = framejump[idxframe]
         frame = frames[start_frame_idx]
         # FIXME: implementar esto
-        # if frame + 1 != nextframe:  # there are empty frames
-        #     # flush
-        #     continue
+        if frame + 1 != nextframe:  # there are empty frames!
+            # print("No hay frame", frame+1)
+            next_slice = slice(0, 0, 1)
+        else:
+            next_slice = slice(framejump[idxframe + 1], framejump[idxframe + 2])
         f_slice = slice(start_frame_idx, framejump[idxframe + 1])
-        next_slice = slice(framejump[idxframe + 1], framejump[idxframe + 2])
         next_run = [[] for _ in range(next_slice.stop - next_slice.start)]
         distance_next = distance.cdist(
             xy[f_slice], xy[next_slice], "sqeuclidean"
@@ -489,7 +489,7 @@ if __name__ == "__main__":
     px_size = info[1]["Pixelsize"]
     radius_threshold = 75  # nm
     # idx_unes = remove_unespecific(data, radius_threshold, px_size)
-    runs = group_events(data, 2, px_size)
+    runs = group_events(data, 5, px_size)
     # idx_to_discard = filter_data(data, radius_threshold, px_size)
     # data_filter = np.ones((data.shape[0],), dtype=bool)
     # data_filter[idx_to_discard] = False
@@ -502,19 +502,31 @@ if __name__ == "__main__":
 
     # plt.scatter(*zip(*(_.center for _ in runs)))
     # plt.scatter(*zip(*((_["x"], _["y"]) for _ in data)), marker='.')
+    runs_old = runs
+    # runs = [r for r in runs if r.length >= 3]
     t0 = _time.time()
     positions = np.array([_.center for _ in runs])
+    sigmas = np.array([(_.std[0]**2 + _.std[1]**2)**.5 for _ in runs])
+    duraciones = np.array([_.length for _ in runs])
     pd = distance.pdist(positions)
     Z = hierarchy.single(pd)
     # Z = hierarchy.ward(pd)
-    clst = hierarchy.fcluster(Z, .5, criterion='distance')
+    clst = hierarchy.fcluster(Z, .1, criterion='distance')
     nclust = clst.max()
     origamis = []
-    for c in range(1, nclust+1):  # cluster numbering starts at 0
+    for c in range(1, nclust + 1):  # cluster numbering starts at 0
         origamis.append(np.nonzero(clst == c)[0])
-    print("Creados ", nclust, "grupos en ", _time.time()-t0, "s")
+    print("Creados ", nclust, "grupos en ", _time.time() - t0, "s")
     plt.figure("grouped runs")
-    plt.scatter(*positions.T)
+    plt.scatter(*positions.T, s=1)
+    ax = plt.gca()
+    ax.set_aspect("equal")
+    ax.add_collection(EllipseCollection(
+        widths=sigmas, heights=sigmas, angles=0, units='xy',
+        facecolors=plt.cm.hsv(duraciones / duraciones.max()),
+        offsets=positions, transOffset=ax.transData,
+        )
+    )
     patches = []
     for origami in origamis:
         or_points = np.array([positions[_] for _ in origami])
@@ -527,7 +539,14 @@ if __name__ == "__main__":
     # colors = 100 * np.random.rand(len(patches))
     p = PatchCollection(patches, alpha=0.3)
     p.set_color("r")
-    plt.gca().add_collection(p)
+    ax.add_collection(p)
+
+    # filtrado por largo:
+    a = ([_ for r in runs if r.length > 4 for _ in r._localization_list])
+    plt.figure("hist")
+    largos = [_.length for _ in runs]
+    plt.hist(largos, bins=max(largos))
+    plt.yscale("log")
 
 
 if False:

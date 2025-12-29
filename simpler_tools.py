@@ -12,8 +12,9 @@ used with other software with minumum effort.
 from dataclasses import dataclass
 import h5py
 import numpy as np
-from numpy.lib.recfunctions import append_fields
-from scipy.spatial import distance, KDTree
+# from numpy.lib.recfunctions import append_fields
+from scipy.spatial import distance, ConvexHull, KDTree
+from scipy.cluster import hierarchy
 import yaml
 import logging as _lgn
 import warnings as _warnings
@@ -23,6 +24,8 @@ from scipy.ndimage import map_coordinates
 # The following imports are used only for development.
 import pathlib as _pathlib
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
 import time as _time
 
 
@@ -33,9 +36,9 @@ _lgr.setLevel(_lgn.INFO)
 filename = _pathlib.Path(
     "/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5"
 )
-filename = _pathlib.Path(
-    "/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_100mW_bufferC_gain100_1_MMStack_Pos0.ome_locs.hdf5"
-)
+# filename = _pathlib.Path(
+#     "/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_100mW_bufferC_gain100_1_MMStack_Pos0.ome_locs.hdf5"
+# )
 filename = _pathlib.Path(
     "/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_300mW_bufferC_gain50_50ms_highTIRF_2_MMStack_Pos0.ome_locs.hdf5"
 )
@@ -46,6 +49,7 @@ class FluoEvent:
         chk_diff = [_[0] for _ in run_list]
         if not np.all(np.diff(chk_diff) == 1):
             raise ValueError(f"Frames no consecutivos: {run_list}")
+            # print(ValueError(f"Frames no consecutivos: {run_list}"))
         self._initial_frame = run_list[0][0]
         self._final_frame = run_list[-1][0]
         self._localization_list = [_[1] for _ in run_list]
@@ -253,7 +257,7 @@ def group_events(
         # primero cerremos las anteriores
         for idx, lista in enumerate(prev_run):  # los indices de prev_run
             if lista:
-                if this_neighbours[idx]:  # todo: calcular una sola vez
+                if this_neighbours[idx]:
                     next_run[np.argmax(distance_next[idx])] = lista
                 else:
                     lista.append((frame, start_frame_idx + idx,))  # pegar loc actual
@@ -484,20 +488,73 @@ if __name__ == "__main__":
         info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
     px_size = info[1]["Pixelsize"]
     radius_threshold = 75  # nm
-    idx_unes = remove_unespecific(data, radius_threshold, px_size)
+    # idx_unes = remove_unespecific(data, radius_threshold, px_size)
     runs = group_events(data, 2, px_size)
-    idx_to_discard = filter_data(data, radius_threshold, px_size)
-    data_filter = np.ones((data.shape[0],), dtype=bool)
-    data_filter[idx_to_discard] = False
-    data_filtered = data[data_filter]
-    _lgr.info(
-        "minimum alpha is: %s",
-        1 - (np.min(data["photons"]) / np.max(data["photons"])),
-    )
-    z = calculate_z(data_filtered, 0.95, 100, np.max(data["photons"]))
+    # idx_to_discard = filter_data(data, radius_threshold, px_size)
+    # data_filter = np.ones((data.shape[0],), dtype=bool)
+    # data_filter[idx_to_discard] = False
+    # data_filtered = data[data_filter]
+    # _lgr.info(
+    #     "minimum alpha is: %s",
+    #     1 - (np.min(data["photons"]) / np.max(data["photons"])),
+    # )
+    # z = calculate_z(data_filtered, 0.95, 100, np.max(data["photons"]))
 
-    plt.scatter(*zip(*(_.center for _ in runs)))
-    plt.scatter(*zip(*((_["x"], _["y"]) for _ in data)), marker='.')
+    # plt.scatter(*zip(*(_.center for _ in runs)))
+    # plt.scatter(*zip(*((_["x"], _["y"]) for _ in data)), marker='.')
+    t0 = _time.time()
+    positions = np.array([_.center for _ in runs])
+    pd = distance.pdist(positions)
+    Z = hierarchy.single(pd)
+    # Z = hierarchy.ward(pd)
+    clst = hierarchy.fcluster(Z, .5, criterion='distance')
+    nclust = clst.max()
+    origamis = []
+    for c in range(1, nclust+1):  # cluster numbering starts at 0
+        origamis.append(np.nonzero(clst == c)[0])
+    print("Creados ", nclust, "grupos en ", _time.time()-t0, "s")
+    plt.figure("grouped runs")
+    plt.scatter(*positions.T)
+    patches = []
+    for origami in origamis:
+        or_points = np.array([positions[_] for _ in origami])
+        if len(origami) < 3:
+            vertex = or_points
+        else:
+            ch = ConvexHull(or_points)
+            vertex = ch.points[ch.vertices]
+        patches.append(Polygon(vertex, closed=True, color="r"))
+    # colors = 100 * np.random.rand(len(patches))
+    p = PatchCollection(patches, alpha=0.3)
+    p.set_color("r")
+    plt.gca().add_collection(p)
+
+
+if False:
+    positions = np.array([_.center for _ in runs])
+    juntos = np.nonzero(distance.pdist(positions) < 20)[0]
+    rows, cols = np.triu_indices(len(positions), 1)
+    rows = rows[juntos]
+    rows = np.concatenate((rows, [-1],))
+    cols = cols[juntos]
+    sets = [set() for _ in range(len(positions))]  # set o list?
+    last_idx = 0
+    for idx in range(len(positions)):
+        origami = sets[idx]
+        origami.add(idx)
+        while rows[last_idx] == idx:
+            origami |= sets[cols[last_idx]]
+            sets[cols[last_idx]] = origami
+            last_idx += 1
+    stop()
+    sets = set(tuple(_) for _ in sets)  # squash
+    # from scipy.cluster.hierarchy import dendrogram, linkage
+
+    # from matplotlib import pyplot as plt
+    # Z = linkage(dist, 'ward')
+
+    # fig = plt.figure(figsize=(25, 10))
+    # dn = dendrogram(Z)
 
 if False:
     # data_filtered['z'] = z

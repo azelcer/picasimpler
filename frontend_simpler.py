@@ -28,10 +28,12 @@ from PyQt5.QtWidgets import (
 from PyQt5 import QtGui as _QtGui
 # import pyqtgraph as _pg
 from matplotlib.figure import Figure
+from matplotlib.collections import PathCollection, EllipseCollection, PolyCollection
+from matplotlib.lines import Line2D
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # or backend_qt6agg
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # or backend_qt6agg
 import logging as _lgn
-from simpler_tools import SimplerAnalysisParameters, SIMPLERData
+from simpler_tools import SimplerAnalysisParameters, SIMPLERData, FluoEvent
 
 
 _lgr = _lgn.getLogger(__name__)
@@ -116,6 +118,51 @@ class SIMPLERTableModel(QAbstractTableModel):
             return str(self._columns[section])
 
 
+class FluoEventTableModel(QAbstractTableModel):
+    def __init__(self, data: list[FluoEvent]):
+        super().__init__()
+        self._data = data
+        self._columns = ["Length", "Init frame", "End frame", "Localizations list"]
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            row = self._data[index.row()]
+            match index.column():
+                case 0:
+                    return str(row.length)
+                case 1:
+                    return str(row._initial_frame)
+                case 2:
+                    return str(row._final_frame)
+                case 3:
+                    return ", ".join([str(_) for _ in row._localization_list])
+        # elif role == Qt.BackgroundRole:
+        #     if not self._data.data[index.row()]["valid"]:
+        #         return _QtGui.QBrush(_QtGui.QColor(0xc0c0c0))
+
+    def rowCount(self, index):
+        return len(self._data)
+
+    def columnCount(self, index):
+        return len(self._columns)
+
+    def headerData(self, section: int, orientation: Qt.Orientation, role: Qt.DisplayRole):
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Orientation.Vertical:
+                return str(section)
+            return str(self._columns[section])
+
+# table.cellClicked.connect(self.handle_cell_click)
+# def handle_cell_click(self, row, column):
+#     print(f'Cell clicked: Row {row}, Column {column}') #
+# table.selectionModel().selectionChanged.connect(self.handle_selection_changed)
+# def handle_selection_changed(self, selected, deselected):
+#     # Code to handle the change in selection
+#     pass #
+# self.tv.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
+# QtGui.QAbstractItemView.SelectRows if you haven't loaded QtGui
+
+
 class SimplerWidget(QFrame):
 
     apply_signal = pyqtSignal(SimplerAnalysisParameters)
@@ -186,6 +233,33 @@ class SimplerCalibrationWidget(QFrame):
             )
 
 
+class EventsGroupingWidget(QFrame):
+
+    apply_signal = pyqtSignal()
+
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent=parent, *args, **kwargs)
+        self._parent = parent
+        self._init_GUI()
+
+    def freeze(self):
+        self.setEnabled(False)
+
+    def thaw(self):
+        self.setEnabled(True)
+
+    def _init_GUI(self):
+        layout = QVBoxLayout()
+        self._dist_sb = create_labeled_float("Max dist / nm", layout, 10, 1, 1)
+        self._group_button = QPushButton("Group events", self)
+        layout.addWidget(self._group_button)
+        self.setLayout(layout)
+        self._group_button.pressed.connect(self._parent.group_events)
+
+    def get_distance(self) -> float:
+        return self._dist_sb.value()
+
+
 class DataTableWidget(QFrame):
 
     def __init__(self, *args, **kwargs):
@@ -196,60 +270,110 @@ class DataTableWidget(QFrame):
         layout = QVBoxLayout(self)
         self.setLayout(layout)
         self._table = QTableView(self)
+        layout.addWidget(QLabel("Localizations data"))
         layout.addWidget(self._table)
 
     def set_data(self, data):
         self._table.setModel(SIMPLERTableModel(data))
 
 
-class DataPlotWidget(QFrame):
-
-    # apply_signal = pyqtSignal(SimplerAnalysisParameters)
+class EventsTableWidget(QFrame):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._init_GUI()
 
     def _init_GUI(self):
+        layout = QVBoxLayout(self)
+        self.setLayout(layout)
+        self._table = QTableView(self)
+        layout.addWidget(QLabel("Events data"))
+        layout.addWidget(self._table)
+
+    def set_data(self, data):
+        self._table.setModel(FluoEventTableModel(data))
+
+
+class DataPlotWidget(QFrame):
+
+    # apply_signal = pyqtSignal(SimplerAnalysisParameters)
+    _marker_size = 1.
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_GUI()
+        self._ungrouped_scatter: PathCollection = None
+        self._grouped_scatter: PathCollection = None
+        self._events_scatter: EllipseCollection = None
+        self._sites_scatter: PolyCollection = None
+        self._data = None
+        self._events = None
+
+    def _init_GUI(self):
         layout = QHBoxLayout()
         plt_lyt = QVBoxLayout()
         # self._plot = _pg.PlotWidget()
         # self._plot.setAspectLocked(1)
-        self.fig = Figure(figsize=(5, 4), dpi=100)
+        self.fig = Figure()  # figsize=(5, 4), dpi=100)
         self.ax = self.fig.add_subplot(111)  # Add a subplot to the figure
-        self.ax.axis("scaled")
-        # self.sp = self.ax.scatter([], [])
+        self.ax.axis("equal")
         self._plot = FigureCanvas(self.fig)
         toolbar = NavigationToolbar(self._plot, self)
         plt_lyt.addWidget(toolbar)
         plt_lyt.addWidget(self._plot)
         layout.addLayout(plt_lyt, stretch=3)
-        # layout.addWidget(self._plot)
 
         chk_layout = QVBoxLayout()
-        self._unfiltered_chk = QCheckBox("Not included")
-        self._filtered_chk = QCheckBox("Included")
-        self._SIMPLER_equiv_chk = QCheckBox("SIMPLER equivalent")
-        chk_layout.addWidget(self._unfiltered_chk)
-        chk_layout.addWidget(self._filtered_chk)
-        chk_layout.addWidget(self._SIMPLER_equiv_chk)
+        self._ungrouped_chk = QCheckBox("Ungrouped")
+        self._grouped_chk = QCheckBox("Grouped")
+        self._groups_chk = QCheckBox("Events")
+        chk_layout.addWidget(self._ungrouped_chk)
+        chk_layout.addWidget(self._grouped_chk)
+        chk_layout.addWidget(self._groups_chk)
         layout.addLayout(chk_layout)
         self.setLayout(layout)
 
     def set_data(self, new_data: SIMPLERData):
-        # borrar todo
-        # actualizar
+        """Cleans everything."""
+
         # FIXME: cambiar este acceso feo, es sólo para arrancar a dibujar
-        data = new_data.data
-        x = data["x"]
-        y = data["y"]
+        self._data = new_data
+        # x = data["x"]
+        # y = data["y"]
         # Meter transformacion a µm
         # self._scatter_plot = self._plot.plot(x, y, pen=None, symbolpen=None, symbol="s", symbolSize=.2, pxMode=False) # default True == son pixeles
         # p.setDownsampling(ds=None, auto=True, method="subsample")
         # p.setClipToView(True)
         # p.disableAutoRange()
         self.ax.clear()
-        self.ax.scatter(x, y)
+        self._ungrouped_scatter: Line2D = None
+        self._grouped_scatter: Line2D = None
+        self._events_scatter: EllipseCollection = None
+        self._sites_scatter: PolyCollection = None
+        self._update_graphs()
+
+    def _update_graphs(self):
+        if self._ungrouped_chk.checkState():
+            data = self._data.data  # TODO: avoind intrusion, filter
+            if self._ungrouped_scatter is None:
+                # self._ungrouped_scatter = self.ax.scatter([0], [0])
+                self._ungrouped_scatter = self.ax.plot([0], [0], marker="o", ls="", ms=self._marker_size, c="blue")[0]
+            # TODO: filtrar
+            # self._ungrouped_scatter.set_offsets(_np.c_[data["x"], data["y"]])
+            self._ungrouped_scatter.set_data(data["x"], data["y"])
+        if self._data._runs and self._grouped_chk.checkState():  # TODO: avoind intrusion
+            if self._grouped_scatter is None:
+                self._grouped_scatter = self.ax.plot([0], [0], marker="o", ls="", ms=self._marker_size, c="red")[0]
+            g_data = self._data.get_grouped_locations()
+            self._grouped_scatter.set_data(g_data["x"], g_data["y"])
+        self.ax.relim()
+        # self.ax.autoscale_view()
+        # self.ax.autoscale(enable=True, axis='both')
+        self._plot.draw()
+
+    def set_events(self):
+        self._update_graphs()  # tal vez sólo filtrar eventos
+        # self._scatter_plot.draw()
 
     def update_data(self, new_data: SIMPLERData):
         # borrar todo
@@ -307,12 +431,19 @@ class Frontend(QMainWindow):
         central_layout = QVBoxLayout()
         cw.setLayout(central_layout)
         self._SIMPLER_widget = SimplerWidget(self)
+        self._event_grouping_widget = EventsGroupingWidget(self)
         self._plot_widget = DataPlotWidget()
-        self._table_widget = DataTableWidget(self)
+        self._localizations_table_widget = DataTableWidget(self)
+        self._events_table_widget = EventsTableWidget(self)
+        upper_layout = QHBoxLayout()
+        upper_layout.addWidget(self._event_grouping_widget)
+        upper_layout.addWidget(self._SIMPLER_widget)
         lower_layout = QHBoxLayout()
         lower_layout.addWidget(self._plot_widget)
-        lower_layout.addWidget(self._table_widget)
-        central_layout.addWidget(self._SIMPLER_widget)
+        lower_layout.addWidget(self._events_table_widget)
+        lower_layout.addWidget(self._localizations_table_widget)
+
+        central_layout.addLayout(upper_layout)
         central_layout.addLayout(lower_layout)
         self.setCentralWidget(cw)
         return
@@ -330,6 +461,14 @@ class Frontend(QMainWindow):
                 )
             return
         print("not implemented")
+
+    def group_events(self):
+        if self._data is None:
+            _lgr.info("No data to filter")
+            return
+        self._data.group_events(self._event_grouping_widget.get_distance())
+        self._events_table_widget.set_data(self._data.get_events())
+        self._plot_widget.set_events()
 
     def filter_data(self):
         if self._data is None:
@@ -364,7 +503,7 @@ class Frontend(QMainWindow):
         """Load a file."""
         self._data = SIMPLERData(fname)
         self._plot_widget.set_data(self._data)
-        self._table_widget.set_data(self._data)
+        self._localizations_table_widget.set_data(self._data)
 
     @pyqtSlot(_QtGui.QCloseEvent)
     def closeEvent(self, event):

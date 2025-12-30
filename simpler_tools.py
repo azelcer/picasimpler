@@ -446,6 +446,7 @@ class SIMPLERData:
             self.info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
         self.pixel_size = self.info[1]["Pixelsize"]
         self._filtered_data = np.empty_like(self.data)
+        self._runs: list[FluoEvent] = None
 
     def filter_data(self, params: SimplerAnalysisParameters):
         idx_to_discard = filter_data(self.data, params.max_dist, self.pixel_size)
@@ -454,6 +455,22 @@ class SIMPLERData:
         self._out_idx = idx_to_discard
         self.data["valid"] = data_filter
         self._filtered_data = self.data[data_filter]
+
+    def group_events(self, distance: float):
+        self._runs = group_events(self.data, abs(distance), self.pixel_size)
+
+    def get_events(self):
+        if self._runs is None:
+            raise ValueError("No grouping has been performed yet")
+        return self._runs
+
+    def get_grouped_indices(self):
+        if self._runs is None:
+            raise ValueError("No grouping has been performed yet")
+        return np.concatenate([_._localization_list for _ in self._runs])
+
+    def get_grouped_locations(self):
+        return self.data[self.get_grouped_indices()]
 
     def get_unfilterred_data(self):
         return self.data

@@ -18,6 +18,7 @@ from scipy.cluster import hierarchy
 import yaml
 import logging as _lgn
 import warnings as _warnings
+from sklearn import cluster 
 from sklearn.cluster import DBSCAN as _DBSCAN, KMeans as _KMeans
 from scipy.ndimage import map_coordinates
 
@@ -467,16 +468,42 @@ class SIMPLERData:
         """Indices of runs belonging to the same site."""
         if not self._runs:
             return []
-        pd = _distance.pdist(self._events_positions)
-        func = getattr(hierarchy, method)
-        Z = func(pd)
-        clst = hierarchy.fcluster(Z, distance / self.pixel_size, criterion='distance')
-        nclust = clst.max()
-        sites = []
-        # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
-        for c in range(1, nclust + 1):  # cluster numbering starts at 0
-            sites.append(np.nonzero(clst == c)[0])
-        self._sites = [[self._runs[_] for _ in s] for s in sites]
+        # scipy first
+        t0 = _time.time()
+        if hasattr(hierarchy, method):
+            func = getattr(hierarchy, method)
+            pd = _distance.pdist(self._events_positions)
+            Z = func(pd)
+            clst = hierarchy.fcluster(Z, distance / self.pixel_size, criterion='distance')
+            nclust = clst.max()
+            sites = []
+            # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
+            for c in range(1, nclust + 1):  # cluster numbering starts at 1
+                sites.append(np.nonzero(clst == c)[0])
+            self._sites = [[self._runs[_] for _ in s] for s in sites]
+        else:
+            if method == "OPTICS":  # TODO: use match
+                clust = cluster.OPTICS(min_samples=5, max_eps=distance / self.pixel_size,)
+                clust.fit(self._events_positions)
+                nclust = clust.labels_.max()
+                sites = []
+                # TODO: acceder via labels_
+                # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
+                for c in range(nclust):  # cluster numbering starts at 0
+                    sites.append(np.nonzero(clust.labels_ == c)[0])
+                self._sites = [[self._runs[_] for _ in s] for s in sites]
+            elif method == "DBSCAN":  # TODO: use match
+                clust = cluster.DBSCAN(min_samples=5, eps=distance / self.pixel_size,)
+                clust.fit(self._events_positions)
+                nclust = clust.labels_.max()
+                sites = []
+                # TODO: acceder via labels_
+                # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
+                for c in range(nclust):  # cluster numbering starts at 0
+                    sites.append(np.nonzero(clust.labels_ == c)[0])
+                self._sites = [[self._runs[_] for _ in s] for s in sites]
+        _lgr.info("Clustering with %s took %s s and found %s sites.",
+                  method, _time.time() - t0, len(self._sites))
 
 
     def get_events(self):

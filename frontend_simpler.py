@@ -600,7 +600,7 @@ class Frontend(QMainWindow):
         if not self._data._runs:  # TODO: do not deep link
             _lgr.info("Data not grouped into events")
             return
-        self._runner.submit(self._sites_grouped_cb, self._data.group_sites, args=(self._sites_grouping_widget.get_distance(),))
+        self._runner.submit(self._sites_grouped_cb, self._data.group_sites, args=(self._sites_grouping_widget.get_distance(), "DBSCAN"))
         self.notify("Grouping sites...")
         self._freeze_all()
 

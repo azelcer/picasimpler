@@ -448,6 +448,7 @@ class SIMPLERData:
         self.pixel_size = self.info[1]["Pixelsize"]
         self._filtered_data = np.empty_like(self.data)
         self._runs: list[FluoEvent] = None
+        self._filtered_runs: list[FluoEvent] = None
         self._sites: list[list[FluoEvent]] = None
 
     def filter_data(self, params: SimplerAnalysisParameters):
@@ -460,9 +461,18 @@ class SIMPLERData:
 
     def group_events(self, distance: float):
         self._runs = group_events(self.data, abs(distance), self.pixel_size)
-        self._events_positions = np.array([_.center for _ in self._runs])
-        self._events_size = np.array([(_.std[0]**2 + _.std[1]**2)**.5 for _ in self._runs])
-        # duraciones = np.array([_.length for _ in runs])
+        self._filtered_runs = self._runs
+        self._analyze_events()
+
+    def _analyze_events(self):
+        self._events_positions = np.array([_.center for _ in self._filtered_runs])
+        self._events_size = np.array([(_.std[0]**2 + _.std[1]**2)**.5 for _ in self._filtered_runs])
+
+    def filter_events(self, min_lenght: int = 2, max_length: int = None):
+        if not self._runs:
+            return
+        self._filtered_runs = [_ for _ in self._runs if
+                               min_lenght <= _.lenght <= 0 or max_length]
 
     def group_sites(self, distance: float, method: str = "single"):
         """Indices of runs belonging to the same site."""
@@ -480,7 +490,7 @@ class SIMPLERData:
             # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
             for c in range(1, nclust + 1):  # cluster numbering starts at 1
                 sites.append(np.nonzero(clst == c)[0])
-            self._sites = [[self._runs[_] for _ in s] for s in sites]
+            self._sites = [[self._filtered_runs[_] for _ in s] for s in sites]
         else:
             if method == "OPTICS":  # TODO: use match
                 clust = cluster.OPTICS(min_samples=5, max_eps=distance / self.pixel_size,)
@@ -491,7 +501,7 @@ class SIMPLERData:
                 # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
                 for c in range(nclust):  # cluster numbering starts at 0
                     sites.append(np.nonzero(clust.labels_ == c)[0])
-                self._sites = [[self._runs[_] for _ in s] for s in sites]
+                self._sites = [[self._filtered_runs[_] for _ in s] for s in sites]
             elif method == "DBSCAN":  # TODO: use match
                 clust = cluster.DBSCAN(min_samples=5, eps=distance / self.pixel_size,)
                 clust.fit(self._events_positions)
@@ -501,20 +511,19 @@ class SIMPLERData:
                 # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
                 for c in range(nclust):  # cluster numbering starts at 0
                     sites.append(np.nonzero(clust.labels_ == c)[0])
-                self._sites = [[self._runs[_] for _ in s] for s in sites]
+                self._sites = [[self._filtered_runs[_] for _ in s] for s in sites]
         _lgr.info("Clustering with %s took %s s and found %s sites.",
                   method, _time.time() - t0, len(self._sites))
-
 
     def get_events(self):
         if self._runs is None:
             raise ValueError("No grouping has been performed yet")
-        return self._runs
+        return self._filtered_runs
 
     def get_grouped_indices(self):
         if self._runs is None:
             raise ValueError("No grouping has been performed yet")
-        return np.concatenate([_._localization_list for _ in self._runs])
+        return np.concatenate([_._localization_list for _ in self._filtered_runs])
 
     def get_grouped_locations(self):
         if self._runs is None:

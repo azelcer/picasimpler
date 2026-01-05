@@ -364,6 +364,9 @@ class EventsTableWidget(QFrame):
     def set_data(self, data):
         self._table.setModel(FluoEventTableModel(data))
 
+    def reset(self):
+        self._table.setModel(None)
+
 
 class DataPlotWidget(QFrame):
 
@@ -426,6 +429,7 @@ class DataPlotWidget(QFrame):
         self._init_graphs()
         self._update_graphs()
         self._graph_selection_changed(1)
+        self.ax.margins(.05)
         self.ax.relim()
         self.ax.autoscale_view()
         self.ax.autoscale(enable=True, axis='both')
@@ -434,7 +438,7 @@ class DataPlotWidget(QFrame):
     def _update_graphs(self):
         data = self._data.get_ungrouped_locations()
         self._ungrouped_scatter.set_data(data["x"], data["y"])
-
+        # print([(min(_), max(_)) for _ in [data["x"], data["y"]]])
         data = self._data.get_grouped_locations()
         self._grouped_scatter.set_data(data["x"], data["y"])
 
@@ -459,7 +463,7 @@ class DataPlotWidget(QFrame):
                 vertex = ch.points[ch.vertices]
             patches.append(Polygon(vertex, closed=True, color="r"))
         p = PatchCollection(patches, alpha=0.3)
-        # p.set_color("r")
+        p.set_color("r")
         self._sites_scatter = self.ax.add_collection(p)
 
     def data_updated(self):
@@ -658,6 +662,7 @@ class Frontend(QMainWindow):
         self._runner.cleanup()
         self._plot_widget.set_data(self._data)
         self._localizations_table_widget.set_data(self._data)
+        self._events_table_widget.reset()
         self.setWindowTitle(make_window_title(self._fname))
         self.notify(f"Opened {_pathlib.Path(self._fname).stem}")
 

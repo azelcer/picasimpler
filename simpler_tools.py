@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import h5py
 import numpy as np
 # from numpy.lib.recfunctions import append_fields
-from scipy.spatial import distance, ConvexHull, KDTree
+from scipy.spatial import distance as _distance, KDTree
 from scipy.cluster import hierarchy
 import yaml
 import logging as _lgn
@@ -147,10 +147,10 @@ def filter_data(
         if distance_next is not None:
             distance_prev = distance_next.T
         else:
-            distance_prev = distance.cdist(
+            distance_prev = _distance.cdist(
                 xy[f_slice], xy[prev_slice], "sqeuclidean"
             )
-        distance_next = distance.cdist(
+        distance_next = _distance.cdist(
             xy[f_slice], xy[next_slice], "sqeuclidean"
         )
         has_prev = np.any(distance_prev < r_th_sq, axis=1)
@@ -247,7 +247,7 @@ def group_events(
             next_slice = slice(framejump[idxframe + 1], framejump[idxframe + 2])
         f_slice = slice(start_frame_idx, framejump[idxframe + 1])
         next_run = [[] for _ in range(next_slice.stop - next_slice.start)]
-        distance_next = distance.cdist(
+        distance_next = _distance.cdist(
             xy[f_slice], xy[next_slice], "sqeuclidean"
         ) < r_th_sq
         # next_neighbours = distance_next.sum(axis=0)
@@ -447,6 +447,7 @@ class SIMPLERData:
         self.pixel_size = self.info[1]["Pixelsize"]
         self._filtered_data = np.empty_like(self.data)
         self._runs: list[FluoEvent] = None
+        self._sites: list[list[FluoEvent]] = None
 
     def filter_data(self, params: SimplerAnalysisParameters):
         idx_to_discard = filter_data(self.data, params.max_dist, self.pixel_size)
@@ -458,6 +459,25 @@ class SIMPLERData:
 
     def group_events(self, distance: float):
         self._runs = group_events(self.data, abs(distance), self.pixel_size)
+        self._events_positions = np.array([_.center for _ in self._runs])
+        self._events_size = np.array([(_.std[0]**2 + _.std[1]**2)**.5 for _ in self._runs])
+        # duraciones = np.array([_.length for _ in runs])
+
+    def group_sites(self, distance: float, method: str = "single"):
+        """Indices of runs belonging to the same site."""
+        if not self._runs:
+            return []
+        pd = _distance.pdist(self._events_positions)
+        func = getattr(hierarchy, method)
+        Z = func(pd)
+        clst = hierarchy.fcluster(Z, distance / self.pixel_size, criterion='distance')
+        nclust = clst.max()
+        sites = []
+        # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
+        for c in range(1, nclust + 1):  # cluster numbering starts at 0
+            sites.append(np.nonzero(clst == c)[0])
+        self._sites = [[self._runs[_] for _ in s] for s in sites]
+
 
     def get_events(self):
         if self._runs is None:
@@ -470,7 +490,33 @@ class SIMPLERData:
         return np.concatenate([_._localization_list for _ in self._runs])
 
     def get_grouped_locations(self):
+        if self._runs is None:
+            return np.array([], dtype=self.data.dtype)
         return self.data[self.get_grouped_indices()]
+
+    def get_events_locations(self):
+        if self._runs is None:
+            return np.empty((0, 2,))
+        return self._events_positions
+
+    def get_events_sizes(self):
+        if self._runs is None:
+            return np.empty((0,))
+        return self._events_size
+
+    def get_sites(self) -> list[list[FluoEvent]]:
+        if self._sites is None:
+            return []
+        return self._sites
+
+    def get_ungrouped_filter(self):
+        rv = np.ones_like(self.data, dtype=bool)
+        if self._runs:
+            rv[self.get_grouped_indices()] = False
+        return rv
+
+    def get_ungrouped_locations(self):
+        return self.data[self.get_ungrouped_filter()]
 
     def get_unfilterred_data(self):
         return self.data
@@ -525,7 +571,7 @@ if __name__ == "__main__":
     positions = np.array([_.center for _ in runs])
     sigmas = np.array([(_.std[0]**2 + _.std[1]**2)**.5 for _ in runs])
     duraciones = np.array([_.length for _ in runs])
-    pd = distance.pdist(positions)
+    pd = _distance.pdist(positions)
     Z = hierarchy.single(pd)
     # Z = hierarchy.ward(pd)
     clst = hierarchy.fcluster(Z, .1, criterion='distance')
@@ -565,32 +611,6 @@ if __name__ == "__main__":
     plt.hist(largos, bins=max(largos))
     plt.yscale("log")
 
-
-if False:
-    positions = np.array([_.center for _ in runs])
-    juntos = np.nonzero(distance.pdist(positions) < 20)[0]
-    rows, cols = np.triu_indices(len(positions), 1)
-    rows = rows[juntos]
-    rows = np.concatenate((rows, [-1],))
-    cols = cols[juntos]
-    sets = [set() for _ in range(len(positions))]  # set o list?
-    last_idx = 0
-    for idx in range(len(positions)):
-        origami = sets[idx]
-        origami.add(idx)
-        while rows[last_idx] == idx:
-            origami |= sets[cols[last_idx]]
-            sets[cols[last_idx]] = origami
-            last_idx += 1
-    stop()
-    sets = set(tuple(_) for _ in sets)  # squash
-    # from scipy.cluster.hierarchy import dendrogram, linkage
-
-    # from matplotlib import pyplot as plt
-    # Z = linkage(dist, 'ward')
-
-    # fig = plt.figure(figsize=(25, 10))
-    # dn = dendrogram(Z)
 
 if False:
     # data_filtered['z'] = z

@@ -2,6 +2,7 @@
 
 """
 import numpy as _np
+from scipy.spatial import ConvexHull
 import pathlib as _pathlib
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QAbstractTableModel
 from PyQt5.QtWidgets import (
@@ -28,12 +29,15 @@ from PyQt5.QtWidgets import (
 from PyQt5 import QtGui as _QtGui
 # import pyqtgraph as _pg
 from matplotlib.figure import Figure
-from matplotlib.collections import PathCollection, EllipseCollection, PolyCollection
+from matplotlib.collections import EllipseCollection, PatchCollection
+from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # or backend_qt6agg
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # or backend_qt6agg
 import logging as _lgn
 from simpler_tools import SimplerAnalysisParameters, SIMPLERData, FluoEvent
+
+from threading import Thread, Event
 
 
 _lgr = _lgn.getLogger(__name__)
@@ -88,6 +92,46 @@ def create_labeled_int(name: str, external_layout: QBoxLayout,
     hlayout.addWidget(sb)
     external_layout.addLayout(hlayout)
     return sb
+
+
+class background_runner:
+
+    # _task_finished_evt = Event()
+
+    def __init__(self):
+        self._running = False
+        self._thread = None
+        self._callback: callable = None
+
+    def submit(self, callback: callable, function: callable, args: list = [], kwargs: dict = {}):
+        if self._running or self._thread:
+            _lgr.error("Background task already running")
+            return False
+        self._target = function
+        self._callback = callback
+        self._thread = Thread(target=self._do_run, args=args, kwargs=kwargs)
+        self._running = True
+        self._thread.start()
+
+    def _do_run(self, *args, **kwargs):
+        try:
+            self._rv = self._target(*args, **kwargs)
+        except Exception as e:
+            print("exception", e, type(e))
+            self._rv = None
+        self._running = False
+        self._callback(self._rv)
+
+    def cleanup(self):
+        if self._running:
+            _lgr.error("Background task still running")
+            return False
+        if not self._thread:
+            _lgr.error("No background task running")
+            return True
+        self._thread.join()
+        self._thread = None
+        return True
 
 
 class SIMPLERTableModel(QAbstractTableModel):
@@ -251,10 +295,37 @@ class EventsGroupingWidget(QFrame):
     def _init_GUI(self):
         layout = QVBoxLayout()
         self._dist_sb = create_labeled_float("Max dist / nm", layout, 10, 1, 1)
-        self._group_button = QPushButton("Group events", self)
+        self._group_button = QPushButton("Group into events", self)
         layout.addWidget(self._group_button)
         self.setLayout(layout)
         self._group_button.pressed.connect(self._parent.group_events)
+
+    def get_distance(self) -> float:
+        return self._dist_sb.value()
+
+
+class SitesGroupingWidget(QFrame):
+
+    apply_signal = pyqtSignal()
+
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent=parent, *args, **kwargs)
+        self._parent = parent
+        self._init_GUI()
+
+    def freeze(self):
+        self.setEnabled(False)
+
+    def thaw(self):
+        self.setEnabled(True)
+
+    def _init_GUI(self):
+        layout = QVBoxLayout()
+        self._dist_sb = create_labeled_float("Max dist / nm", layout, 80, 1, 1, maximum=100)
+        self._group_button = QPushButton("Group events into sites", self)
+        layout.addWidget(self._group_button)
+        self.setLayout(layout)
+        self._group_button.pressed.connect(self._parent.group_sites)
 
     def get_distance(self) -> float:
         return self._dist_sb.value()
@@ -302,10 +373,7 @@ class DataPlotWidget(QFrame):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._init_GUI()
-        self._ungrouped_scatter: PathCollection = None
-        self._grouped_scatter: PathCollection = None
-        self._events_scatter: EllipseCollection = None
-        self._sites_scatter: PolyCollection = None
+        self._init_graphs()
         self._data = None
         self._events = None
 
@@ -326,67 +394,99 @@ class DataPlotWidget(QFrame):
         chk_layout = QVBoxLayout()
         self._ungrouped_chk = QCheckBox("Ungrouped")
         self._grouped_chk = QCheckBox("Grouped")
-        self._groups_chk = QCheckBox("Events")
+        self._events_chk = QCheckBox("Events")
+        self._ungrouped_chk.setCheckState(1)
+        self._grouped_chk.setCheckState(1)
+        self._events_chk.setCheckState(1)
+        self._ungrouped_chk.stateChanged.connect(self._graph_selection_changed)
+        self._grouped_chk.stateChanged.connect(self._graph_selection_changed)
+        self._events_chk.stateChanged.connect(self._graph_selection_changed)
         chk_layout.addWidget(self._ungrouped_chk)
         chk_layout.addWidget(self._grouped_chk)
-        chk_layout.addWidget(self._groups_chk)
+        chk_layout.addWidget(self._events_chk)
         layout.addLayout(chk_layout)
         self.setLayout(layout)
+
+    def _init_graphs(self):
+        self.ax.clear()
+        self._ungrouped_scatter: Line2D = self.ax.plot([], [], marker="o", ls="", ms=self._marker_size, c="blue")[0]
+        self._grouped_scatter: Line2D = self.ax.plot([], [], marker="o", ls="", ms=self._marker_size, c="red")[0]
+        self._events_scatter = self.ax.add_collection(EllipseCollection([], [], []))
+        self._sites_scatter = self.ax.add_collection(PatchCollection([]))
 
     def set_data(self, new_data: SIMPLERData):
         """Cleans everything."""
 
-        # FIXME: cambiar este acceso feo, es sólo para arrancar a dibujar
         self._data = new_data
-        # x = data["x"]
-        # y = data["y"]
         # Meter transformacion a µm
         # self._scatter_plot = self._plot.plot(x, y, pen=None, symbolpen=None, symbol="s", symbolSize=.2, pxMode=False) # default True == son pixeles
         # p.setDownsampling(ds=None, auto=True, method="subsample")
         # p.setClipToView(True)
         # p.disableAutoRange()
-        self.ax.clear()
-        self._ungrouped_scatter: Line2D = None
-        self._grouped_scatter: Line2D = None
-        self._events_scatter: EllipseCollection = None
-        self._sites_scatter: PolyCollection = None
+        self._init_graphs()
         self._update_graphs()
-
-    def _update_graphs(self):
-        if self._ungrouped_chk.checkState():
-            data = self._data.data  # TODO: avoind intrusion, filter
-            if self._ungrouped_scatter is None:
-                # self._ungrouped_scatter = self.ax.scatter([0], [0])
-                self._ungrouped_scatter = self.ax.plot([0], [0], marker="o", ls="", ms=self._marker_size, c="blue")[0]
-            # TODO: filtrar
-            # self._ungrouped_scatter.set_offsets(_np.c_[data["x"], data["y"]])
-            self._ungrouped_scatter.set_data(data["x"], data["y"])
-        if self._data._runs and self._grouped_chk.checkState():  # TODO: avoind intrusion
-            if self._grouped_scatter is None:
-                self._grouped_scatter = self.ax.plot([0], [0], marker="o", ls="", ms=self._marker_size, c="red")[0]
-            g_data = self._data.get_grouped_locations()
-            self._grouped_scatter.set_data(g_data["x"], g_data["y"])
+        self._graph_selection_changed(1)
         self.ax.relim()
-        # self.ax.autoscale_view()
-        # self.ax.autoscale(enable=True, axis='both')
+        self.ax.autoscale_view()
+        self.ax.autoscale(enable=True, axis='both')
         self._plot.draw()
 
-    def set_events(self):
-        self._update_graphs()  # tal vez sólo filtrar eventos
-        # self._scatter_plot.draw()
+    def _update_graphs(self):
+        data = self._data.get_ungrouped_locations()
+        self._ungrouped_scatter.set_data(data["x"], data["y"])
 
-    def update_data(self, new_data: SIMPLERData):
-        # borrar todo
-        # actualizar
-        # FIXME: cambiar este acceso feo, es sólo para arrancar a dibujar
-        data = new_data.data
-        x = data["x"][data["valid"]]
-        y = data["y"][data["valid"]]
-        # Meter transformacion a µm
-        # self._scatter_plot.setData(x, y)
-        self.ax.clear()
-        self.ax.scatter(x, y)
-        # self._scatter_plot.draw()
+        data = self._data.get_grouped_locations()
+        self._grouped_scatter.set_data(data["x"], data["y"])
+
+        self._events_scatter.remove()
+        sigmas = self._data.get_events_sizes()
+        self._events_scatter = self.ax.add_collection(EllipseCollection(
+                widths=sigmas, heights=sigmas, angles=0, units='xy',
+                # facecolors=plt.cm.hsv(duraciones / duraciones.max()),
+                offsets=self._data.get_events_locations(), transOffset=self.ax.transData,
+                alpha=0.4,
+                )
+            )
+        self._sites_scatter.remove()
+        sites = self._data.get_sites()
+        patches = []
+        for site in sites:
+            or_points = _np.array([_.center for _ in site])
+            if len(site) < 3:
+                vertex = or_points
+            else:
+                ch = ConvexHull(or_points)
+                vertex = ch.points[ch.vertices]
+            patches.append(Polygon(vertex, closed=True, color="r"))
+        p = PatchCollection(patches, alpha=0.3)
+        # p.set_color("r")
+        self._sites_scatter = self.ax.add_collection(p)
+
+    def data_updated(self):
+        self._update_graphs()
+        # Collections are not updated but replaced: visibility is forgotten
+        self._graph_selection_changed(1)
+
+    # SLOTS
+    @pyqtSlot(int)
+    def _graph_selection_changed(self, checked: int):
+        if self._ungrouped_chk.checkState():
+            self._ungrouped_scatter.set_visible(True)
+        else:
+            self._ungrouped_scatter.set_visible(False)
+
+        if self._grouped_chk.checkState():
+            self._grouped_scatter.set_visible(True)
+        else:
+            self._grouped_scatter.set_visible(False)
+
+        if self._events_scatter:
+            if self._events_chk.checkState():
+                self._events_scatter.set_visible(True)
+            else:
+                self._events_scatter.set_visible(False)
+        self._plot.draw()
+        # self._plot.draw_idle()
 
 
 class Frontend(QMainWindow):
@@ -397,6 +497,10 @@ class Frontend(QMainWindow):
 
     _modified = False
     _data = None
+    _freezable_widgets: list[QWidget] = []
+    _data_grouped_signal = pyqtSignal()
+    _data_load_signal = pyqtSignal()
+    _sites_grouped_signal = pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         """Init Frontend."""
@@ -406,8 +510,12 @@ class Frontend(QMainWindow):
         self.setWindowTitle(_APP_NAME)
         # self.setWindowIcon()
         self._status_bar: QStatusBar = self.statusBar()
-        self._status_bar.showMessage('Ready')  # Not for frames!
+        self.notify('Ready')  # Not for frames!
         # print(self._SIMPLER_widget.get_analysis_parameters())
+        self._runner = background_runner()
+        self._data_load_signal.connect(self._data_loaded_handler)
+        self._data_grouped_signal.connect(self._data_grouped_handler)
+        self._sites_grouped_signal.connect(self._sites_grouped_handler)
 
     def _setup_menus(self):
         """Setup menues."""
@@ -430,13 +538,18 @@ class Frontend(QMainWindow):
         cw = QWidget()
         central_layout = QVBoxLayout()
         cw.setLayout(central_layout)
-        self._SIMPLER_widget = SimplerWidget(self)
         self._event_grouping_widget = EventsGroupingWidget(self)
+        self._freezable_widgets.append(self._event_grouping_widget)
+        self._sites_grouping_widget = SitesGroupingWidget(self)
+        self._freezable_widgets.append(self._sites_grouping_widget)
+        self._SIMPLER_widget = SimplerWidget(self)
+        self._freezable_widgets.append(self._SIMPLER_widget)
         self._plot_widget = DataPlotWidget()
         self._localizations_table_widget = DataTableWidget(self)
         self._events_table_widget = EventsTableWidget(self)
         upper_layout = QHBoxLayout()
         upper_layout.addWidget(self._event_grouping_widget)
+        upper_layout.addWidget(self._sites_grouping_widget)
         upper_layout.addWidget(self._SIMPLER_widget)
         lower_layout = QHBoxLayout()
         lower_layout.addWidget(self._plot_widget)
@@ -448,15 +561,25 @@ class Frontend(QMainWindow):
         self.setCentralWidget(cw)
         return
 
+    def _freeze_all(self):
+        for w in self._freezable_widgets:
+            w.freeze()
+        self._menu_bar.setEnabled(False)
+
+    def _thaw_all(self):
+        self._menu_bar.setEnabled(True)
+        for w in self._freezable_widgets:
+            w.thaw()
+
     def notify(self, msg: str):
         """Convenience function."""
-        self._status_bar.showMessage(str)
+        self._status_bar.showMessage(msg)
 
     def file_save(self):
         """Checks and opens a file."""
         if not self._modified:
             QMessageBox.information(
-                self, 'Message', "Noting to save",
+                self, 'Message', "Nothing to save",
                 QMessageBox.Ok, QMessageBox.Ok,
                 )
             return
@@ -464,11 +587,33 @@ class Frontend(QMainWindow):
 
     def group_events(self):
         if self._data is None:
-            _lgr.info("No data to filter")
+            _lgr.info("No data to group")
             return
-        self._data.group_events(self._event_grouping_widget.get_distance())
+        self._runner.submit(self._data_grouped_cb, self._data.group_events, args=(self._event_grouping_widget.get_distance(),))
+        self.notify("Grouping data...")
+        self._freeze_all()
+
+    def group_sites(self):
+        if self._data is None:
+            _lgr.info("No data to group")
+            return
+        if not self._data._runs:  # TODO: do not deep link
+            _lgr.info("Data not grouped into events")
+            return
+        self._runner.submit(self._sites_grouped_cb, self._data.group_sites, args=(self._sites_grouping_widget.get_distance(),))
+        self.notify("Grouping sites...")
+        self._freeze_all()
+
+    def _data_grouped_cb(self, rv):
+        self._data_grouped_signal.emit()
+
+    @pyqtSlot()
+    def _data_grouped_handler(self):
+        self._runner.cleanup()
+        self._thaw_all()
         self._events_table_widget.set_data(self._data.get_events())
-        self._plot_widget.set_events()
+        self._plot_widget.data_updated()
+        self.notify("Data grouped")
 
     def filter_data(self):
         if self._data is None:
@@ -488,9 +633,10 @@ class Frontend(QMainWindow):
                 return
         fname = self._ask_file_open()
         if fname:
-            self._do_file_open(fname)
-            self.setWindowTitle(make_window_title(fname))
-            self._status_bar.showMessage(f"Opened {_pathlib.Path(fname).stem}")
+            self._fname = fname
+            self._runner.submit(self._data_loaded_cb, self._do_file_open, args=(fname,))
+            self._freeze_all()
+            # self._do_file_open(fname)
 
     def _ask_file_open(self):
         """Ask a filename to open."""
@@ -502,12 +648,39 @@ class Frontend(QMainWindow):
     def _do_file_open(self, fname: str | _pathlib.Path):
         """Load a file."""
         self._data = SIMPLERData(fname)
+
+    def _data_loaded_cb(self, rv):
+        self._data_load_signal.emit()
+
+    @pyqtSlot()
+    def _data_loaded_handler(self):
+        self._thaw_all()
+        self._runner.cleanup()
         self._plot_widget.set_data(self._data)
         self._localizations_table_widget.set_data(self._data)
+        self.setWindowTitle(make_window_title(self._fname))
+        self.notify(f"Opened {_pathlib.Path(self._fname).stem}")
+
+    def _sites_grouped_cb(self, rv):
+        self._sites_grouped_signal.emit()
+
+    @pyqtSlot()
+    def _sites_grouped_handler(self):
+        self._thaw_all()
+        self._runner.cleanup()
+        self._plot_widget.data_updated()
+        self.notify("Events grouped into sites!")
 
     @pyqtSlot(_QtGui.QCloseEvent)
     def closeEvent(self, event):
         """Shut down."""
+        if not self._runner.cleanup():
+            QMessageBox.information(
+                self, "Can't exit", "Background task still running",
+                QMessageBox.Ok, QMessageBox.Ok,
+                )
+            event.ignore()
+            return
         if not self._modified:
             event.accept()
             return

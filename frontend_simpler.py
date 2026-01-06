@@ -4,7 +4,7 @@
 import numpy as _np
 from scipy.spatial import ConvexHull
 import pathlib as _pathlib
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QAbstractTableModel, QItemSelection
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QAbstractTableModel, QItemSelection, QItemSelectionModel
 from PyQt5.QtWidgets import (
     # QGroupBox,
     QMainWindow,
@@ -35,6 +35,7 @@ from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # or backend_qt6agg
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # or backend_qt6agg
+from matplotlib.backend_bases import PickEvent
 import logging as _lgn
 from simpler_tools import SimplerAnalysisParameters, SIMPLERData, FluoEvent
 
@@ -449,6 +450,13 @@ class SitesTableWidget(QFrame):
         selection = [index.row() for index in self._table.selectedIndexes() if index.column() == 0]
         self._parent._sites_selection_changed(selection)
 
+    def toggle_selection(self, idx: int):
+        selection_model = self._table.selectionModel()
+        selection_model.blockSignals(True)
+        index = self._table.model().index(idx, 0)
+        selection_model.select(index, QItemSelectionModel.Toggle | QItemSelectionModel.Rows)
+        selection_model.blockSignals(False)
+        self._table.scrollTo(index)
 
     def set_data(self, data):
         self._table.setModel(SiteTableModel(data))
@@ -463,12 +471,13 @@ class DataPlotWidget(QFrame):
     # apply_signal = pyqtSignal(SimplerAnalysisParameters)
     _marker_size = 1.
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent: QWidget, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
         self._init_GUI()
         self._init_graphs()
         self._data = None
         self._events = None
+        self._parent = parent
 
     def _init_GUI(self):
         layout = QHBoxLayout()
@@ -506,6 +515,7 @@ class DataPlotWidget(QFrame):
         self.setLayout(layout)
 
         self._plot.mpl_connect('scroll_event', self._on_scroll)
+        self._plot.mpl_connect('pick_event', self._on_pick)
 
     def _on_scroll(self, event):
         _ZOOM_FACTOR = 0.75
@@ -524,6 +534,20 @@ class DataPlotWidget(QFrame):
         self.ax.set_xlim(new_mins[0], new_maxs[0])
         self.ax.set_ylim(new_mins[1], new_maxs[1])
         self._plot.draw()
+
+    def _on_pick(self, event: PickEvent):
+        if (idx := getattr(event, "ind", None)) is None:
+            _lgr.error("No index in pick event")
+            return
+        if event.mouseevent.button == 1 and event.mouseevent.dblclick:
+            self._parent.site_toggle_selection(idx[0])
+        # print(type(event))
+        # print(event.mouseevent)
+        # print(event.artist)
+        # print(event.ind)
+        # print(event.name)
+        # print(event.__dir__())
+        # print()
 
     def zoom_to(self, lim_x, lim_y):
         self.ax.set_xlim(*lim_x)
@@ -565,11 +589,11 @@ class DataPlotWidget(QFrame):
         self._events_scatter.remove()
         sigmas = self._data.get_events_sizes()
         self._events_scatter = self.ax.add_collection(EllipseCollection(
-                widths=sigmas, heights=sigmas, angles=0, units='xy',
-                # facecolors=plt.cm.hsv(duraciones / duraciones.max()),
-                offsets=self._data.get_events_locations(), transOffset=self.ax.transData,
-                alpha=0.4,
-                )
+            widths=sigmas, heights=sigmas, angles=0, units='xy',
+            # facecolors=plt.cm.hsv(duraciones / duraciones.max()),
+            offsets=self._data.get_events_locations(), transOffset=self.ax.transData,
+            alpha=0.4,
+            )
             )
         self._sites_scatter.remove()
         sites = self._data.get_sites()
@@ -581,10 +605,11 @@ class DataPlotWidget(QFrame):
             else:
                 ch = ConvexHull(or_points)
                 vertex = ch.points[ch.vertices]
-            patches.append(Polygon(vertex, closed=True, color="r"))
-        p = PatchCollection(patches, alpha=0.3)
+            patches.append(Polygon(vertex, closed=True, color="r", ))
+        p = PatchCollection(patches, alpha=0.3, picker=True)
         p.set_color("green")
         self._sites_scatter = self.ax.add_collection(p)
+        self._sites_scatter.set_picker(True)
 
     def data_updated(self):
         self._update_graphs()
@@ -673,7 +698,7 @@ class Frontend(QMainWindow):
         self._freezable_widgets.append(self._sites_grouping_widget)
         self._SIMPLER_widget = SimplerWidget(self)
         self._freezable_widgets.append(self._SIMPLER_widget)
-        self._plot_widget = DataPlotWidget()
+        self._plot_widget = DataPlotWidget(self)
         self._localizations_table_widget = DataTableWidget(self)
         self._events_table_widget = EventsTableWidget(self)
         self._sites_table_widget = SitesTableWidget(self)
@@ -751,6 +776,9 @@ class Frontend(QMainWindow):
         self.notify("Grouping sites...")
         self._freeze_all()
 
+    def site_toggle_selection(self, idx: int):
+        self._sites_table_widget.toggle_selection(idx)
+
     def _data_grouped_cb(self, rv):
         self._data_grouped_signal.emit()
 
@@ -826,9 +854,14 @@ class Frontend(QMainWindow):
     def _sites_selection_changed(self, indexes: list[int]):
         if not indexes:  # empty list
             return
+        shift_arr = _np.array((-1, 1, ))
         sites = self._data.get_sites()
         positions = _np.array([evt.center for i in indexes for evt in sites[i]])
         lim_x, lim_y = zip(positions.min(axis=0), positions.max(axis=0), )
+        plus_x = abs(lim_x[0] - lim_x[1]) * .05
+        plus_y = abs(lim_y[0] - lim_y[1]) * .05
+        lim_x += shift_arr * plus_x
+        lim_y += shift_arr * plus_y
         self._plot_widget.zoom_to(lim_x, lim_y)
 
     @pyqtSlot(_QtGui.QCloseEvent)

@@ -420,6 +420,27 @@ class EventsTableWidget(QFrame):
         self._table.setModel(None)
 
 
+class SitesTableWidget(QFrame):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_GUI()
+
+    def _init_GUI(self):
+        layout = QVBoxLayout(self)
+        self.setLayout(layout)
+        self._table = QTableView(self)
+        self._table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        layout.addWidget(QLabel("Sites data"))
+        layout.addWidget(self._table)
+
+    def set_data(self, data):
+        self._table.setModel(SiteTableModel(data))
+
+    def reset(self):
+        self._table.setModel(None)
+
+
 class DataPlotWidget(QFrame):
 
     # apply_signal = pyqtSignal(SimplerAnalysisParameters)
@@ -633,6 +654,7 @@ class Frontend(QMainWindow):
         self._plot_widget = DataPlotWidget()
         self._localizations_table_widget = DataTableWidget(self)
         self._events_table_widget = EventsTableWidget(self)
+        self._sites_table_widget = SitesTableWidget(self)
         upper_layout = QHBoxLayout()
         upper_layout.addWidget(self._event_grouping_widget)
         upper_layout.addWidget(self._sites_grouping_widget)
@@ -641,10 +663,13 @@ class Frontend(QMainWindow):
         lower_layout.addWidget(self._plot_widget)
         # lower_layout.addWidget(self._events_table_widget)
         # lower_layout.addWidget(self._localizations_table_widget)
+        self._sites_dock = wrap_in_dock(self, "Sites table", self._sites_table_widget)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._sites_dock)
         self._evt_dock = wrap_in_dock(self, "Events table", self._events_table_widget)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._evt_dock)
         self._loc_dock = wrap_in_dock(self, "Localizations table", self._localizations_table_widget)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._loc_dock)
+        self.tabifyDockWidget(self._sites_dock, self._evt_dock)
         self.tabifyDockWidget(self._evt_dock, self._loc_dock)
 
         central_layout.addLayout(upper_layout, stretch=0)
@@ -760,6 +785,7 @@ class Frontend(QMainWindow):
         self._plot_widget.set_data(self._data)
         self._localizations_table_widget.set_data(self._data)
         self._events_table_widget.reset()
+        self._sites_table_widget.reset()
         self.setWindowTitle(make_window_title(self._fname))
         self.notify(f"Opened {_pathlib.Path(self._fname).stem}")
 
@@ -771,6 +797,8 @@ class Frontend(QMainWindow):
         self._thaw_all()
         self._runner.cleanup()
         self._plot_widget.data_updated()
+        self._sites_table_widget.set_data(self._data.get_sites())
+        self._sites_dock.raise_()
         self.notify("Events grouped into sites!")
 
     @pyqtSlot(_QtGui.QCloseEvent)

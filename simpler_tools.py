@@ -46,7 +46,8 @@ filename = _pathlib.Path(
 
 
 class FluoEvent:
-    def __init__(self, run_list: tuple[int, int]):  # frame, loc
+    def __init__(self, idx: int, run_list: tuple[int, int]):  # frame, loc
+        self._idx = idx
         chk_diff = [_[0] for _ in run_list]
         if not np.all(np.diff(chk_diff) == 1):
             raise ValueError(f"Frames no consecutivos: {run_list}")
@@ -67,6 +68,10 @@ class FluoEvent:
         self._desv = (np.std(df["x"]), np.std(df["y"]),)
 
     @property
+    def idx(self):
+        return self._idx
+
+    @property
     def center(self):
         return self._center
 
@@ -79,7 +84,21 @@ class FluoEvent:
         return self._final_frame - self._initial_frame + 1
 
 
-# No fuzz aboutstrings
+# class FluoSite:
+#     def __init__(self, idx: int, event_list: list[FluoEvent]):
+#         self._idx = idx
+#         self._events = event_list
+#         self._localization_list = [_ for evt in self._events for _ in evt._localization_list]
+
+#     def __repr__(self):
+#         return f"{self.__class__.__name__}({len(self._events)} evts, {len(self._localization_list)} locs)"
+
+#     @property
+#     def idx(self):
+#         return self._idx
+
+
+# No fuzz about strings
 def _h5py_dataset2ndarray(ds: h5py.Dataset) -> np.ndarray:
     # new_dtype_list = arr.dtype.descr + [('score', 'f4')]
     dt = ds.dtype
@@ -235,6 +254,7 @@ def group_events(
         np.diff(frames, prepend=-np.inf, append=np.inf) != 0
     )[0]
     runs: list[FluoEvent] = []
+    n_evt = 0
     prev_run = [[] for _ in range(framejump[1] - framejump[0])]
     for idxframe in range(0, len(framejump) - 2):
         nextframe = frames[framejump[idxframe + 1]]
@@ -262,7 +282,8 @@ def group_events(
                     next_run[np.argmax(distance_next[idx])] = lista
                 else:
                     lista.append((frame, start_frame_idx + idx,))  # pegar loc actual
-                    runs.append(FluoEvent(lista))
+                    runs.append(FluoEvent(n_evt, lista))
+                    n_evt += 1
         for idx, s in enumerate(this_neighbours):
             # print(f"la localización {start_frame_idx+idx} ({data[f_slice][idx]})"
             #       f"{'si' if s else 'no'} tiene vecinos")
@@ -272,14 +293,15 @@ def group_events(
     for idx, lista in enumerate(prev_run):  # los indices de prev_run
         if lista:
             lista.append((nextframe, framejump[idxframe + 1] + idx,))  # pegar loc actual
-            runs.append(FluoEvent(lista))
+            runs.append(FluoEvent(n_evt, lista))
+            n_evt += 1
     for r in runs:
         r.calculate_center(data)
     end = _time.time()
     _lgr.info(
         "Time of filtering step: %s s. %s runs found with %s (%.2f%%) localizations",
         end - start,
-        len(runs),
+        n_evt,
         sum(_.length for _ in runs),
         sum(_.length for _ in runs) / len(data) * 100
     )
@@ -472,7 +494,11 @@ class SIMPLERData:
         if not self._runs:
             return
         self._filtered_runs = [_ for _ in self._runs if
-                               min_lenght <= _.lenght <= 0 or max_length]
+                               min_lenght <= _.length <= (max_length or np.inf)]
+        self._analyze_events()
+        _lgr.info("Filtered by lengths between %s and %s. %s events remaining",
+                  min_lenght, max_length or np.inf, len(self._filtered_runs)
+                  )
 
     def group_sites(self, distance: float, method: str = "single"):
         """Indices of runs belonging to the same site."""
@@ -523,6 +549,8 @@ class SIMPLERData:
     def get_grouped_indices(self):
         if self._runs is None:
             raise ValueError("No grouping has been performed yet")
+        if not self._filtered_runs:
+            return np.empty((0,), dtype=int)
         return np.concatenate([_._localization_list for _ in self._filtered_runs])
 
     def get_grouped_locations(self):

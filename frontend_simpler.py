@@ -196,6 +196,38 @@ class FluoEventTableModel(QAbstractTableModel):
                 return str(section)
             return str(self._columns[section])
 
+
+class SiteTableModel(QAbstractTableModel):
+    def __init__(self, data: list[list[FluoEvent]]):
+        super().__init__()
+        self._data = data
+        self._columns = ["Events list", "Localizations list"]
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            row = self._data[index.row()]
+            match index.column():
+                case 0:
+                    return ", ".join([str(evt.idx) for evt in row])
+                case 1:
+                    return ", ".join([str(_) for evt in row for _ in evt._localization_list])
+        # elif role == Qt.BackgroundRole:
+        #     if not self._data.data[index.row()]["valid"]:
+        #         return _QtGui.QBrush(_QtGui.QColor(0xc0c0c0))
+
+    def rowCount(self, index):
+        return len(self._data)
+
+    def columnCount(self, index):
+        return len(self._columns)
+
+    def headerData(self, section: int, orientation: Qt.Orientation, role: Qt.DisplayRole):
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Orientation.Vertical:
+                return str(section)
+            return str(self._columns[section])
+
+
 # table.cellClicked.connect(self.handle_cell_click)
 # def handle_cell_click(self, row, column):
 #     print(f'Cell clicked: Row {row}, Column {column}') #
@@ -233,6 +265,7 @@ class SimplerWidget(QFrame):
         self._apply_button = QPushButton("Apply", self)
         layout.addWidget(self._filter_button)
         layout.addWidget(self._apply_button)
+        layout.addStretch(1)
         self.setLayout(layout)
 
     def get_analysis_parameters(self) -> SimplerAnalysisParameters:
@@ -266,6 +299,7 @@ class SimplerCalibrationWidget(QFrame):
         # self._N0_sb = create_labeled_int("N<sub>0</sub>", layout, 10000,)
         self._clusterize_button = QPushButton("Clusterize", self)
         layout.addWidget(self._clusterize_button)
+        layout.addStretch(0)
         self.setLayout(layout)
 
     def get_analysis_parameters(self) -> SimplerAnalysisParameters:
@@ -297,11 +331,20 @@ class EventsGroupingWidget(QFrame):
         self._dist_sb = create_labeled_float("Max dist / nm", layout, 10, 1, 1)
         self._group_button = QPushButton("Group into events", self)
         layout.addWidget(self._group_button)
+        layout.addStrut(1)
+        self._min_length_sb = create_labeled_int("Min frames / nm", layout, 2, 2, None)
+        self._filter_button = QPushButton("Filter", self)
+        layout.addWidget(self._filter_button)
         self.setLayout(layout)
+        layout.addStretch(0)
         self._group_button.pressed.connect(self._parent.group_events)
+        self._filter_button.pressed.connect(self._parent.filter_events)
 
     def get_distance(self) -> float:
         return self._dist_sb.value()
+
+    def get_length_limits(self) -> tuple[int, int]:
+        return (self._min_length_sb.value(), None)
 
 
 class SitesGroupingWidget(QFrame):
@@ -324,6 +367,7 @@ class SitesGroupingWidget(QFrame):
         self._dist_sb = create_labeled_float("Max dist / nm", layout, 80, 1, 1, maximum=100)
         self._group_button = QPushButton("Group events into sites", self)
         layout.addWidget(self._group_button)
+        layout.addStretch(1)
         self.setLayout(layout)
         self._group_button.pressed.connect(self._parent.group_sites)
 
@@ -398,15 +442,19 @@ class DataPlotWidget(QFrame):
         self._ungrouped_chk = QCheckBox("Ungrouped")
         self._grouped_chk = QCheckBox("Grouped")
         self._events_chk = QCheckBox("Events")
+        self._sites_chk = QCheckBox("Sites")
         self._ungrouped_chk.setCheckState(1)
         self._grouped_chk.setCheckState(1)
         self._events_chk.setCheckState(1)
+        self._sites_chk.setCheckState(1)
         self._ungrouped_chk.stateChanged.connect(self._graph_selection_changed)
         self._grouped_chk.stateChanged.connect(self._graph_selection_changed)
         self._events_chk.stateChanged.connect(self._graph_selection_changed)
+        self._sites_chk.stateChanged.connect(self._graph_selection_changed)
         chk_layout.addWidget(self._ungrouped_chk)
         chk_layout.addWidget(self._grouped_chk)
         chk_layout.addWidget(self._events_chk)
+        chk_layout.addWidget(self._sites_chk)
         layout.addLayout(chk_layout)
         self.setLayout(layout)
 
@@ -463,7 +511,7 @@ class DataPlotWidget(QFrame):
                 vertex = ch.points[ch.vertices]
             patches.append(Polygon(vertex, closed=True, color="r"))
         p = PatchCollection(patches, alpha=0.3)
-        p.set_color("r")
+        p.set_color("green")
         self._sites_scatter = self.ax.add_collection(p)
 
     def data_updated(self):
@@ -489,6 +537,11 @@ class DataPlotWidget(QFrame):
                 self._events_scatter.set_visible(True)
             else:
                 self._events_scatter.set_visible(False)
+        if self._sites_scatter:
+            if self._sites_chk.checkState():
+                self._sites_scatter.set_visible(True)
+            else:
+                self._sites_scatter.set_visible(False)
         self._plot.draw()
         # self._plot.draw_idle()
 
@@ -560,8 +613,8 @@ class Frontend(QMainWindow):
         lower_layout.addWidget(self._events_table_widget)
         lower_layout.addWidget(self._localizations_table_widget)
 
-        central_layout.addLayout(upper_layout)
-        central_layout.addLayout(lower_layout)
+        central_layout.addLayout(upper_layout, stretch=0)
+        central_layout.addLayout(lower_layout, stretch=1)
         self.setCentralWidget(cw)
         return
 
@@ -596,6 +649,14 @@ class Frontend(QMainWindow):
         self._runner.submit(self._data_grouped_cb, self._data.group_events, args=(self._event_grouping_widget.get_distance(),))
         self.notify("Grouping data...")
         self._freeze_all()
+
+    def filter_events(self):
+        if self._data is None:
+            _lgr.info("No data to group")
+            return
+        self._data.filter_events(*self._event_grouping_widget.get_length_limits())
+        self._plot_widget.data_updated()
+        self.notify("Events filtered by length")
 
     def group_sites(self):
         if self._data is None:

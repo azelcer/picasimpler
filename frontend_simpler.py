@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QBoxLayout,
     QWidget,
     QTableView,
+    QDockWidget,
 )
 from PyQt5 import QtGui as _QtGui
 # import pyqtgraph as _pg
@@ -37,7 +38,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import logging as _lgn
 from simpler_tools import SimplerAnalysisParameters, SIMPLERData, FluoEvent
 
-from threading import Thread, Event
+from threading import Thread
 
 
 _lgr = _lgn.getLogger(__name__)
@@ -132,6 +133,13 @@ class background_runner:
         self._thread.join()
         self._thread = None
         return True
+
+
+def wrap_in_dock(parent: QWidget, title: str, content: QWidget) -> QDockWidget:
+    dock_widget = QDockWidget(title, parent)
+    dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+    dock_widget.setWidget(content)
+    return dock_widget
 
 
 class SIMPLERTableModel(QAbstractTableModel):
@@ -432,6 +440,7 @@ class DataPlotWidget(QFrame):
         self.fig = Figure()  # figsize=(5, 4), dpi=100)
         self.ax = self.fig.add_subplot(111)  # Add a subplot to the figure
         self.ax.axis("equal")
+        # ax.figure.canvas.mpl_connect('scroll_event', self.on_scroll)
         self._plot = FigureCanvas(self.fig)
         toolbar = NavigationToolbar(self._plot, self)
         plt_lyt.addWidget(toolbar)
@@ -457,6 +466,26 @@ class DataPlotWidget(QFrame):
         chk_layout.addWidget(self._sites_chk)
         layout.addLayout(chk_layout)
         self.setLayout(layout)
+
+        self._plot.mpl_connect('scroll_event', self._on_scroll)
+
+    def _on_scroll(self, event):
+        _ZOOM_FACTOR = 0.75
+        if event.inaxes is not self.ax:
+            return
+        pos = (event.xdata, event.ydata, )
+        x_lims = self.ax.get_xlim()
+        y_lims = self.ax.get_ylim()
+        mins, maxs = list(zip(x_lims, y_lims))
+        if event.button == 'up':
+            factor = _ZOOM_FACTOR
+        elif event.button == 'down':
+            factor = 1. / _ZOOM_FACTOR
+        new_mins = [p - (p - mn) * factor for p, mn in zip(pos, mins)]
+        new_maxs = [(mx - p) * factor + p for p, mx in zip(pos, maxs)]
+        self.ax.set_xlim(new_mins[0], new_maxs[0])
+        self.ax.set_ylim(new_mins[1], new_maxs[1])
+        self._plot.draw()
 
     def _init_graphs(self):
         self.ax.clear()
@@ -610,8 +639,13 @@ class Frontend(QMainWindow):
         upper_layout.addWidget(self._SIMPLER_widget)
         lower_layout = QHBoxLayout()
         lower_layout.addWidget(self._plot_widget)
-        lower_layout.addWidget(self._events_table_widget)
-        lower_layout.addWidget(self._localizations_table_widget)
+        # lower_layout.addWidget(self._events_table_widget)
+        # lower_layout.addWidget(self._localizations_table_widget)
+        self._evt_dock = wrap_in_dock(self, "Events table", self._events_table_widget)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._evt_dock)
+        self._loc_dock = wrap_in_dock(self, "Localizations table", self._localizations_table_widget)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._loc_dock)
+        self.tabifyDockWidget(self._evt_dock, self._loc_dock)
 
         central_layout.addLayout(upper_layout, stretch=0)
         central_layout.addLayout(lower_layout, stretch=1)
@@ -656,6 +690,7 @@ class Frontend(QMainWindow):
             return
         self._data.filter_events(*self._event_grouping_widget.get_length_limits())
         self._plot_widget.data_updated()
+        self._evt_dock.raise_()
         self.notify("Events filtered by length")
 
     def group_sites(self):
@@ -678,6 +713,7 @@ class Frontend(QMainWindow):
         self._thaw_all()
         self._events_table_widget.set_data(self._data.get_events())
         self._plot_widget.data_updated()
+        self._evt_dock.raise_()
         self.notify("Data grouped")
 
     def filter_data(self):

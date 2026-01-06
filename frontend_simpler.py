@@ -4,7 +4,7 @@
 import numpy as _np
 from scipy.spatial import ConvexHull
 import pathlib as _pathlib
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QAbstractTableModel
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QAbstractTableModel, QItemSelection
 from PyQt5.QtWidgets import (
     # QGroupBox,
     QMainWindow,
@@ -422,8 +422,9 @@ class EventsTableWidget(QFrame):
 
 class SitesTableWidget(QFrame):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self._parent = parent
         self._init_GUI()
 
     def _init_GUI(self):
@@ -433,9 +434,25 @@ class SitesTableWidget(QFrame):
         self._table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         layout.addWidget(QLabel("Sites data"))
         layout.addWidget(self._table)
+        # Clicked.connect(self.handle_cell_click)
+        # self._table.cellClicked.connect(self.handle_cell_click)
+    # def handle_cell_click(self, row, column):
+    #     print(f'Cell clicked: Row {row}, Column {column}') #
+    # table.selectionModel().selectionChanged.connect(self.handle_selection_changed)
+    # def handle_selection_changed(self, selected, deselected):
+    #     # Code to handle the change in selection
+    #     pass #
+
+    def _sel_changed(self, event: QItemSelection):
+        # Sólo funciona porque es SelectRows
+        # selection = [index.row() for index in event.indexes() if index.column() == 0]
+        selection = [index.row() for index in self._table.selectedIndexes() if index.column() == 0]
+        self._parent._sites_selection_changed(selection)
+
 
     def set_data(self, data):
         self._table.setModel(SiteTableModel(data))
+        self._table.selectionModel().selectionChanged.connect(self._sel_changed)
 
     def reset(self):
         self._table.setModel(None)
@@ -506,6 +523,11 @@ class DataPlotWidget(QFrame):
         new_maxs = [(mx - p) * factor + p for p, mx in zip(pos, maxs)]
         self.ax.set_xlim(new_mins[0], new_maxs[0])
         self.ax.set_ylim(new_mins[1], new_maxs[1])
+        self._plot.draw()
+
+    def zoom_to(self, lim_x, lim_y):
+        self.ax.set_xlim(*lim_x)
+        self.ax.set_ylim(*lim_y)
         self._plot.draw()
 
     def _init_graphs(self):
@@ -800,6 +822,14 @@ class Frontend(QMainWindow):
         self._sites_table_widget.set_data(self._data.get_sites())
         self._sites_dock.raise_()
         self.notify("Events grouped into sites!")
+
+    def _sites_selection_changed(self, indexes: list[int]):
+        if not indexes:  # empty list
+            return
+        sites = self._data.get_sites()
+        positions = _np.array([evt.center for i in indexes for evt in sites[i]])
+        lim_x, lim_y = zip(positions.min(axis=0), positions.max(axis=0), )
+        self._plot_widget.zoom_to(lim_x, lim_y)
 
     @pyqtSlot(_QtGui.QCloseEvent)
     def closeEvent(self, event):

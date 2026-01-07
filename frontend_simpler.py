@@ -1,50 +1,48 @@
 """
-
+Necesita:
+    numpy
+    pyqt5
+    hdf5
+    matplotlib
+    pyyaml
+    scipy
+    scikit
 """
-from collections.abc import Iterable
 import numpy as _np
-from scipy.spatial import ConvexHull
 import pathlib as _pathlib
 from PyQt5.QtCore import (
     pyqtSignal,
     pyqtSlot,
     Qt,
-    QAbstractTableModel,
-    QItemSelection,
 )
 from PyQt5.QtWidgets import (
     QMainWindow,
     QAction,
-    QLabel,
-    QPushButton,
-    QCheckBox,
     QHBoxLayout,
     QVBoxLayout,
-    QSpinBox,
-    QDoubleSpinBox,
     QMessageBox,
     QFileDialog,
     QStatusBar,
-    QFrame,
-    QBoxLayout,
     QWidget,
-    QTableView,
     QDockWidget,
 )
 from PyQt5 import QtGui as _QtGui
-# import pyqtgraph as _pg
-from matplotlib.figure import Figure
-from matplotlib.collections import EllipseCollection, PatchCollection
-from matplotlib.patches import Polygon
-from matplotlib.lines import Line2D
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
-from matplotlib.backend_bases import PickEvent
+
 import logging as _lgn
 
-from simpler_tools import SimplerAnalysisParameters, SIMPLERData, FluoEvent
+from simpler_tools import SIMPLERData
 
-from threading import Thread
+
+from widgets.plot_widget import DataPlotWidget
+from widgets.simpler_widget import SimplerWidget
+from widgets.events_widget import EventsGroupingWidget
+from widgets.sites_widget import SitesGroupingWidget
+from widgets.data_table_widget import DataTableWidget
+from widgets.events_table_widget import EventsTableWidget
+from widgets.site_table_widget import SitesTableWidget
+
+
+from helpers.running_helpers import background_runner
 
 
 _lgr = _lgn.getLogger(__name__)
@@ -52,12 +50,6 @@ _lgr.setLevel(_lgn.DEBUG)
 
 
 _APP_NAME = "PicaSIMPLER"
-
-# Placeholers for customization
-_UNSELECTED_LINEWITDH = 1
-_SELECTED_LINEWITDH = 4
-_UNSELECTED_LINECOLOR = (0, 128 / 255, 0, .3)
-_SELECTED_LINECOLOR = (1., 0, 0, 1.)
 
 
 def make_window_title(filename: str | _pathlib.Path | None) -> str:
@@ -67,46 +59,6 @@ def make_window_title(filename: str | _pathlib.Path | None) -> str:
     return f"{_APP_NAME} - {filename.stem}"
 
 
-# pyqt helpers
-def create_labeled_float(name: str, external_layout: QBoxLayout,
-                         value: float, decimals: int, step: float,
-                         minimum: float = 0., maximum: float = None
-                         ) -> QDoubleSpinBox:
-    """Creates a labeled float spinbox."""
-    hlayout = QHBoxLayout()
-    sb = QDoubleSpinBox()
-    sb.setDecimals(decimals)
-    sb.setMinimum(minimum)
-    if maximum is not None:
-        sb.setMaximum(maximum)
-    sb.setSingleStep(step)
-    sb.setValue(value)
-    hlayout.addWidget(QLabel(name))
-    hlayout.addWidget(sb)
-    external_layout.addLayout(hlayout)
-    return sb
-
-
-def create_labeled_int(name: str, external_layout: QBoxLayout,
-                       value: int, step: int = 1,
-                       minimum: int | None = None, maximum: int | None = None,
-                       ) -> QDoubleSpinBox:
-    """Creates a labeled float spinbox."""
-    hlayout = QHBoxLayout()
-    sb = QSpinBox()
-    if minimum is not None:
-        sb.setMinimum(minimum)
-    if maximum is None:
-        maximum = (1 << 31) - 1  # signed 32 bit
-    sb.setMaximum(maximum)
-
-    sb.setValue(value)
-    hlayout.addWidget(QLabel(name))
-    hlayout.addWidget(sb)
-    external_layout.addLayout(hlayout)
-    return sb
-
-
 def wrap_in_dock(parent: QWidget, title: str, content: QWidget) -> QDockWidget:
     dock_widget = QDockWidget(title, parent)
     dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
@@ -114,556 +66,8 @@ def wrap_in_dock(parent: QWidget, title: str, content: QWidget) -> QDockWidget:
     return dock_widget
 
 
-# running helpers
-class background_runner:
-
-    # _task_finished_evt = Event()
-
-    def __init__(self):
-        self._running = False
-        self._thread = None
-        self._callback: callable = None
-
-    def submit(self, callback: callable, function: callable, args: list = [], kwargs: dict = {}):
-        if self._running or self._thread:
-            _lgr.error("Background task already running")
-            return False
-        self._target = function
-        self._callback = callback
-        self._thread = Thread(target=self._do_run, args=args, kwargs=kwargs)
-        self._running = True
-        self._thread.start()
-
-    def _do_run(self, *args, **kwargs):
-        try:
-            self._rv = self._target(*args, **kwargs)
-        except Exception as e:
-            print("exception", e, type(e))
-            self._rv = None
-        self._running = False
-        self._callback(self._rv)
-
-    def cleanup(self):
-        if self._running:
-            _lgr.error("Background task still running")
-            return False
-        if not self._thread:
-            _lgr.error("No background task running")
-            return True
-        self._thread.join()
-        self._thread = None
-        return True
-
-
-# Models to be moved to their own module
-# Table models
-class SIMPLERTableModel(QAbstractTableModel):
-    def __init__(self, data: SIMPLERData):
-        super().__init__()
-        self._data = data
-        self._columns = data.get_column_names()
-
-    def data(self, index, role):
-        if role == Qt.DisplayRole:
-            # suponemos siempre numpy
-            val = self._data.data[index.row()][index.column()]
-            return "-" if _np.isnan(val) else str(val)
-        elif role == Qt.BackgroundRole:
-            if not self._data.data[index.row()]["valid"]:
-                return _QtGui.QBrush(_QtGui.QColor(0xc0c0c0))
-
-    def rowCount(self, index):
-        return self._data.data.shape[0]
-
-    def columnCount(self, index):
-        return len(self._columns)
-
-    def headerData(self, section: int, orientation: Qt.Orientation, role: Qt.DisplayRole):
-        if role == Qt.DisplayRole:
-            if orientation == Qt.Orientation.Vertical:
-                return str(section)
-            return str(self._columns[section])
-
-
-class FluoEventTableModel(QAbstractTableModel):
-    def __init__(self, data: list[FluoEvent]):
-        super().__init__()
-        self._data = data
-        self._columns = ["Length", "Init frame", "End frame", "Localizations list"]
-
-    def data(self, index, role):
-        if role == Qt.DisplayRole:
-            row = self._data[index.row()]
-            match index.column():
-                case 0:
-                    return str(row.length)
-                case 1:
-                    return str(row._initial_frame)
-                case 2:
-                    return str(row._final_frame)
-                case 3:
-                    return ", ".join([str(_) for _ in row._localization_list])
-
-    def rowCount(self, index):
-        return len(self._data)
-
-    def columnCount(self, index):
-        return len(self._columns)
-
-    def headerData(self, section: int, orientation: Qt.Orientation, role: Qt.DisplayRole):
-        if role == Qt.DisplayRole:
-            if orientation == Qt.Orientation.Vertical:
-                return str(section)
-            return str(self._columns[section])
-
-
-class SiteTableModel(QAbstractTableModel):
-    def __init__(self, data: list[list[FluoEvent]]):
-        super().__init__()
-        self._data = data
-        self._columns = ["Events list", "Localizations list"]
-
-    def data(self, index, role):
-        if role == Qt.DisplayRole:
-            row = self._data[index.row()]
-            match index.column():
-                case 0:
-                    return ", ".join([str(evt.idx) for evt in row])
-                case 1:
-                    return ", ".join([str(_) for evt in row for _ in evt._localization_list])
-
-    def rowCount(self, index):
-        return len(self._data)
-
-    def columnCount(self, index):
-        return len(self._columns)
-
-    def headerData(self, section: int, orientation: Qt.Orientation, role: Qt.DisplayRole):
-        if role == Qt.DisplayRole:
-            if orientation == Qt.Orientation.Vertical:
-                return str(section)
-            return str(self._columns[section])
-
-
-# Contained widgets
-class SimplerWidget(QFrame):
-
-    apply_signal = pyqtSignal(SimplerAnalysisParameters)
-
-    def __init__(self, parent: QWidget, *args, **kwargs):
-        super().__init__(parent=parent, *args, **kwargs)
-        self._parent = parent
-        self._init_GUI()
-
-    def freeze(self):
-        self.setEnabled(False)
-
-    def thaw(self):
-        self.setEnabled(True)
-
-    def _init_GUI(self):
-        layout = QVBoxLayout()
-        self._dist_sb = create_labeled_float("Max dist / nm", layout, 10, 1, 1)
-        self._alpha_sb = create_labeled_float("\u03B1<sub>F</sub>", layout, 10, 1, 1)
-        self._dF_sb = create_labeled_float("d<sub>F</sub> / nm", layout, 10, 1, 1)
-        self._N0_sb = create_labeled_int("N<sub>0</sub>", layout, 10000,)
-        self._filter_button = QPushButton("Filter", self)
-        self._filter_button.pressed.connect(self._parent.filter_data)
-        self._apply_button = QPushButton("Apply", self)
-        layout.addWidget(self._filter_button)
-        layout.addWidget(self._apply_button)
-        layout.addStretch(1)
-        self.setLayout(layout)
-
-    def get_analysis_parameters(self) -> SimplerAnalysisParameters:
-        return SimplerAnalysisParameters(
-            self._dist_sb.value(),
-            self._alpha_sb.value(),
-            self._dF_sb.value(),
-            self._N0_sb.value(),
-        )
-
-
-class SimplerCalibrationWidget(QFrame):
-
-    apply_signal = pyqtSignal(SimplerAnalysisParameters)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._init_GUI()
-
-    def freeze(self):
-        self.setEnabled(False)
-
-    def thaw(self):
-        self.setEnabled(True)
-
-    def _init_GUI(self):
-        layout = QVBoxLayout()
-        self._dist_sb = create_labeled_float("Max dist / nm", layout, 10, 1, 1)
-        # self._alpha_sb = create_labeled_float("\u03B1<sub>F</sub>", layout, 10, 1, 1)
-        # self._dF_sb = create_labeled_float("d<sub>F</sub> / nm", layout, 10, 1, 1)
-        # self._N0_sb = create_labeled_int("N<sub>0</sub>", layout, 10000,)
-        self._clusterize_button = QPushButton("Clusterize", self)
-        layout.addWidget(self._clusterize_button)
-        layout.addStretch(0)
-        self.setLayout(layout)
-
-    def get_analysis_parameters(self) -> SimplerAnalysisParameters:
-        return SimplerAnalysisParameters(
-            self._dist_sb.value(),
-            self._alpha_sb.value(),
-            self._dF_sb.value(),
-            self._N0_sb.value(),
-        )
-
-
-class EventsGroupingWidget(QFrame):
-
-    apply_signal = pyqtSignal()
-
-    def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent=parent, *args, **kwargs)
-        self._parent = parent
-        self._init_GUI()
-
-    def freeze(self):
-        self.setEnabled(False)
-
-    def thaw(self):
-        self.setEnabled(True)
-
-    def _init_GUI(self):
-        layout = QVBoxLayout()
-        self._dist_sb = create_labeled_float("Max dist / nm", layout, 10, 1, 1)
-        self._group_button = QPushButton("Group into events", self)
-        layout.addWidget(self._group_button)
-        layout.addStrut(1)
-        self._min_length_sb = create_labeled_int("Min frames / nm", layout, 2, 2, None)
-        self._filter_button = QPushButton("Filter", self)
-        layout.addWidget(self._filter_button)
-        self.setLayout(layout)
-        layout.addStretch(0)
-        self._group_button.pressed.connect(self._parent.group_events)
-        self._filter_button.pressed.connect(self._parent.filter_events)
-
-    def get_distance(self) -> float:
-        return self._dist_sb.value()
-
-    def get_length_limits(self) -> tuple[int, int]:
-        return (self._min_length_sb.value(), None)
-
-
-class SitesGroupingWidget(QFrame):
-
-    apply_signal = pyqtSignal()
-
-    def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent=parent, *args, **kwargs)
-        self._parent = parent
-        self._init_GUI()
-
-    def freeze(self):
-        self.setEnabled(False)
-
-    def thaw(self):
-        self.setEnabled(True)
-
-    def _init_GUI(self):
-        # TODO: add mehtod selection dropbox
-        layout = QVBoxLayout()
-        self._dist_sb = create_labeled_float("Max dist / nm", layout, 80, 1, 1, maximum=100)
-        self._group_button = QPushButton("Group events into sites", self)
-        layout.addWidget(self._group_button)
-        layout.addStretch(1)
-        self.setLayout(layout)
-        self._group_button.pressed.connect(self._parent.group_sites)
-
-    def get_distance(self) -> float:
-        return self._dist_sb.value()
-
-
-class DataTableWidget(QFrame):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._init_GUI()
-
-    def _init_GUI(self):
-        layout = QVBoxLayout(self)
-        self.setLayout(layout)
-        self._table = QTableView(self)
-        layout.addWidget(self._table)
-
-    def set_data(self, data):
-        self._table.setModel(SIMPLERTableModel(data))
-
-
-class EventsTableWidget(QFrame):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._init_GUI()
-
-    def _init_GUI(self):
-        layout = QVBoxLayout(self)
-        self.setLayout(layout)
-        self._table = QTableView(self)
-        layout.addWidget(self._table)
-
-    def set_data(self, data):
-        self._table.setModel(FluoEventTableModel(data))
-
-    def reset(self):
-        self._table.setModel(None)
-
-
-class SitesTableWidget(QFrame):
-
-    def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, *args, **kwargs)
-        self._parent = parent
-        self._init_GUI()
-
-    def _init_GUI(self):
-        layout = QVBoxLayout(self)
-        self.setLayout(layout)
-        self._table = QTableView(self)
-        self._table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        layout.addWidget(self._table)
-
-    def _sel_changed(self, selected: QItemSelection, deselected: QItemSelection):
-        # Sólo funciona porque es SelectRows
-        # es esto o un set
-        sel = [index.row() for index in selected.indexes() if index.column() == 0]
-        desel = [index.row() for index in deselected.indexes() if index.column() == 0]
-        self._parent._sites_selection_changed(sel, desel)
-
-    def get_selected_rows(self):
-        # es esto o un set
-        selection = [index.row() for index in self._table.selectedIndexes() if index.column() == 0]
-        return selection
-
-    def toggle_selection(self, idx: int):
-        selection_model = self._table.selectionModel()
-        selection_model.blockSignals(True)
-        index = self._table.model().index(idx, 0)
-
-        selection_model.select(index, selection_model.Toggle | selection_model.Rows)
-        selection_model.blockSignals(False)
-        self._table.scrollTo(index)
-        self._table.model().layoutChanged.emit()
-        if selection_model.isRowSelected(idx):
-            return True
-        return False
-
-        # was_selected = selection_model.isRowSelected(idx)
-        # mode = selection_model.Rows | (
-        #     selection_model.Deselect if was_selected else selection_model.Select)
-        # selection_model.select(index, mode)
-        # selection_model.blockSignals(False)
-        # self._table.scrollTo(index)
-        # self._table.model().layoutChanged.emit()
-        # return not was_selected
-
-    def set_data(self, data):
-        self._table.setModel(SiteTableModel(data))
-        self._table.selectionModel().selectionChanged.connect(self._sel_changed)
-
-    def reset(self):
-        self._table.setModel(None)
-
-
-class DataPlotWidget(QFrame):
-
-    _marker_size = 1.
-
-    def __init__(self, parent: QWidget, *args, **kwargs):
-        super().__init__(parent, *args, **kwargs)
-        self._init_GUI()
-        self._init_graphs()
-        self._data = None
-        self._events = None
-        self._parent = parent
-
-    def _init_GUI(self):
-        layout = QHBoxLayout()
-        plt_lyt = QVBoxLayout()
-        self.fig = Figure()  # figsize=(5, 4), dpi=100)
-        self.ax = self.fig.add_subplot(111)  # Add a subplot to the figure
-        self.ax.axis("equal")
-        self._plot = FigureCanvas(self.fig)
-        toolbar = NavigationToolbar(self._plot, self)
-        plt_lyt.addWidget(toolbar)
-        plt_lyt.addWidget(self._plot)
-        layout.addLayout(plt_lyt, stretch=3)
-
-        chk_layout = QVBoxLayout()
-        self._ungrouped_chk = QCheckBox("Ungrouped")
-        self._grouped_chk = QCheckBox("Grouped")
-        self._events_chk = QCheckBox("Events")
-        self._sites_chk = QCheckBox("Sites")
-        self._ungrouped_chk.setCheckState(1)
-        self._grouped_chk.setCheckState(1)
-        self._events_chk.setCheckState(1)
-        self._sites_chk.setCheckState(1)
-        self._ungrouped_chk.stateChanged.connect(self._graph_selection_changed)
-        self._grouped_chk.stateChanged.connect(self._graph_selection_changed)
-        self._events_chk.stateChanged.connect(self._graph_selection_changed)
-        self._sites_chk.stateChanged.connect(self._graph_selection_changed)
-        chk_layout.addWidget(self._ungrouped_chk)
-        chk_layout.addWidget(self._grouped_chk)
-        chk_layout.addWidget(self._events_chk)
-        chk_layout.addWidget(self._sites_chk)
-        layout.addLayout(chk_layout)
-        self.setLayout(layout)
-
-        self._plot.mpl_connect('scroll_event', self._on_scroll)
-        self._plot.mpl_connect('pick_event', self._on_pick)
-
-    def _on_scroll(self, event):
-        _ZOOM_FACTOR = 0.75
-        if event.inaxes is not self.ax:
-            return
-        pos = (event.xdata, event.ydata, )
-        x_lims = self.ax.get_xlim()
-        y_lims = self.ax.get_ylim()
-        mins, maxs = list(zip(x_lims, y_lims))
-        if event.button == 'up':
-            factor = _ZOOM_FACTOR
-        elif event.button == 'down':
-            factor = 1. / _ZOOM_FACTOR
-        new_mins = [p - (p - mn) * factor for p, mn in zip(pos, mins)]
-        new_maxs = [(mx - p) * factor + p for p, mx in zip(pos, maxs)]
-        self.ax.set_xlim(new_mins[0], new_maxs[0])
-        self.ax.set_ylim(new_mins[1], new_maxs[1])
-        self._plot.draw()
-
-    def change_selected_patches(self, indexes: int | list[int], selected: bool):
-        """Update patches according to new state."""
-        lw = self._sites_patches.get_linewidth()
-        lc = self._sites_patches.get_edgecolor()
-        # print(lc)
-        if not isinstance(indexes, Iterable):
-            indexes = [indexes]
-        new_lw = _SELECTED_LINEWITDH if selected else _UNSELECTED_LINEWITDH
-        new_color = _SELECTED_LINECOLOR if selected else _UNSELECTED_LINECOLOR
-        for idx in indexes:
-            lw[idx] = new_lw
-            lc[idx] = new_color
-        self._sites_patches.set_linewidth(lw)
-        self._sites_patches.set_edgecolor(lc)
-        self._plot.draw_idle()
-
-    def _on_pick(self, event: PickEvent):
-        if (idx := getattr(event, "ind", None)) is None:
-            _lgr.error("No index in pick event")
-            return
-        idx = idx[0]
-
-        if event.mouseevent.button == 1 and event.mouseevent.dblclick:
-            self.change_selected_patches(idx, self._parent.site_toggle_selection(idx))
-
-    def zoom_to(self, lim_x, lim_y):
-        self.ax.set_xlim(*lim_x)
-        self.ax.set_ylim(*lim_y)
-        self._plot.draw()
-
-    def _init_graphs(self):
-        self.ax.clear()
-        self._ungrouped_scatter: Line2D = self.ax.plot([], [], marker="o", ls="", ms=self._marker_size, c="blue")[0]
-        self._grouped_scatter: Line2D = self.ax.plot([], [], marker="o", ls="", ms=self._marker_size, c="red")[0]
-        self._events_scatter = self.ax.add_collection(EllipseCollection([], [], []))
-        self._sites_patches = PatchCollection([])
-        self._sites_scatter = self.ax.add_collection(self._sites_patches)
-
-    def set_data(self, new_data: SIMPLERData):
-        """Cleans everything."""
-        self._data = new_data
-        self._init_graphs()
-        self._update_graphs()
-        self._graph_selection_changed(1)
-        self.ax.margins(.05)
-        self.ax.relim()
-        self.ax.autoscale_view()
-        self.ax.autoscale(enable=True, axis='both')
-        self._plot.draw()
-
-    def _update_graphs(self):
-        data = self._data.get_ungrouped_locations()
-        self._ungrouped_scatter.set_data(data["x"], data["y"])
-        data = self._data.get_grouped_locations()
-        self._grouped_scatter.set_data(data["x"], data["y"])
-
-        self._events_scatter.remove()
-        sigmas = self._data.get_events_sizes()
-        self._events_scatter = self.ax.add_collection(
-            EllipseCollection(
-                widths=sigmas, heights=sigmas, angles=0, units='xy',
-                # facecolors=plt.cm.hsv(duraciones / duraciones.max()),
-                offsets=self._data.get_events_locations(), transOffset=self.ax.transData,
-                alpha=0.4,
-            )
-        )
-        self._sites_scatter.remove()
-        sites = self._data.get_sites()
-        self._patches = []
-        for site in sites:
-            or_points = _np.array([_.center for _ in site])
-            if len(site) < 3:
-                vertex = or_points
-            else:
-                ch = ConvexHull(or_points)
-                vertex = ch.points[ch.vertices]
-            self._patches.append(Polygon(vertex, closed=True,))
-        # alpha is set on face and edgecolors
-        p = PatchCollection(self._patches, match_original=False, picker=True)
-        p.set_color(_UNSELECTED_LINECOLOR)
-        # This is needed to be able to access individual Patch properties:
-        #    using 'match_original=True' seems to freeze the properties
-        p.set_edgecolor([_UNSELECTED_LINECOLOR] * len(self._patches))
-        p.set_linewidth([_UNSELECTED_LINEWITDH] * len(self._patches))
-        self._sites_scatter = self.ax.add_collection(p)
-        self._sites_patches = p
-        self._sites_scatter.set_picker(True)
-
-    def data_updated(self):
-        self._update_graphs()
-        # Collections are not updated but replaced: visibility is forgotten
-        self._graph_selection_changed(1)
-
-    # SLOTS
-    @pyqtSlot(int)
-    def _graph_selection_changed(self, checked: int):
-        if self._ungrouped_chk.checkState():
-            self._ungrouped_scatter.set_visible(True)
-        else:
-            self._ungrouped_scatter.set_visible(False)
-
-        if self._grouped_chk.checkState():
-            self._grouped_scatter.set_visible(True)
-        else:
-            self._grouped_scatter.set_visible(False)
-
-        if self._events_scatter:
-            if self._events_chk.checkState():
-                self._events_scatter.set_visible(True)
-            else:
-                self._events_scatter.set_visible(False)
-        if self._sites_scatter:
-            if self._sites_chk.checkState():
-                self._sites_scatter.set_visible(True)
-            else:
-                self._sites_scatter.set_visible(False)
-        self._plot.draw()
-        # self._plot.draw_idle()
-
-
 class Frontend(QMainWindow):
-    """Coso.
-
-    Implemented as a QFrame so it can be easily integrated within a larger app.
-    """
+    """Coso."""
 
     _modified = False
     _data = None

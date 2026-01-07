@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Functions to process and calibrate SIMPLER measurements.
-
-The functions are expected to interface with the sofware Picasso, as it is
-widely used for SML. Nevertheless, the functions are general enough to be
-used with other software with minumum effort.
-
-
-@author: aszalai, azelcer
 """
+import time as _time
+import pathlib as _pathlib
 from dataclasses import dataclass
 import h5py
 import numpy as np
-# from numpy.lib.recfunctions import append_fields
 from scipy.spatial import distance as _distance, KDTree
 from scipy.cluster import hierarchy
 import yaml
@@ -22,27 +15,10 @@ from sklearn import cluster
 from sklearn.cluster import DBSCAN as _DBSCAN, KMeans as _KMeans
 from scipy.ndimage import map_coordinates
 
-# The following imports are used only for development.
-import pathlib as _pathlib
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
-from matplotlib.collections import PatchCollection, EllipseCollection
-import time as _time
-
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
-
-filename = _pathlib.Path(
-    "/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5"
-)
-# filename = _pathlib.Path(
-#     "/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_100mW_bufferC_gain100_1_MMStack_Pos0.ome_locs.hdf5"
-# )
-filename = _pathlib.Path(
-    "/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_300mW_bufferC_gain50_50ms_highTIRF_2_MMStack_Pos0.ome_locs.hdf5"
-)
 
 
 class FluoEvent:
@@ -82,20 +58,6 @@ class FluoEvent:
     @property
     def length(self):
         return self._final_frame - self._initial_frame + 1
-
-
-# class FluoSite:
-#     def __init__(self, idx: int, event_list: list[FluoEvent]):
-#         self._idx = idx
-#         self._events = event_list
-#         self._localization_list = [_ for evt in self._events for _ in evt._localization_list]
-
-#     def __repr__(self):
-#         return f"{self.__class__.__name__}({len(self._events)} evts, {len(self._localization_list)} locs)"
-
-#     @property
-#     def idx(self):
-#         return self._idx
 
 
 # No fuzz about strings
@@ -186,43 +148,6 @@ def filter_data(
         100 * len(idx_to_discard) / len(xy),
     )
     return idx_to_discard
-
-
-def remove_unespecific(
-    data: np.ndarray, radius_threshold: float, px_size: float
-) -> np.ndarray:
-    """Filter localizations that seem to be non-specific adsorption.
-
-    Parameters
-    ----------
-        data: numpy.ndarray
-            Structured array as obtained from picasso
-        radius_threshold: float
-            Maximun radius in nm for two localizations to be considered
-            the same
-        px_size: float
-            Pixel size, in nm
-
-    Returns
-    -------
-        Array of booleans with indices of records to keep in True
-    """
-    r_th = radius_threshold / px_size
-    start = _time.time()
-    xy = np.column_stack((np.transpose(data["x"]), np.transpose(data["y"])))
-    kdt = KDTree(xy)
-    rv = kdt.query(xy, [2,], distance_upper_bound=r_th)[0]
-    rv = rv.reshape(rv.shape[0]) != np.inf
-    end = _time.time()
-    n_discarded = len(rv) - rv.sum()
-    _lgr.info(
-        "Time of unespecific filtering step: %s s. %s of %s (%.2f%%) localizations discarded",
-        end - start,
-        n_discarded,
-        len(xy),
-        100 * n_discarded / len(xy),
-    )
-    return rv
 
 
 def group_events(
@@ -401,16 +326,6 @@ def N_clusters(origamis: _DBSCAN, data: np.ndarray) -> list[_KMeans]:
     return markers
 
 
-# def clusters_centers(cluster: _DBSCAN, data):
-#     """Calculate clusters means."""
-#     labels = set(cluster.labels_) - {-1}
-#     centers = np.ndarray((len(labels), 2))
-#     xy = np.column_stack((np.transpose(data['x']), np.transpose(data['y'])))
-#     for idx, l in enumerate(labels):
-#         centers[idx] = np.average(xy[cluster.labels_ == l], axis=0)
-#     return centers
-
-
 def xy_from_N(
     clusters: list[_KMeans], positions: list[np.ndarray]
 ) -> np.ndarray:
@@ -451,8 +366,8 @@ class SimplerAnalysisParameters:
 class SIMPLERData:
     """Manages and processes SIMPLER data obtained from PICASSO.
 
-    Meter threads despues para que todo lo que sea mas o menos lento (hasta la carga es lenta)
-    funcione en bckg y con callbacks
+    Meter callbacks despues para que todo lo que sea mas o menos lento (hasta
+    la carga es lenta)
     """
 
     def __init__(
@@ -607,6 +522,20 @@ class SIMPLERData:
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Polygon
+    from matplotlib.collections import PatchCollection, EllipseCollection
+
+    filename = _pathlib.Path(
+        "/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5"
+    )
+    # filename = _pathlib.Path(
+    #     "/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_100mW_bufferC_gain100_1_MMStack_Pos0.ome_locs.hdf5"
+    # )
+    filename = _pathlib.Path(
+        "/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_300mW_bufferC_gain50_50ms_highTIRF_2_MMStack_Pos0.ome_locs.hdf5"
+    )
+
     start = _time.time()
     with h5py.File(filename, "r") as store:
         data = _h5py_dataset2ndarray(store["locs"])
@@ -615,7 +544,6 @@ if __name__ == "__main__":
         info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
     px_size = info[1]["Pixelsize"]
     radius_threshold = 75  # nm
-    # idx_unes = remove_unespecific(data, radius_threshold, px_size)
     runs = group_events(data, 5, px_size)
     # idx_to_discard = filter_data(data, radius_threshold, px_size)
     # data_filter = np.ones((data.shape[0],), dtype=bool)
@@ -629,96 +557,3 @@ if __name__ == "__main__":
 
     # plt.scatter(*zip(*(_.center for _ in runs)))
     # plt.scatter(*zip(*((_["x"], _["y"]) for _ in data)), marker='.')
-    runs_old = runs
-    # runs = [r for r in runs if r.length >= 3]
-    t0 = _time.time()
-    positions = np.array([_.center for _ in runs])
-    sigmas = np.array([(_.std[0]**2 + _.std[1]**2)**.5 for _ in runs])
-    duraciones = np.array([_.length for _ in runs])
-    pd = _distance.pdist(positions)
-    Z = hierarchy.single(pd)
-    # Z = hierarchy.ward(pd)
-    clst = hierarchy.fcluster(Z, .1, criterion='distance')
-    nclust = clst.max()
-    origamis = []
-    for c in range(1, nclust + 1):  # cluster numbering starts at 0
-        origamis.append(np.nonzero(clst == c)[0])
-    print("Creados ", nclust, "grupos en ", _time.time() - t0, "s")
-    plt.figure("grouped runs")
-    plt.scatter(*positions.T, s=1)
-    ax = plt.gca()
-    ax.set_aspect("equal")
-    ax.add_collection(EllipseCollection(
-        widths=sigmas, heights=sigmas, angles=0, units='xy',
-        facecolors=plt.cm.hsv(duraciones / duraciones.max()),
-        offsets=positions, transOffset=ax.transData,
-        )
-    )
-    patches = []
-    for origami in origamis:
-        or_points = np.array([positions[_] for _ in origami])
-        if len(origami) < 3:
-            vertex = or_points
-        else:
-            ch = ConvexHull(or_points)
-            vertex = ch.points[ch.vertices]
-        patches.append(Polygon(vertex, closed=True, color="r"))
-    # colors = 100 * np.random.rand(len(patches))
-    p = PatchCollection(patches, alpha=0.3)
-    p.set_color("r")
-    ax.add_collection(p)
-
-    # filtrado por largo:
-    a = ([_ for r in runs if r.length > 4 for _ in r._localization_list])
-    plt.figure("hist")
-    largos = [_.length for _ in runs]
-    plt.hist(largos, bins=max(largos))
-    plt.yscale("log")
-
-
-if False:
-    # data_filtered['z'] = z
-    cluster_threshold = 30  # la distancia si está 100% acostado es 30
-    cluster, xy = cluster_xy_positions(
-        data_filtered, cluster_threshold, px_size
-    )
-    plt.figure("coloreados")
-    cluster_lbls = set(set(cluster.labels_) - {-1})
-    centers = np.empty(
-        (
-            2,
-            len(cluster_lbls),
-        )
-    )
-    for idx, lbl in enumerate(cluster_lbls):
-        _x, _y = tuple(zip(*xy[cluster.labels_ == lbl]))
-        plt.scatter(_x, _y)
-        centers[:, idx] = (np.average(_x), np.average(_y))
-    out_file = filename.with_stem(filename.stem + "_frames_filtered")
-    sa, saType = df_to_sarray(data_filtered)
-    try:
-        with h5py.File(out_file, "a") as f:
-            f.create_dataset("locs", data=sa, dtype=saType)
-        with open(
-            filename.with_suffix(".yaml").with_stem(
-                filename.stem + "_frames_filtered"
-            ),
-            "w",
-        ) as file:
-            yaml.dump_all(info, file, default_flow_style=False)
-    except ValueError:
-        _lgr.error("No puedo grabar, el archivo ya existe o algo así")
-        # raise
-    end = _time.time()
-    _lgr.info("Script total time: %s s", end - start)
-    # centros = clusters_centers(cluster, data_filtered)
-    # plt.figure("dos")
-    # plt.scatter(centros[:, 0], centros[:, 1], s=1)
-    n_clus = N_clusters(cluster, data_filtered)
-    plt.figure("centros")
-    plt.scatter(*centers, s=1)
-
-    plt.figure("todos")
-    x = data_filtered["x"][cluster.core_sample_indices_]
-    y = data_filtered["y"][cluster.core_sample_indices_]
-    plt.scatter(x, y, s=1)

@@ -1,7 +1,6 @@
 """
 
 """
-# noqa: E501
 from collections.abc import Iterable
 import numpy as _np
 from scipy.spatial import ConvexHull
@@ -14,7 +13,6 @@ from PyQt5.QtCore import (
     QItemSelection,
 )
 from PyQt5.QtWidgets import (
-    # QGroupBox,
     QMainWindow,
     QAction,
     QLabel,
@@ -22,8 +20,6 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QVBoxLayout,
-    # QFormLayout,
-    # QLineEdit,
     QSpinBox,
     QDoubleSpinBox,
     QMessageBox,
@@ -41,8 +37,8 @@ from matplotlib.figure import Figure
 from matplotlib.collections import EllipseCollection, PatchCollection
 from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas  # or backend_qt6agg
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar  # or backend_qt6agg
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backend_bases import PickEvent
 import logging as _lgn
 
@@ -56,6 +52,12 @@ _lgr.setLevel(_lgn.DEBUG)
 
 
 _APP_NAME = "PicaSIMPLER"
+
+# Placeholers for customization
+_UNSELECTED_LINEWITDH = 1
+_SELECTED_LINEWITDH = 6
+_UNSELECTED_LINECOLOR = (0, 128 / 255, 0, .3)
+_SELECTED_LINECOLOR = (1., 0, 0, 1.)
 
 
 def make_window_title(filename: str | _pathlib.Path | None) -> str:
@@ -105,6 +107,14 @@ def create_labeled_int(name: str, external_layout: QBoxLayout,
     return sb
 
 
+def wrap_in_dock(parent: QWidget, title: str, content: QWidget) -> QDockWidget:
+    dock_widget = QDockWidget(title, parent)
+    dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+    dock_widget.setWidget(content)
+    return dock_widget
+
+
+# running helpers
 class background_runner:
 
     # _task_finished_evt = Event()
@@ -145,13 +155,8 @@ class background_runner:
         return True
 
 
-def wrap_in_dock(parent: QWidget, title: str, content: QWidget) -> QDockWidget:
-    dock_widget = QDockWidget(title, parent)
-    dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-    dock_widget.setWidget(content)
-    return dock_widget
-
-
+# Models to be moved to their own module
+# Table models
 class SIMPLERTableModel(QAbstractTableModel):
     def __init__(self, data: SIMPLERData):
         super().__init__()
@@ -198,9 +203,6 @@ class FluoEventTableModel(QAbstractTableModel):
                     return str(row._final_frame)
                 case 3:
                     return ", ".join([str(_) for _ in row._localization_list])
-        # elif role == Qt.BackgroundRole:
-        #     if not self._data.data[index.row()]["valid"]:
-        #         return _QtGui.QBrush(_QtGui.QColor(0xc0c0c0))
 
     def rowCount(self, index):
         return len(self._data)
@@ -229,9 +231,6 @@ class SiteTableModel(QAbstractTableModel):
                     return ", ".join([str(evt.idx) for evt in row])
                 case 1:
                     return ", ".join([str(_) for evt in row for _ in evt._localization_list])
-        # elif role == Qt.BackgroundRole:
-        #     if not self._data.data[index.row()]["valid"]:
-        #         return _QtGui.QBrush(_QtGui.QColor(0xc0c0c0))
 
     def rowCount(self, index):
         return len(self._data)
@@ -246,17 +245,7 @@ class SiteTableModel(QAbstractTableModel):
             return str(self._columns[section])
 
 
-# table.cellClicked.connect(self.handle_cell_click)
-# def handle_cell_click(self, row, column):
-#     print(f'Cell clicked: Row {row}, Column {column}') #
-# table.selectionModel().selectionChanged.connect(self.handle_selection_changed)
-# def handle_selection_changed(self, selected, deselected):
-#     # Code to handle the change in selection
-#     pass #
-# self.tv.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
-# QtGui.QAbstractItemView.SelectRows if you haven't loaded QtGui
-
-
+# Contained widgets
 class SimplerWidget(QFrame):
 
     apply_signal = pyqtSignal(SimplerAnalysisParameters)
@@ -326,7 +315,7 @@ class SimplerCalibrationWidget(QFrame):
             self._alpha_sb.value(),
             self._dF_sb.value(),
             self._N0_sb.value(),
-            )
+        )
 
 
 class EventsGroupingWidget(QFrame):
@@ -381,6 +370,7 @@ class SitesGroupingWidget(QFrame):
         self.setEnabled(True)
 
     def _init_GUI(self):
+        # TODO: add mehtod selection dropbox
         layout = QVBoxLayout()
         self._dist_sb = create_labeled_float("Max dist / nm", layout, 80, 1, 1, maximum=100)
         self._group_button = QPushButton("Group events into sites", self)
@@ -441,17 +431,10 @@ class SitesTableWidget(QFrame):
         self._table = QTableView(self)
         self._table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         layout.addWidget(self._table)
-        # Clicked.connect(self.handle_cell_click)
-        # self._table.cellClicked.connect(self.handle_cell_click)
-    # def handle_cell_click(self, row, column):
-    #     print(f'Cell clicked: Row {row}, Column {column}') #
-    # table.selectionModel().selectionChanged.connect(self.handle_selection_changed)
-    # def handle_selection_changed(self, selected, deselected):
-    #     # Code to handle the change in selection
-    #     pass #
 
     def _sel_changed(self, selected: QItemSelection, deselected: QItemSelection):
         # Sólo funciona porque es SelectRows
+        # es esto o un set
         sel = [index.row() for index in selected.indexes() if index.column() == 0]
         desel = [index.row() for index in deselected.indexes() if index.column() == 0]
         self._parent._sites_selection_changed(sel, desel)
@@ -493,7 +476,6 @@ class SitesTableWidget(QFrame):
 
 class DataPlotWidget(QFrame):
 
-    # apply_signal = pyqtSignal(SimplerAnalysisParameters)
     _marker_size = 1.
 
     def __init__(self, parent: QWidget, *args, **kwargs):
@@ -507,12 +489,9 @@ class DataPlotWidget(QFrame):
     def _init_GUI(self):
         layout = QHBoxLayout()
         plt_lyt = QVBoxLayout()
-        # self._plot = _pg.PlotWidget()
-        # self._plot.setAspectLocked(1)
         self.fig = Figure()  # figsize=(5, 4), dpi=100)
         self.ax = self.fig.add_subplot(111)  # Add a subplot to the figure
         self.ax.axis("equal")
-        # ax.figure.canvas.mpl_connect('scroll_event', self.on_scroll)
         self._plot = FigureCanvas(self.fig)
         toolbar = NavigationToolbar(self._plot, self)
         plt_lyt.addWidget(toolbar)
@@ -561,14 +540,14 @@ class DataPlotWidget(QFrame):
         self._plot.draw()
 
     def change_selected_patches(self, indexes: int | list[int], selected: bool):
-        """Update patches accordign to new state."""
+        """Update patches according to new state."""
         lw = self._sites_patches.get_linewidth()
         lc = self._sites_patches.get_edgecolor()
         # print(lc)
         if not isinstance(indexes, Iterable):
             indexes = [indexes]
-        new_lw = 6 if selected else 1
-        new_color = (1., 0, 0, 1.) if selected else (0, 128/255, 0, .3)
+        new_lw = _SELECTED_LINEWITDH if selected else _UNSELECTED_LINEWITDH
+        new_color = _SELECTED_LINECOLOR if selected else _UNSELECTED_LINECOLOR
         for idx in indexes:
             lw[idx] = new_lw
             lc[idx] = new_color
@@ -600,7 +579,6 @@ class DataPlotWidget(QFrame):
 
     def set_data(self, new_data: SIMPLERData):
         """Cleans everything."""
-
         self._data = new_data
         self._init_graphs()
         self._update_graphs()
@@ -614,19 +592,19 @@ class DataPlotWidget(QFrame):
     def _update_graphs(self):
         data = self._data.get_ungrouped_locations()
         self._ungrouped_scatter.set_data(data["x"], data["y"])
-        # print([(min(_), max(_)) for _ in [data["x"], data["y"]]])
         data = self._data.get_grouped_locations()
         self._grouped_scatter.set_data(data["x"], data["y"])
 
         self._events_scatter.remove()
         sigmas = self._data.get_events_sizes()
-        self._events_scatter = self.ax.add_collection(EllipseCollection(
-            widths=sigmas, heights=sigmas, angles=0, units='xy',
-            # facecolors=plt.cm.hsv(duraciones / duraciones.max()),
-            offsets=self._data.get_events_locations(), transOffset=self.ax.transData,
-            alpha=0.4,
+        self._events_scatter = self.ax.add_collection(
+            EllipseCollection(
+                widths=sigmas, heights=sigmas, angles=0, units='xy',
+                # facecolors=plt.cm.hsv(duraciones / duraciones.max()),
+                offsets=self._data.get_events_locations(), transOffset=self.ax.transData,
+                alpha=0.4,
             )
-            )
+        )
         self._sites_scatter.remove()
         sites = self._data.get_sites()
         self._patches = []
@@ -640,8 +618,10 @@ class DataPlotWidget(QFrame):
             self._patches.append(Polygon(vertex, closed=True,))
         p = PatchCollection(self._patches, match_original=False, alpha=0.3, picker=True)
         p.set_color("green")
-        p.set_edgecolor(["green"] * len(self._patches))
-        p.set_linewidth([1] * len(self._patches))
+        # This is needed to be able to access individual Patch properties:
+        #    using 'match_original=True' seems to freeze the properties
+        p.set_edgecolor([_UNSELECTED_LINECOLOR] * len(self._patches))
+        p.set_linewidth([_UNSELECTED_LINEWITDH] * len(self._patches))
         self._sites_scatter = self.ax.add_collection(p)
         self._sites_patches = p
         self._sites_scatter.set_picker(True)
@@ -743,8 +723,6 @@ class Frontend(QMainWindow):
         upper_layout.addWidget(self._SIMPLER_widget)
         lower_layout = QHBoxLayout()
         lower_layout.addWidget(self._plot_widget)
-        # lower_layout.addWidget(self._events_table_widget)
-        # lower_layout.addWidget(self._localizations_table_widget)
         self._sites_dock = wrap_in_dock(self, "Sites table", self._sites_table_widget)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._sites_dock)
         self._evt_dock = wrap_in_dock(self, "Events table", self._events_table_widget)
@@ -779,7 +757,7 @@ class Frontend(QMainWindow):
             QMessageBox.information(
                 self, 'Message', "Nothing to save",
                 QMessageBox.Ok, QMessageBox.Ok,
-                )
+            )
             return
         print("not implemented")
 
@@ -840,7 +818,7 @@ class Frontend(QMainWindow):
             reply = QMessageBox.question(
                 self, 'Message', "Are you sure to quit?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-                )
+            )
             if reply != QMessageBox.Yes:
                 return
         fname = self._ask_file_open()
@@ -854,7 +832,7 @@ class Frontend(QMainWindow):
         """Ask a filename to open."""
         fname = QFileDialog.getOpenFileName(
             self, 'Open file', filter="Picasso HDF5 (*.hdf5)",  # TODO: remember dir
-            )
+        )
         return fname[0]
 
     def _do_file_open(self, fname: str | _pathlib.Path):
@@ -913,19 +891,24 @@ class Frontend(QMainWindow):
         """Shut down."""
         if not self._runner.cleanup():
             QMessageBox.information(
-                self, "Can't exit", "Background task still running",
-                QMessageBox.Ok, QMessageBox.Ok,
-                )
+                self,
+                "Can't exit",
+                "Background task still running",
+                QMessageBox.Ok,
+                QMessageBox.Ok,
+            )
             event.ignore()
             return
         if not self._modified:
             event.accept()
             return
-        reply = QMessageBox.question(self, 'Message',
-                                     "Are you sure to quit?",
-                                     QMessageBox.Yes | QMessageBox.No,
-                                     QMessageBox.No
-                                     )
+        reply = QMessageBox.question(
+            self,
+            "Changes have been made",
+            "Are you sure to quit?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
         if reply == QMessageBox.Yes:
             event.accept()
         else:

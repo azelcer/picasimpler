@@ -1,10 +1,18 @@
 """
 
 """
+# noqa: E501
+from collections.abc import Iterable
 import numpy as _np
 from scipy.spatial import ConvexHull
 import pathlib as _pathlib
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QAbstractTableModel, QItemSelection, QItemSelectionModel
+from PyQt5.QtCore import (
+    pyqtSignal,
+    pyqtSlot,
+    Qt,
+    QAbstractTableModel,
+    QItemSelection,
+)
 from PyQt5.QtWidgets import (
     # QGroupBox,
     QMainWindow,
@@ -33,10 +41,11 @@ from matplotlib.figure import Figure
 from matplotlib.collections import EllipseCollection, PatchCollection
 from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # or backend_qt6agg
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # or backend_qt6agg
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas  # or backend_qt6agg
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar  # or backend_qt6agg
 from matplotlib.backend_bases import PickEvent
 import logging as _lgn
+
 from simpler_tools import SimplerAnalysisParameters, SIMPLERData, FluoEvent
 
 from threading import Thread
@@ -394,7 +403,6 @@ class DataTableWidget(QFrame):
         layout = QVBoxLayout(self)
         self.setLayout(layout)
         self._table = QTableView(self)
-        layout.addWidget(QLabel("Localizations data"))
         layout.addWidget(self._table)
 
     def set_data(self, data):
@@ -411,7 +419,6 @@ class EventsTableWidget(QFrame):
         layout = QVBoxLayout(self)
         self.setLayout(layout)
         self._table = QTableView(self)
-        layout.addWidget(QLabel("Events data"))
         layout.addWidget(self._table)
 
     def set_data(self, data):
@@ -433,7 +440,6 @@ class SitesTableWidget(QFrame):
         self.setLayout(layout)
         self._table = QTableView(self)
         self._table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        layout.addWidget(QLabel("Sites data"))
         layout.addWidget(self._table)
         # Clicked.connect(self.handle_cell_click)
         # self._table.cellClicked.connect(self.handle_cell_click)
@@ -444,19 +450,38 @@ class SitesTableWidget(QFrame):
     #     # Code to handle the change in selection
     #     pass #
 
-    def _sel_changed(self, event: QItemSelection):
+    def _sel_changed(self, selected: QItemSelection, deselected: QItemSelection):
         # Sólo funciona porque es SelectRows
-        # selection = [index.row() for index in event.indexes() if index.column() == 0]
+        sel = [index.row() for index in selected.indexes() if index.column() == 0]
+        desel = [index.row() for index in deselected.indexes() if index.column() == 0]
+        self._parent._sites_selection_changed(sel, desel)
+
+    def get_selected_rows(self):
+        # es esto o un set
         selection = [index.row() for index in self._table.selectedIndexes() if index.column() == 0]
-        self._parent._sites_selection_changed(selection)
+        return selection
 
     def toggle_selection(self, idx: int):
         selection_model = self._table.selectionModel()
         selection_model.blockSignals(True)
         index = self._table.model().index(idx, 0)
-        selection_model.select(index, QItemSelectionModel.Toggle | QItemSelectionModel.Rows)
+
+        selection_model.select(index, selection_model.Toggle | selection_model.Rows)
         selection_model.blockSignals(False)
         self._table.scrollTo(index)
+        self._table.model().layoutChanged.emit()
+        if selection_model.isRowSelected(idx):
+            return True
+        return False
+
+        # was_selected = selection_model.isRowSelected(idx)
+        # mode = selection_model.Rows | (
+        #     selection_model.Deselect if was_selected else selection_model.Select)
+        # selection_model.select(index, mode)
+        # selection_model.blockSignals(False)
+        # self._table.scrollTo(index)
+        # self._table.model().layoutChanged.emit()
+        # return not was_selected
 
     def set_data(self, data):
         self._table.setModel(SiteTableModel(data))
@@ -535,19 +560,30 @@ class DataPlotWidget(QFrame):
         self.ax.set_ylim(new_mins[1], new_maxs[1])
         self._plot.draw()
 
+    def change_selected_patches(self, indexes: int | list[int], selected: bool):
+        """Update patches accordign to new state."""
+        lw = self._sites_patches.get_linewidth()
+        lc = self._sites_patches.get_edgecolor()
+        # print(lc)
+        if not isinstance(indexes, Iterable):
+            indexes = [indexes]
+        new_lw = 6 if selected else 1
+        new_color = (1., 0, 0, 1.) if selected else (0, 128/255, 0, .3)
+        for idx in indexes:
+            lw[idx] = new_lw
+            lc[idx] = new_color
+        self._sites_patches.set_linewidth(lw)
+        self._sites_patches.set_edgecolor(lc)
+        self._plot.draw_idle()
+
     def _on_pick(self, event: PickEvent):
         if (idx := getattr(event, "ind", None)) is None:
             _lgr.error("No index in pick event")
             return
+        idx = idx[0]
+
         if event.mouseevent.button == 1 and event.mouseevent.dblclick:
-            self._parent.site_toggle_selection(idx[0])
-        # print(type(event))
-        # print(event.mouseevent)
-        # print(event.artist)
-        # print(event.ind)
-        # print(event.name)
-        # print(event.__dir__())
-        # print()
+            self.change_selected_patches(idx, self._parent.site_toggle_selection(idx))
 
     def zoom_to(self, lim_x, lim_y):
         self.ax.set_xlim(*lim_x)
@@ -559,17 +595,13 @@ class DataPlotWidget(QFrame):
         self._ungrouped_scatter: Line2D = self.ax.plot([], [], marker="o", ls="", ms=self._marker_size, c="blue")[0]
         self._grouped_scatter: Line2D = self.ax.plot([], [], marker="o", ls="", ms=self._marker_size, c="red")[0]
         self._events_scatter = self.ax.add_collection(EllipseCollection([], [], []))
-        self._sites_scatter = self.ax.add_collection(PatchCollection([]))
+        self._sites_patches = PatchCollection([])
+        self._sites_scatter = self.ax.add_collection(self._sites_patches)
 
     def set_data(self, new_data: SIMPLERData):
         """Cleans everything."""
 
         self._data = new_data
-        # Meter transformacion a µm
-        # self._scatter_plot = self._plot.plot(x, y, pen=None, symbolpen=None, symbol="s", symbolSize=.2, pxMode=False) # default True == son pixeles
-        # p.setDownsampling(ds=None, auto=True, method="subsample")
-        # p.setClipToView(True)
-        # p.disableAutoRange()
         self._init_graphs()
         self._update_graphs()
         self._graph_selection_changed(1)
@@ -597,7 +629,7 @@ class DataPlotWidget(QFrame):
             )
         self._sites_scatter.remove()
         sites = self._data.get_sites()
-        patches = []
+        self._patches = []
         for site in sites:
             or_points = _np.array([_.center for _ in site])
             if len(site) < 3:
@@ -605,10 +637,13 @@ class DataPlotWidget(QFrame):
             else:
                 ch = ConvexHull(or_points)
                 vertex = ch.points[ch.vertices]
-            patches.append(Polygon(vertex, closed=True, color="r", ))
-        p = PatchCollection(patches, alpha=0.3, picker=True)
+            self._patches.append(Polygon(vertex, closed=True,))
+        p = PatchCollection(self._patches, match_original=False, alpha=0.3, picker=True)
         p.set_color("green")
+        p.set_edgecolor(["green"] * len(self._patches))
+        p.set_linewidth([1] * len(self._patches))
         self._sites_scatter = self.ax.add_collection(p)
+        self._sites_patches = p
         self._sites_scatter.set_picker(True)
 
     def data_updated(self):
@@ -777,7 +812,8 @@ class Frontend(QMainWindow):
         self._freeze_all()
 
     def site_toggle_selection(self, idx: int):
-        self._sites_table_widget.toggle_selection(idx)
+        """Updates table."""
+        return self._sites_table_widget.toggle_selection(idx)
 
     def _data_grouped_cb(self, rv):
         self._data_grouped_signal.emit()
@@ -851,7 +887,15 @@ class Frontend(QMainWindow):
         self._sites_dock.raise_()
         self.notify("Events grouped into sites!")
 
-    def _sites_selection_changed(self, indexes: list[int]):
+    def _sites_selection_changed(self, new_sel_idx: list[int], new_desel_idx: list[int]):
+        """Called from table widget.
+
+        Updates zoom.
+        """
+        # Asegurarse de que todos los seleccionados tengan los colores y líneas
+        self._plot_widget.change_selected_patches(new_sel_idx, True)
+        self._plot_widget.change_selected_patches(new_desel_idx, False)
+        indexes = self._sites_table_widget.get_selected_rows()
         if not indexes:  # empty list
             return
         shift_arr = _np.array((-1, 1, ))

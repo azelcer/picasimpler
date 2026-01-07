@@ -55,7 +55,7 @@ _APP_NAME = "PicaSIMPLER"
 
 # Placeholers for customization
 _UNSELECTED_LINEWITDH = 1
-_SELECTED_LINEWITDH = 6
+_SELECTED_LINEWITDH = 4
 _UNSELECTED_LINECOLOR = (0, 128 / 255, 0, .3)
 _SELECTED_LINECOLOR = (1., 0, 0, 1.)
 
@@ -616,8 +616,9 @@ class DataPlotWidget(QFrame):
                 ch = ConvexHull(or_points)
                 vertex = ch.points[ch.vertices]
             self._patches.append(Polygon(vertex, closed=True,))
-        p = PatchCollection(self._patches, match_original=False, alpha=0.3, picker=True)
-        p.set_color("green")
+        # alpha is set on face and edgecolors
+        p = PatchCollection(self._patches, match_original=False, picker=True)
+        p.set_color(_UNSELECTED_LINECOLOR)
         # This is needed to be able to access individual Patch properties:
         #    using 'match_original=True' seems to freeze the properties
         p.set_edgecolor([_UNSELECTED_LINECOLOR] * len(self._patches))

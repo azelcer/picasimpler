@@ -33,9 +33,9 @@ class _SIMPLERTableModel(_QAbstractTableModel):
             # suponemos siempre numpy
             val = self._data.data[index.row()][index.column()]
             return "-" if _np.isnan(val) else str(val)
-        elif role == _Qt.BackgroundRole:
-            if not self._data.data[index.row()]["valid"]:
-                return _QtGui.QBrush(_QtGui.QColor(0xc0c0c0))
+        # elif role == _Qt.BackgroundRole:
+        #     if not self._data.data[index.row()]["valid"]:
+        #         return _QtGui.QBrush(_QtGui.QColor(0xc0c0c0))
 
     def rowCount(self, index):
         return self._data.data.shape[0]

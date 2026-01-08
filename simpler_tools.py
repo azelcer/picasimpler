@@ -27,14 +27,12 @@ class FluoEvent:
         chk_diff = [_[0] for _ in run_list]
         if not np.all(np.diff(chk_diff) == 1):
             raise ValueError(f"Frames no consecutivos: {run_list}")
-            # print(ValueError(f"Frames no consecutivos: {run_list}"))
         self._initial_frame = run_list[0][0]
         self._final_frame = run_list[-1][0]
         self._localization_list = [_[1] for _ in run_list]
         # self._center = np.average()
 
     def __repr__(self):
-        # print(self.__dir__())
         return f"{self.__class__.__name__}(f{self._initial_frame}-f{self._final_frame})"
 
     def calculate_center(self, data: np.ndarray):
@@ -70,7 +68,7 @@ def _h5py_dataset2ndarray(ds: h5py.Dataset) -> np.ndarray:
         _lgr.info("ya tiene z")
     else:
         fields_to_add.append(("z", '<f4', np.nan,))
-    fields_to_add.append(("valid", '?', False,))
+    # fields_to_add.append(("valid", '?', False,))
     if fields_to_add:
         # names, dtypes, fill_v = zip(*fields_to_add)
         # print(names, dtypes, fill_v)
@@ -357,7 +355,6 @@ def calibrate_origami(data):
 
 @dataclass
 class SimplerAnalysisParameters:
-    max_dist: float
     alpha: float
     df: float
     N0: int  # Ojo cuando hagamos mapeado
@@ -380,25 +377,38 @@ class SIMPLERData:
             self.data = _h5py_dataset2ndarray(store["locs"])
         if not yaml_file_name:
             yaml_file_name = file_name.with_suffix(".yaml")
+        yaml_file_name = _pathlib.Path(yaml_file_name)
         with open(yaml_file_name, "r") as info_file:
             self.info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
+        self._orig_fname = file_name
+        self._orig_yaml_name = yaml_file_name
         self.pixel_size = self.info[1]["Pixelsize"]
-        self._filtered_data = np.empty_like(self.data)
         self._runs: list[FluoEvent] = None
         self._filtered_runs: list[FluoEvent] = None
         self._sites: list[list[FluoEvent]] = None
+        self._custom_info = {}  # info to add to the YAML file
 
-    def filter_data(self, params: SimplerAnalysisParameters):
-        idx_to_discard = filter_data(self.data, params.max_dist, self.pixel_size)
-        data_filter = np.ones((self.data.shape[0],), dtype=bool)
-        data_filter[idx_to_discard] = False
-        self._out_idx = idx_to_discard
-        self.data["valid"] = data_filter
-        self._filtered_data = self.data[data_filter]
+    def save(self, fname: str | _pathlib.Path):
+        fname = _pathlib.Path(fname)
+        with h5py.File(fname, "w") as store:  # "x"
+            locs = store.create_dataset("locs", data=self.data, dtype=self.data.dtype)
+        yaml_file_name = fname.with_suffix(".yaml")
+        with open(yaml_file_name, "w") as info_file:
+            yaml.dump_all(self.info, info_file, default_flow_style=False)
+
+    # def filter_data(self, params: SimplerAnalysisParameters):
+    #     """Viejo, ahora usamos otro"""
+    #     idx_to_discard = filter_data(self.data, params.max_dist, self.pixel_size)
+    #     data_filter = np.ones((self.data.shape[0],), dtype=bool)
+    #     data_filter[idx_to_discard] = False
+    #     self._out_idx = idx_to_discard
+    #     self.data["valid"] = data_filter
+    #     self._filtered_data = self.data[data_filter]
 
     def group_events(self, distance: float):
         self._runs = group_events(self.data, abs(distance), self.pixel_size)
         self._filtered_runs = self._runs
+        self._sites = None
         self._analyze_events()
 
     def _analyze_events(self):
@@ -411,6 +421,7 @@ class SIMPLERData:
         self._filtered_runs = [_ for _ in self._runs if
                                min_lenght <= _.length <= (max_length or np.inf)]
         self._analyze_events()
+        self._sites = None
         _lgr.info("Filtered by lengths between %s and %s. %s events remaining",
                   min_lenght, max_length or np.inf, len(self._filtered_runs)
                   )
@@ -500,18 +511,30 @@ class SIMPLERData:
     def get_unfilterred_data(self):
         return self.data
 
-    def get_filterred_data(self):
-        return self._filtered_data
+    # def get_filterred_data(self):
+    #     return self._filtered_data
 
     def get_column_names(self):
         return self.data.dtype.names
 
     def calculate_z(self, params: SimplerAnalysisParameters):
-        if len(self._filtered_data) == 0:
+        if not self._runs:
             _lgr.warning("No hay data para calcular Z")
             return
-        z = calculate_z(self._filtered_data, params.alpha, params.df, params.N0)
-        self._filtered_data["z"] = z 
+        # trim ends
+        # TODO: ver si aplicar a TODOS los runs o sólo a los agrupados en sites
+        # for r in self._runs:
+        #     print(r._localization_list)
+        #     for l in r._localization_list: 
+        #         if type(l) is not np.int64:
+        #             print(type(l))
+        # print([_._localization_list[1:-1] for _ in self._runs])
+        valid_loc = np.concatenate([_._localization_list[1:-1] for _ in self._runs if _._localization_list[1:-1]], dtype=np.int64)
+        # print(valid_loc)
+        z = calculate_z(self.data[valid_loc], params.alpha, params.df, params.N0)
+        self.data["z"][valid_loc] = z
+        # print(self.data[valid_loc]["z"])
+        # print(z)
 
     def cluster_origamis(self, max_dist: float):
         ...
@@ -542,6 +565,12 @@ if __name__ == "__main__":
     yaml_file = filename.with_suffix(".yaml")
     with open(yaml_file, "r") as info_file:
         info = list(yaml.load_all(info_file, Loader=yaml.FullLoader))
+    
+    xxx = SIMPLERData(filename)
+    xxx.save("/tmp/kkk.hdf5")
+    fff = SIMPLERData("/tmp/kkk.hdf5")
+    
+    
     px_size = info[1]["Pixelsize"]
     radius_threshold = 75  # nm
     runs = group_events(data, 5, px_size)

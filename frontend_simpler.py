@@ -100,7 +100,7 @@ class Frontend(QMainWindow):
         save_act = QAction('&Save', self)
         save_act.setShortcut('Ctrl+S')
         save_act.setStatusTip('Save file')
-        save_act.triggered.connect(self.file_save)
+        save_act.triggered.connect(self.file_save_grouped)
         self._menu_bar = mb = self.menuBar()
         fileMenu = mb.addMenu('&File')
         fileMenu.addAction(open_act)
@@ -156,14 +156,17 @@ class Frontend(QMainWindow):
         """Convenience function."""
         self._status_bar.showMessage(msg)
 
-    def file_save(self):
+    def file_save_grouped(self):
         """Checks and opens a file."""
-        if not self._modified:
-            QMessageBox.information(
-                self, 'Message', "Nothing to save",
-                QMessageBox.Ok, QMessageBox.Ok,
-            )
-            return
+        # if not self._modified:
+        #     QMessageBox.information(
+        #         self, 'Message', "Nothing to save",
+        #         QMessageBox.Ok, QMessageBox.Ok,
+        #     )
+        #     return
+        fname = self._ask_file_save()
+        if fname:
+            self._data.save(fname)
         print("not implemented")
 
     def group_events(self):
@@ -210,18 +213,18 @@ class Frontend(QMainWindow):
         self._evt_dock.raise_()
         self.notify("Data grouped")
 
-    def filter_data(self):
+    def do_SIMPLER(self):
         if self._data is None:
-            _lgr.info("No data to filter")
+            _lgr.info("No data to apply SIMPLER")
             return
-        self._data.filter_data(self._SIMPLER_widget.get_analysis_parameters())
-        self._plot_widget.update_data(self._data)
+        self._data.calculate_z(self._SIMPLER_widget.get_analysis_parameters())
+        self._localizations_table_widget.set_data(self._data)
 
     def file_open(self):
         """Checks and opens a file."""
         if self._modified:
             reply = QMessageBox.question(
-                self, 'Message', "Are you sure to quit?",
+                self, 'Changes unsaved', "Are you sure to load a file and lose your changes?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No
             )
             if reply != QMessageBox.Yes:
@@ -237,6 +240,13 @@ class Frontend(QMainWindow):
         """Ask a filename to open."""
         fname = QFileDialog.getOpenFileName(
             self, 'Open file', filter="Picasso HDF5 (*.hdf5)",  # TODO: remember dir
+        )
+        return fname[0]
+
+    def _ask_file_save(self):
+        """Ask a filename to save."""
+        fname = QFileDialog.getSaveFileName(
+            self, 'Save file', filter="Picasso HDF5 (*.hdf5)",  # TODO: remember dir
         )
         return fname[0]
 

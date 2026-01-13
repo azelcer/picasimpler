@@ -31,7 +31,7 @@ class SimplerWidget(QFrame):
 
     def _init_GUI(self):
         layout = QVBoxLayout()
-        self._alpha_sb = _pqth.create_labeled_float("\u03B1<sub>F</sub>", layout, 10, 1, 1)
+        self._alpha_sb = _pqth.create_labeled_float("\u03B1<sub>F</sub>", layout, .97, 2, .01, maximum=1.)
         self._dF_sb = _pqth.create_labeled_float("d<sub>F</sub> / nm", layout, 10, 1, 1)
         self._N0_sb = _pqth.create_labeled_int("N<sub>0</sub>", layout, 10000,)
         self._apply_button = QPushButton("Apply", self)

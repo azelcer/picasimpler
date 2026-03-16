@@ -10,6 +10,8 @@ Necesita:
 """
 import numpy as _np
 import pathlib as _pathlib
+# For testing
+from matplotlib.figure import Figure
 from PyQt5.QtCore import (
     pyqtSignal,
     pyqtSlot,
@@ -40,7 +42,7 @@ from widgets.sites_widget import SitesGroupingWidget
 from widgets.data_table_widget import DataTableWidget
 from widgets.events_table_widget import EventsTableWidget
 from widgets.site_table_widget import SitesTableWidget
-
+from widgets.simple_cal_widget import SIMPLERPlotWidget
 
 from helpers.running_helpers import background_runner
 
@@ -86,6 +88,10 @@ class Frontend(QMainWindow):
         self._status_bar: QStatusBar = self.statusBar()
         self.notify('Ready')  # Not for frames!
         # print(self._SIMPLER_widget.get_analysis_parameters())
+
+        self._SIMPLER_plot_window = SIMPLERPlotWidget(self)
+        # self._SIMPLER_plot_window.hide()
+
         self._runner = background_runner()
         self._data_load_signal.connect(self._data_loaded_handler)
         self._data_grouped_signal.connect(self._data_grouped_handler)
@@ -212,6 +218,15 @@ class Frontend(QMainWindow):
         self._plot_widget.data_updated()
         self._evt_dock.raise_()
         self.notify("Data grouped")
+        # TODO: move to another place
+        fig = Figure()
+        axes = fig.add_subplot(111)  # Add a subplot to the figure
+        evts = self._data.get_events()
+        axes.hist([_.length for _ in evts] + [1] * len(self._data.get_ungrouped_locations()))
+        axes.set_yscale("log")
+        self._gggg = fig
+        fig.savefig("/tmp/kk.png")
+        print("Chau")
 
     def do_SIMPLER(self):
         if self._data is None:
@@ -300,6 +315,8 @@ class Frontend(QMainWindow):
         lim_x += shift_arr * plus_x
         lim_y += shift_arr * plus_y
         self._plot_widget.zoom_to(lim_x, lim_y)
+        # Debería ser el último que eligió
+        self._SIMPLER_plot_window.set_data(self._data, indexes[-1])
 
     @pyqtSlot(_QtGui.QCloseEvent)
     def closeEvent(self, event):
@@ -314,20 +331,21 @@ class Frontend(QMainWindow):
             )
             event.ignore()
             return
-        if not self._modified:
-            event.accept()
-            return
-        reply = QMessageBox.question(
-            self,
-            "Changes have been made",
-            "Are you sure to quit?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply == QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
+
+        if self._modified:
+            reply = QMessageBox.question(
+                self,
+                "Changes have been made",
+                "Are you sure to quit?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                event.ignore()
+                return
+        event.accept()
+        self._SIMPLER_plot_window.close()
+
         # super().closeEvent(*args, **kwargs)
 
 

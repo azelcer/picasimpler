@@ -34,6 +34,7 @@ _lgr.setLevel(_lgn.INFO)
 filename = _pathlib.Path("/home/azelcer/Dropbox/2024/simpler/example_spectrin_large.hdf5")
 filename = _pathlib.Path("/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_100mW_bufferC_gain100_1_MMStack_Pos0.ome_locs.hdf5")
 filename = _pathlib.Path("/home/azelcer/Dropbox/2025/simpler/rifleSIMPLER_3ptsR3_1ptR4_200pM_Cy3B_300mW_bufferC_gain50_50ms_highTIRF_2_MMStack_Pos0.ome_locs.hdf5")
+filename = _pathlib.Path(r"X:\messdaten\Giovanni_A\SIMPLER\260306\RifleR3_4pts_500pMCy3B_200mW_100gain_50ms\R3docks_1\R3docks_1_MMStack_Pos0.ome_locs.hdf5")
 
 
 def df_to_sarray(df):

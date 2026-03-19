@@ -6,13 +6,13 @@ import h5py
 import yaml
 import time as _time
 
-from tqdm import tqdm
 from dataclasses import dataclass, field
 from pathlib import Path
 from scipy.spatial import distance
 from sklearn.mixture import GaussianMixture
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
+from analysis_status import AnalysisStatus
 from config_var import (
     SPAT_TOL_NM,
     MAX_FIRST_FRAME_PERC,
@@ -26,11 +26,10 @@ _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
 
-picks_data_path = Path(r"X:\messdaten\Giovanni_A\SIMPLER\260306\RifleR3_4pts_500pMCy3B_200mW_100gain_50ms\R3docks_1\R3docks_1_MMStack_Pos0.ome_locs_picked_allstanding.hdf5")
-picks_data_path = Path(r"X:\messdaten\Giovanni_A\SIMPLER\260310\rifle_4pts_R4_500pM_Cy3B_buffC_200mW_40gain_100ms\lowTIRF_2\R4_lowTIRF_1\R4_lowTIRF_1_MMStack_Pos0.ome_locs_picked_standing.hdf5")
-picks_data_path = Path(r"X:\messdaten\Giovanni_A\SIMPLER\260310\rifle_4pts_R4_500pM_Cy3B_buffC_200mW_40gain_100ms\highTIRF_23\R4_highTIRF_1\R4_highTIRF_1_MMStack_Pos0.ome_locs_picked_standing.hdf5")
-picks_data_path = Path(r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5")
-metadata_path = picks_data_path.parent / Path(picks_data_path.stem + ".yaml")
+class AnalysisSignals(QObject):
+    tell_analysis_step_start = pyqtSignal(AnalysisStatus, int)
+    tell_analysis_elem_done = pyqtSignal(int)
+    tell_analysis_step_done = pyqtSignal()
 
 @dataclass
 class Params:
@@ -60,12 +59,14 @@ class Data:
     """
     data class containing the localization data
     """
-    is_file_open: bool = field(default=False)
+    is_data_file_open: bool = field(default=False)
+    is_metadata_file_open: bool = field(default=False)
     
     df_raw: pd.DataFrame = field(init=False) # dataframe with all data
     df_orig: pd.DataFrame = field(init=False) # dataframe with picks filtered by PAINT kinetics
     df_filt: pd.DataFrame = field(init=False) # dataframe after SIMPLER localization filter
     df_after_clust: pd.DataFrame = field(init=False) # dataframe after clusterization
+    df_clust_result: pd.DataFrame = field(init=False) # dataframe containing the results of the PAINT site clusterization
     
     orig_idx_list: list = field(default_factory=lambda: [])
     
@@ -77,11 +78,12 @@ class AnalysisWorker(QObject):
         super().__init__()
         self.picks_data_path = picks_data_path
         self.metadata_path = metadata_path
+        self.signals = AnalysisSignals()
         self.params = Params()
         self.data = Data()
         # open hdf5 and count picks, open yaml and read metadata
         self.load_hdf5_todf()
-        if self.data.is_file_open:
+        if self.data.is_data_file_open:
             self.load_metadata()
             self.params.r_th_sq = (self.params.spat_tol_nm / self.params.px_size_nm)**2
         
@@ -100,17 +102,17 @@ class AnalysisWorker(QObject):
                     _lgr.info(f"Total number of picks: {tot_picks}")
                     self.data.df_raw = df_data
                     self.data.tot_picks = tot_picks
-                    self.data.is_file_open = True
+                    self.data.is_data_file_open = True
                 else:
                     _lgr.error('hdf5 file does not have expected structure')
                     self.data.df_raw = None
                     self.data.tot_picks = 0
-                    self.data.is_file_open = False
+                    self.data.is_data_file_open = False
         except Exception as e:
             _lgr.error(f"Error opening hdf5 file because of: {e}")
             self.data.df_raw = None
             self.data.tot_picks = 0
-            self.data.is_file_open = False
+            self.data.is_data_file_open = False
     
     def load_metadata(self):
         """
@@ -128,11 +130,13 @@ class AnalysisWorker(QObject):
                 self.params.n_frames = frames
                 self.params.exp_time_ms = exp_time_ms
                 self.params.px_size_nm = px_size_nm
+                self.data.is_metadata_file_open = True
         except Exception as e:
             _lgr.error(f"Error opening yaml file because of: {e}")
             self.params.n_frames = None
             self.params.exp_time_ms = None
             self.params.px_size_nm = None
+            self.data.is_metadata_file_open = False            
     
     def filter_orig(self):
         """
@@ -141,7 +145,7 @@ class AnalysisWorker(QObject):
         picks_tokeep = []
         groups = np.array(self.data.df_raw['group'])
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
-        for pick_idx in tqdm(range(self.data.tot_picks)):
+        for pick_idx in range(self.data.tot_picks):
             pick_df = self.data.df_raw.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]]
             first_frame_perc = np.min(pick_df['frame'])/self.params.n_frames
             last_frame_perc = np.max(pick_df['frame'])/self.params.n_frames
@@ -157,6 +161,7 @@ class AnalysisWorker(QObject):
                 (num_on_frames_perc>self.params.max_on_frames_perc)
             ):
                 picks_tokeep.append(pick_idx)
+                self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
         df_orig = self.data.df_raw.loc[self.data.df_raw['group'].isin(picks_tokeep)]
         n_orig = len(picks_tokeep)
         _lgr.info(f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
@@ -207,11 +212,12 @@ class AnalysisWorker(QObject):
         idx_to_discard = np.array([])
         groups = np.array(self.data.df_orig['group'])
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
-        for pick_idx in tqdm(range(self.data.tot_orig)):
+        for pick_idx in range(self.data.tot_orig):
             idx_to_discard = np.concatenate(
                 (idx_to_discard, self.filter_locs_inpick(self.data.df_orig.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]])),
                 axis=0
             )
+            self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
         df_filtered = self.data.df_orig.drop(labels=idx_to_discard, axis=0)
         df_filtered = df_filtered.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
@@ -229,9 +235,10 @@ class AnalysisWorker(QObject):
         n_orig_discarded = 0
         pick_todiscard = []
         idx_todiscard = []
+        clust_result_list = []
         groups = np.array(self.data.df_filt['group'])
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
-        for pick_idx in tqdm(range(self.data.tot_orig)):
+        for pick_idx in range(self.data.tot_orig):
             best_bic = np.inf
             df_forfit = self.data.df_filt.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1], self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])]
             for n_clust in range(self.params.n_clust_exp, 0, -1):
@@ -245,6 +252,7 @@ class AnalysisWorker(QObject):
                     pick_todiscard.append(pick_idx)
                     n_orig_discarded += 1
                     break
+            self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
         df_after_clust = self.data.df_filt.drop(labels=idx_todiscard, axis=0)
         df_after_clust = df_after_clust.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
@@ -256,8 +264,13 @@ class AnalysisWorker(QObject):
     @pyqtSlot()
     def do_analysis(self):
         """
-        this function calls one by one all the analysis steps
+        this function calls one by one all the analysis steps (filtering based on kinetics, SIMPLER localization filtering
+        and PAINT site clustering)
         """
+        self.signals.tell_analysis_step_start.emit(AnalysisStatus.KIN_FILT, self.data.tot_picks)
         self.filter_orig()
+        self.signals.tell_analysis_step_start.emit(AnalysisStatus.SIMPLER_FILT, self.data.tot_orig)
         self.filter_data()
+        self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.data.tot_orig)
         self.clustering_xyn()
+        self.signals.tell_analysis_step_done.emit()

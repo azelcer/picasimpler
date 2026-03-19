@@ -34,7 +34,7 @@ class AnalysisSignals(QObject):
 @dataclass
 class Params:
     """
-    data class containing the parameters for the calibration
+    dataclass containing the parameters for the calibration
     """
     # movie parameters
     n_frames: int = field(init=False) # number of frames in movie
@@ -55,23 +55,30 @@ class Params:
     n_clust_exp: int = field(default=N_CLUST_EXP)
     
 @dataclass
+class ClusterData:
+    """
+    dataclass containing all the data (means and covariances) of the clusters after site clusterinzation
+    """
+    clust_means: np.ndarray = field(init=False)
+    clust_covs: np.ndarray = field(init=False)
+    
+@dataclass
 class Data:
     """
-    data class containing the localization data
+    dataclass containing the localization data
     """
     is_data_file_open: bool = field(default=False)
     is_metadata_file_open: bool = field(default=False)
+    
+    tot_picks: int = field(init=False)
+    tot_orig: int = field(init=False)
     
     df_raw: pd.DataFrame = field(init=False) # dataframe with all data
     df_orig: pd.DataFrame = field(init=False) # dataframe with picks filtered by PAINT kinetics
     df_filt: pd.DataFrame = field(init=False) # dataframe after SIMPLER localization filter
     df_after_clust: pd.DataFrame = field(init=False) # dataframe after clusterization
-    df_clust_result: pd.DataFrame = field(init=False) # dataframe containing the results of the PAINT site clusterization
     
-    orig_idx_list: list = field(default_factory=lambda: [])
-    
-    tot_picks: int = field(init=False)
-    tot_orig: int = field(init=False)
+    clusters: ClusterData = field(init=False) # dataclass containing the cluster data 
     
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
@@ -166,7 +173,6 @@ class AnalysisWorker(QObject):
         n_orig = len(picks_tokeep)
         _lgr.info(f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
         self.data.df_orig = df_orig
-        self.data.orig_idx_list = picks_tokeep
         self.data.tot_orig = n_orig
     
     def filter_locs_inpick(self, df_pick):
@@ -233,33 +239,49 @@ class AnalysisWorker(QObject):
         """
         start = _time.time()
         n_orig_discarded = 0
-        pick_todiscard = []
         idx_todiscard = []
-        clust_result_list = []
+        # here we will store all data 
+        clust_means_list = []
+        clust_covs_list = []
+        
         groups = np.array(self.data.df_filt['group'])
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
         for pick_idx in range(self.data.tot_orig):
-            best_bic = np.inf
+            pick_kept = True
             df_forfit = self.data.df_filt.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1], self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])]
             for n_clust in range(self.params.n_clust_exp, 0, -1):
                 gmm = GaussianMixture(n_components=n_clust, covariance_type='full')
                 gmm.fit(df_forfit)
                 last_bic = gmm.bic(df_forfit)
                 if n_clust == self.params.n_clust_exp:
-                    best_bic = last_bic
-                elif last_bic < best_bic:
+                    ref_bic = last_bic
+                    clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
+                elif last_bic < ref_bic:
                     idx_todiscard += [idx for idx in range(groupjump[pick_idx], groupjump[pick_idx + 1])]
-                    pick_todiscard.append(pick_idx)
                     n_orig_discarded += 1
+                    pick_kept = False
                     break
+            if pick_kept:
+                clust_means_list.append(clust_means)
+                clust_covs_list.append(clust_covs)
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
         df_after_clust = self.data.df_filt.drop(labels=idx_todiscard, axis=0)
         df_after_clust = df_after_clust.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
+        clust_means_arr = np.asarray(clust_means_list, dtype=float)
+        clust_covs_arr = np.asarray(clust_covs_list, dtype=float)
         end = _time.time()
         _lgr.info('Time of clustering step: %s s. %s of %s (%.2f%%) origamis discarded',
                 end - start, n_orig_discarded, self.data.tot_orig, 100 * n_orig_discarded / self.data.tot_orig)
         self.data.df_after_clust = df_after_clust
+        
+    @staticmethod
+    def reorder_clust(means, sigmas):
+        """
+        This method reorders in descending order tuples of means and sigmas based on the mean of the last coordinate
+        (number of photons). It is used to order clusters from bottom to top
+        """
+        return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
         
     @pyqtSlot()
     def do_analysis(self):
@@ -274,3 +296,10 @@ class AnalysisWorker(QObject):
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.data.tot_orig)
         self.clustering_xyn()
         self.signals.tell_analysis_step_done.emit()
+        
+if __name__=="__main__":
+    filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"
+    data_path = Path(filepath_str)
+    metadata_path = data_path.parent / Path(data_path.stem + ".yaml")
+    analysis_worker = AnalysisWorker(data_path, metadata_path)
+    analysis_worker.do_analysis()

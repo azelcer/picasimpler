@@ -48,13 +48,13 @@ class ClusterData:
         self.clust_covs = np.asarray(self.clust_covs, dtype=float)
         
     def get_loc_x(self, orig_num):
-        return self.all_orig_loc_list[orig_num][0, :]
+        return self.all_orig_loc_list[orig_num][:, 0]
     
     def get_loc_y(self, orig_num):
-        return self.all_orig_loc_list[orig_num][1, :]
+        return self.all_orig_loc_list[orig_num][:, 1]
     
     def get_loc_n(self, orig_num):
-        return self.all_orig_loc_list[orig_num][2, :]
+        return self.all_orig_loc_list[orig_num][:, 2]
 
 @dataclass
 class Params:
@@ -287,10 +287,11 @@ class AnalysisWorker(QObject):
                 groupjump[pick_idx]:groupjump[pick_idx + 1],
                 self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])
             ] # x, y and photon numbers of localization pertaining to the current origami
+            arr_forfit_nm = self.px_to_nm(np.asarray(df_forfit, dtype=float), self.params.px_size_nm)
             for n_clust in range(self.params.n_clust_exp, 0, -1):
                 gmm = GaussianMixture(n_components=n_clust, covariance_type='full')
-                gmm.fit(df_forfit)
-                last_bic = gmm.bic(df_forfit)
+                gmm.fit(arr_forfit_nm)
+                last_bic = gmm.bic(arr_forfit_nm)
                 if n_clust == self.params.n_clust_exp: # compute BIC for the expected number of clusters
                     ref_bic = last_bic
                     clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
@@ -303,12 +304,7 @@ class AnalysisWorker(QObject):
             if pick_kept:
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
-                all_orig_loc_list.append(
-                    np.asarray(self.data.df_filt.iloc[
-                        groupjump[pick_idx]:groupjump[pick_idx + 1],
-                        self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])
-                        ], dtype=float).T
-                )
+                all_orig_loc_list.append(arr_forfit_nm)
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
             
         self.data.tot_orig_after_clust = self.data.tot_orig - n_orig_discarded
@@ -332,7 +328,16 @@ class AnalysisWorker(QObject):
         (number of photons). It is used to order clusters from bottom to top
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
-        
+    
+    @staticmethod
+    def px_to_nm(arr_toconv, px_size_nm):
+        """
+        This function converts x and y coordinates of a given array from px to nm
+        """
+        arr_toconv[:, 0] = arr_toconv[:, 0]*px_size_nm
+        arr_toconv[:, 1] = arr_toconv[:, 1]*px_size_nm
+        return arr_toconv
+    
     @pyqtSlot()
     def do_analysis(self):
         """

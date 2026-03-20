@@ -41,6 +41,11 @@ class View(QMainWindow):
     def update_analysis_counter(self, elem_num, tot_elem):
         self.ui.analysis_counter_label.setText(str(elem_num)+" / "+str(tot_elem))
         
+    def update_curr_orig_count(self, curr_orig_num, tot_orig):
+        self.ui.current_orig_label.setText(
+            str(curr_orig_num) + " / " + str(tot_orig)
+        )
+        
     def plot_orig_wclust(self, clust_data: ClusterData, orig_num: int):
         """
         This function plots the xN and yN projections of all the localization of the chosen

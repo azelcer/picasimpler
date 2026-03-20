@@ -124,16 +124,19 @@ class Presenter(QObject):
         self._view.update_analysis_status(AnalysisStatus.ANALYSIS_DONE.value)
         self.curr_displ_orig_num = 0
         self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+        self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
         
     @pyqtSlot()
     def _order_plot_next_orig(self):
         self.curr_displ_orig_num += 1
         self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
         self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+        self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
         
     @pyqtSlot()
     def _order_plot_prev_orig(self):
         self.curr_displ_orig_num -= 1
         self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
         self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+        self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
         

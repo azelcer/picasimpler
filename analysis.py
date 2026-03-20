@@ -28,6 +28,7 @@ _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
 
 class AnalysisSignals(QObject):
+    # type of analysis step starting now, and total number of element in it
     tell_analysis_step_start = pyqtSignal(AnalysisStatus, int)
     tell_analysis_elem_done = pyqtSignal(int)
     tell_analysis_step_done = pyqtSignal()
@@ -119,7 +120,11 @@ class AnalysisWorker(QObject):
             H_SITES_NM
         )
         self.data = Data(picks_data_path, metadata_path)
-        # open hdf5 and count picks, open yaml and read metadata
+
+    def load_data(self):
+        """
+        This function calls other functions to load data and metadata from file
+        """
         self.load_hdf5_todf()
         if self.data.is_data_file_open:
             self.load_metadata()

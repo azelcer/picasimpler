@@ -24,6 +24,7 @@ class Presenter(QObject):
         self._analysis_thread = None
         self.tot_elem_curr_analysis_step = 0
         self.curr_displ_orig_num = None
+        self.analysis_status = AnalysisStatus.PRE_ANALYSIS
         
     def show_ui(self):
         self._view.show()
@@ -59,10 +60,11 @@ class Presenter(QObject):
             caption="Select calibration file",
             filter="(*.hdf5)"
         )
-        if filepath_str is not None:
+        if filepath_str:
             self._reset_analysis()
-            self._view.update_analysis_status(AnalysisStatus.PRE_ANALYSIS.value)
-            self._view.update_analysis_counter(0,0)
+            self._view.update_analysis_status_onui(self.analysis_status.get_msg())
+            self._view.reset_counters_onui()
+            self._view.reset_plots()
             self.data_path = Path(filepath_str)
             self.metadata_path = self.data_path.parent / Path(self.data_path.stem + ".yaml")
             self._view.update_data_file_onui(self.data_path)
@@ -75,6 +77,7 @@ class Presenter(QObject):
             self._analysis_thread.quit()
             self._analysis_thread.wait()
         self._analysis_worker = None
+        self.analysis_status = AnalysisStatus.PRE_ANALYSIS
             
     def _start_analysis(self):
         """
@@ -85,6 +88,10 @@ class Presenter(QObject):
         # analysis thread preparation, to allow dynamic updating of the GUI
         self._analysis_worker = AnalysisWorker(self.data_path, self.metadata_path)
         self._analysis_thread = QThread()
+        # start loading data for analysis
+        self.analysis_status = AnalysisStatus.LOADING_DATA
+        self._analysis_worker.load_data()
+        # make signal connections
         self._make_analysis_connect()
         self._analysis_worker.moveToThread(self._analysis_thread)
         self._analysis_thread.start()
@@ -97,18 +104,19 @@ class Presenter(QObject):
             self._analysis_worker = None
             
     @pyqtSlot(AnalysisStatus, int)
-    def _on_new_analysis_step(self, analysis_status: AnalysisStatus, tot_elem_curr_analysis_step):
+    def _on_new_analysis_step(self, analysis_status: AnalysisStatus, tot_elem_curr_analysis_step: int):
         """
         this function is called whenever a new analysis step is started by the analysis worker.
         It tells the View to update the analysis status on UI, and it updates the total number of
         elements in the current analysis step
         """
+        self.analysis_status = analysis_status
         self.tot_elem_curr_analysis_step = tot_elem_curr_analysis_step
         self._view.update_analysis_counter(0, self.tot_elem_curr_analysis_step)
-        self._view.update_analysis_status(analysis_status.value)
+        self._view.update_analysis_status_onui(self.analysis_status.get_msg())
         
     @pyqtSlot(int)
-    def _on_new_analysis_elem(self, elem_num):
+    def _on_new_analysis_elem(self, elem_num: int):
         """
         This function is called everytime a new individual element is analyzed within an
         analysis step. It tells the View to update the counter on the UI
@@ -121,22 +129,25 @@ class Presenter(QObject):
         This function is called once all the analysis steps are done.
         It displays the first origami scatter plot 
         """
-        self._view.update_analysis_status(AnalysisStatus.ANALYSIS_DONE.value)
+        self.analysis_status = AnalysisStatus.ANALYSIS_DONE
+        self._view.update_analysis_status_onui(self.analysis_status.get_msg())
         self.curr_displ_orig_num = 0
         self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
         
     @pyqtSlot()
     def _order_plot_next_orig(self):
-        self.curr_displ_orig_num += 1
-        self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
-        self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
-        self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
+        if self.analysis_status.passed_analysis_step(AnalysisStatus.ANALYSIS_DONE):
+            self.curr_displ_orig_num += 1
+            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
+            self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
         
     @pyqtSlot()
     def _order_plot_prev_orig(self):
-        self.curr_displ_orig_num -= 1
-        self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
-        self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
-        self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
+        if self.analysis_status.passed_analysis_step(AnalysisStatus.ANALYSIS_DONE):
+            self.curr_displ_orig_num -= 1
+            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
+            self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
         

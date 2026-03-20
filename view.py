@@ -32,11 +32,11 @@ class View(QMainWindow):
         self.ui.dir_label.setText(str(data_path.parent))            
         self.ui.filename_label.setText(data_path.stem)
         
-    def update_analysis_status(self, analysis_status: str):
+    def update_analysis_status_onui(self, analysis_status_msg: str):
         """
         This function updates the analysis status reported on UI
         """
-        self.ui.analysis_status_label.setText(analysis_status)
+        self.ui.analysis_status_label.setText(analysis_status_msg)
         
     def update_analysis_counter(self, elem_num, tot_elem):
         self.ui.analysis_counter_label.setText(str(elem_num)+" / "+str(tot_elem))
@@ -46,13 +46,28 @@ class View(QMainWindow):
             str(curr_orig_num) + " / " + str(tot_orig)
         )
         
+    def reset_counters_onui(self):
+        """
+        This function is called whenever a new file browsed, and it empties counters displayed on the UI
+        """
+        self.ui.analysis_counter_label.setText("")
+        self.ui.current_orig_label.setText("")
+        
+    def reset_plots(self):
+        """
+        This function empties the xN and yN plots on the UI
+        """
+        self._xn_plot.clear()
+        self._yn_plot.clear()
+        self._xn_plot.enableAutoRange()
+        self._yn_plot.enableAutoRange()
+        
     def plot_orig_wclust(self, clust_data: ClusterData, orig_num: int):
         """
         This function plots the xN and yN projections of all the localization of the chosen
         origami, superimposed with the corresponding clusterization results
         """
-        self._xn_plot.clear()
-        self._yn_plot.clear()
+        self.reset_plots()
         xn_scatter = pg.ScatterPlotItem(clust_data.get_loc_x(orig_num), clust_data.get_loc_n(orig_num))
         yn_scatter = pg.ScatterPlotItem(clust_data.get_loc_y(orig_num), clust_data.get_loc_n(orig_num))
         xn_clust_centers = pg.ScatterPlotItem(clust_data.clust_means[orig_num, :, 0], clust_data.clust_means[orig_num, :, 2], pen='y')

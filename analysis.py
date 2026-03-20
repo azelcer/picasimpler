@@ -20,6 +20,7 @@ from config_var import (
     FRAME_MEDIAN_PERC_RANGE,
     MAX_ON_FRAMES_PERC,
     N_CLUST_EXP,
+    H_SITES_NM
 )
 
 _lgn.basicConfig()
@@ -32,41 +33,53 @@ class AnalysisSignals(QObject):
     tell_analysis_step_done = pyqtSignal()
 
 @dataclass
+class ClusterData:
+    """
+    dataclass containing all the data (means and covariances) of the clusters after site clusterinzation
+    """
+    clust_means: np.ndarray
+    clust_covs: np.ndarray
+    all_orig_loc_list: list
+    
+    def __post_init__(self):
+        self.clust_means = np.asarray(self.clust_means, dtype=float)
+        self.clust_covs = np.asarray(self.clust_covs, dtype=float)
+
+@dataclass
 class Params:
     """
     dataclass containing the parameters for the calibration
     """
+    
+    # kinetics filtering parameters
+    max_first_frame_perc: float
+    min_last_frame_perc: float
+    frame_median_perc_range: list
+    max_on_frames_perc: float
+    
+    # SIMPLER filtering parameters
+    spat_tol_nm: float # how far can two locs be to be considered the same event
+    
+    # clustering parameters
+    n_clust_exp: int
+    h_sites_nm: list
+    
     # movie parameters
     n_frames: int = field(init=False) # number of frames in movie
     exp_time_ms: float = field(init=False) # exposure time in ms
     px_size_nm: float = field(init=False) # camera pixel size in nm
     
-    # kinetics filtering parameters
-    max_first_frame_perc: float = field(default=MAX_FIRST_FRAME_PERC)
-    min_last_frame_perc: float = field(default=MIN_LAST_FRAME_PERC)
-    frame_median_perc_range: list = field(default_factory=lambda: FRAME_MEDIAN_PERC_RANGE)
-    max_on_frames_perc: float = field(default=MAX_ON_FRAMES_PERC)
-    
-    # SIMPLER filtering parameters
-    spat_tol_nm: float = field(default=SPAT_TOL_NM) # how far can two locs be to be considered the same event
+    # convenience parameters
     r_th_sq: float = field(init=False)
-    
-    # clustering parameters
-    n_clust_exp: int = field(default=N_CLUST_EXP)
-    
-@dataclass
-class ClusterData:
-    """
-    dataclass containing all the data (means and covariances) of the clusters after site clusterinzation
-    """
-    clust_means: np.ndarray = field(init=False)
-    clust_covs: np.ndarray = field(init=False)
     
 @dataclass
 class Data:
     """
     dataclass containing the localization data
     """
+    picks_data_path: Path
+    metadata_path: Path
+    
     is_data_file_open: bool = field(default=False)
     is_metadata_file_open: bool = field(default=False)
     
@@ -78,16 +91,22 @@ class Data:
     df_filt: pd.DataFrame = field(init=False) # dataframe after SIMPLER localization filter
     df_after_clust: pd.DataFrame = field(init=False) # dataframe after clusterization
     
-    clusters: ClusterData = field(init=False) # dataclass containing the cluster data 
+    cluster_data: ClusterData = field(init=False) # dataclass containing the cluster data 
     
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
         super().__init__()
-        self.picks_data_path = picks_data_path
-        self.metadata_path = metadata_path
         self.signals = AnalysisSignals()
-        self.params = Params()
-        self.data = Data()
+        self.params = Params(
+            MAX_FIRST_FRAME_PERC,
+            MIN_LAST_FRAME_PERC,
+            FRAME_MEDIAN_PERC_RANGE,
+            MAX_ON_FRAMES_PERC,
+            SPAT_TOL_NM,
+            N_CLUST_EXP,
+            H_SITES_NM
+        )
+        self.data = Data(picks_data_path, metadata_path)
         # open hdf5 and count picks, open yaml and read metadata
         self.load_hdf5_todf()
         if self.data.is_data_file_open:
@@ -99,7 +118,7 @@ class AnalysisWorker(QObject):
         This function opens the hdf5 containing all the picked structures
         """
         try:
-            with pd.HDFStore(self.picks_data_path, 'r') as store:
+            with pd.HDFStore(self.data.picks_data_path, 'r') as store:
                 hdf5_node_list = [node._v_pathname for node in store._handle.walk_nodes()]
                 if '/locs' in hdf5_node_list:
                     _lgr.info('hdf5 file has expected structure')
@@ -126,7 +145,7 @@ class AnalysisWorker(QObject):
         this function loads the metadata from the yaml file
         """
         try:
-            with open(self.metadata_path, "r") as metadata_file:
+            with open(self.data.metadata_path, "r") as metadata_file:
                 metadata = list(yaml.load_all(metadata_file, Loader=yaml.FullLoader))
                 frames = metadata[0]['Frames']
                 exp_time_ms = metadata[0]['Micro-Manager Metadata']['Exposure-ms']
@@ -235,27 +254,35 @@ class AnalysisWorker(QObject):
     def clustering_xyn(self):
         """
         This function use GMM to cluster localizations in 3D (x, y and N space).
-        It repeats the clustering with increasing number of clusters and compares the result through BIC.
+        It repeats the clustering with decreasing number of clusters and compares the result through BIC.
+        If an origami is better clusterized by a number of cluster different from the expected one,
+        it is discarded.
         """
         start = _time.time()
+        # variables needed to discard origamis not passing the clusterzation test
         n_orig_discarded = 0
         idx_todiscard = []
-        # here we will store all data 
+        # here we will store all data relative to the clusterization result 
         clust_means_list = []
         clust_covs_list = []
-        
+        all_orig_loc_list = []
+        # helper array to find fast all localization pertaining to an origami
         groups = np.array(self.data.df_filt['group'])
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
         for pick_idx in range(self.data.tot_orig):
             pick_kept = True
-            df_forfit = self.data.df_filt.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1], self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])]
+            df_forfit = self.data.df_filt.iloc[
+                groupjump[pick_idx]:groupjump[pick_idx + 1],
+                self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])
+            ] # x, y and photon numbers of localization pertaining to the current origami
             for n_clust in range(self.params.n_clust_exp, 0, -1):
                 gmm = GaussianMixture(n_components=n_clust, covariance_type='full')
                 gmm.fit(df_forfit)
                 last_bic = gmm.bic(df_forfit)
-                if n_clust == self.params.n_clust_exp:
+                if n_clust == self.params.n_clust_exp: # compute BIC for the expected number of clusters
                     ref_bic = last_bic
                     clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
+                # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
                 elif last_bic < ref_bic:
                     idx_todiscard += [idx for idx in range(groupjump[pick_idx], groupjump[pick_idx + 1])]
                     n_orig_discarded += 1
@@ -264,12 +291,22 @@ class AnalysisWorker(QObject):
             if pick_kept:
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
+                all_orig_loc_list.append(
+                    np.asarray(self.data.df_filt.iloc[
+                        groupjump[pick_idx]:groupjump[pick_idx + 1],
+                        self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])
+                        ], dtype=float).T
+                )
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
+            
         df_after_clust = self.data.df_filt.drop(labels=idx_todiscard, axis=0)
         df_after_clust = df_after_clust.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
-        clust_means_arr = np.asarray(clust_means_list, dtype=float)
-        clust_covs_arr = np.asarray(clust_covs_list, dtype=float)
+        self.data.cluster_data = ClusterData(
+            clust_means_list,
+            clust_covs_list,
+            all_orig_loc_list
+        )
         end = _time.time()
         _lgr.info('Time of clustering step: %s s. %s of %s (%.2f%%) origamis discarded',
                 end - start, n_orig_discarded, self.data.tot_orig, 100 * n_orig_discarded / self.data.tot_orig)

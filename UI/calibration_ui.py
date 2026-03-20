@@ -18,7 +18,7 @@ class Ui_MainWindow(object):
         self.analysis_button = QtWidgets.QPushButton(parent=self.centralwidget)
         self.analysis_button.setGeometry(QtCore.QRect(180, 160, 151, 71))
         self.analysis_button.setObjectName("analysis_button")
-        self.yn_widget = QtWidgets.QWidget(parent=self.centralwidget)
+        self.yn_widget = PlotWidget(parent=self.centralwidget)
         self.yn_widget.setGeometry(QtCore.QRect(330, 240, 301, 301))
         self.yn_widget.setObjectName("yn_widget")
         self.analysis_status_label = QtWidgets.QLabel(parent=self.centralwidget)
@@ -35,7 +35,7 @@ class Ui_MainWindow(object):
         self.next_orig_button = QtWidgets.QPushButton(parent=self.centralwidget)
         self.next_orig_button.setGeometry(QtCore.QRect(720, 240, 71, 71))
         self.next_orig_button.setObjectName("next_orig_button")
-        self.xn_widget = QtWidgets.QWidget(parent=self.centralwidget)
+        self.xn_widget = PlotWidget(parent=self.centralwidget)
         self.xn_widget.setGeometry(QtCore.QRect(20, 240, 301, 301))
         self.xn_widget.setObjectName("xn_widget")
         self.discard_orig_button = QtWidgets.QPushButton(parent=self.centralwidget)
@@ -88,3 +88,4 @@ class Ui_MainWindow(object):
 "file (.hdf5)"))
         self.file_title_label.setText(_translate("MainWindow", "Calibration file name:"))
         self.dir_title_label.setText(_translate("MainWindow", "Calibration file directory"))
+from pyqtgraph import PlotWidget

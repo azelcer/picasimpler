@@ -23,6 +23,7 @@ class Presenter(QObject):
         self._analysis_worker = None
         self._analysis_thread = None
         self.tot_elem_curr_analysis_step = 0
+        self.curr_displ_orig_num = None
         
     def show_ui(self):
         self._view.show()
@@ -34,6 +35,8 @@ class Presenter(QObject):
         # connect signals from UI to presenter
         self._view.ui.browse_file_button.clicked.connect(self._browse_file)
         self._view.ui.analysis_button.clicked.connect(self._start_analysis)
+        self._view.ui.next_orig_button.clicked.connect(self._order_plot_next_orig)
+        self._view.ui.prev_orig_button.clicked.connect(self._order_plot_prev_orig)
         
     def _make_analysis_connect(self):
         """
@@ -44,6 +47,7 @@ class Presenter(QObject):
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
         self._analysis_worker.signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
+        self._analysis_worker.signals.tell_analysis_done.connect(self._on_analysis_done)
         
     def _browse_file(self, *args):
         """
@@ -117,4 +121,19 @@ class Presenter(QObject):
         This function is called once all the analysis steps are done.
         It displays the first origami scatter plot 
         """
-        pass
+        self._view.update_analysis_status(AnalysisStatus.ANALYSIS_DONE.value)
+        self.curr_displ_orig_num = 0
+        self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+        
+    @pyqtSlot()
+    def _order_plot_next_orig(self):
+        self.curr_displ_orig_num += 1
+        self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
+        self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+        
+    @pyqtSlot()
+    def _order_plot_prev_orig(self):
+        self.curr_displ_orig_num -= 1
+        self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
+        self._view.plot_orig_wclust(self._analysis_worker.data.cluster_data, self.curr_displ_orig_num)
+        

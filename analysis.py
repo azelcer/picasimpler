@@ -31,11 +31,13 @@ class AnalysisSignals(QObject):
     tell_analysis_step_start = pyqtSignal(AnalysisStatus, int)
     tell_analysis_elem_done = pyqtSignal(int)
     tell_analysis_step_done = pyqtSignal()
+    tell_analysis_done = pyqtSignal()
 
 @dataclass
 class ClusterData:
     """
-    dataclass containing all the data (means and covariances) of the clusters after site clusterinzation
+    dataclass containing all the data (means and covariances) of the clusters after site clusterinzation.
+    Coordinates go from 0 to 2 and are always in this order: x, y and N (number of photons)
     """
     clust_means: np.ndarray
     clust_covs: np.ndarray
@@ -44,6 +46,15 @@ class ClusterData:
     def __post_init__(self):
         self.clust_means = np.asarray(self.clust_means, dtype=float)
         self.clust_covs = np.asarray(self.clust_covs, dtype=float)
+        
+    def get_loc_x(self, orig_num):
+        return self.all_orig_loc_list[orig_num][0, :]
+    
+    def get_loc_y(self, orig_num):
+        return self.all_orig_loc_list[orig_num][1, :]
+    
+    def get_loc_n(self, orig_num):
+        return self.all_orig_loc_list[orig_num][2, :]
 
 @dataclass
 class Params:
@@ -85,6 +96,7 @@ class Data:
     
     tot_picks: int = field(init=False)
     tot_orig: int = field(init=False)
+    tot_orig_after_clust: int = field(init=False)
     
     df_raw: pd.DataFrame = field(init=False) # dataframe with all data
     df_orig: pd.DataFrame = field(init=False) # dataframe with picks filtered by PAINT kinetics
@@ -299,6 +311,7 @@ class AnalysisWorker(QObject):
                 )
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
             
+        self.data.tot_orig_after_clust = self.data.tot_orig - n_orig_discarded
         df_after_clust = self.data.df_filt.drop(labels=idx_todiscard, axis=0)
         df_after_clust = df_after_clust.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
@@ -333,6 +346,7 @@ class AnalysisWorker(QObject):
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.data.tot_orig)
         self.clustering_xyn()
         self.signals.tell_analysis_step_done.emit()
+        self.signals.tell_analysis_done.emit()
         
 if __name__=="__main__":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"

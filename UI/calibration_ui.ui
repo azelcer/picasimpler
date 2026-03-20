@@ -28,7 +28,7 @@
 dataset</string>
     </property>
    </widget>
-   <widget class="QWidget" name="yn_widget" native="true">
+   <widget class="PlotWidget" name="yn_widget" native="true">
     <property name="geometry">
      <rect>
       <x>330</x>
@@ -92,7 +92,7 @@ origami</string>
 origami</string>
     </property>
    </widget>
-   <widget class="QWidget" name="xn_widget" native="true">
+   <widget class="PlotWidget" name="xn_widget" native="true">
     <property name="geometry">
      <rect>
       <x>20</x>
@@ -210,6 +210,14 @@ file (.hdf5)</string>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PlotWidget</class>
+   <extends>QWidget</extends>
+   <header>pyqtgraph</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

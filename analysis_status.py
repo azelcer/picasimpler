@@ -8,3 +8,4 @@ class AnalysisStatus(Enum):
     KIN_FILT = "Kinetics filtering"
     SIMPLER_FILT = "SIMPLER localization filtering"
     SITE_CLUST = "PAINT site clustering"
+    ANALYSIS_DONE = "All analysis steps completed"

@@ -1,4 +1,5 @@
 import sys
+import logging as _lgn
 from pathlib import Path
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
@@ -6,6 +7,11 @@ from PyQt6.QtWidgets import QFileDialog
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, FrameColor
+
+_lgn.basicConfig()
+_lgr = _lgn.getLogger(__name__)
+_lgr.setLevel(_lgn.INFO)
+
 
 class PresenterSignals(QObject):
     request_start_filtering = pyqtSignal()
@@ -152,7 +158,7 @@ class Presenter(QObject):
         self.curr_displ_orig_num = 0
         self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
-        
+
     @pyqtSlot()
     def _on_clust_done(self):
         """
@@ -162,33 +168,31 @@ class Presenter(QObject):
         self.analysis_status = AnalysisStatus.CLUST_DONE
         self._view.update_analysis_status_onui(self.analysis_status.msg)
         self.curr_displ_orig_num = 0
+        if len(self._analysis_worker.data.simpler_locs.all_orig_loc_list) == 0:
+            _lgr.warning("No valid clusters found")
+            return
         self._view.plot_orig_wclust(self._analysis_worker.data.simpler_locs, self._analysis_worker.data.cluster_res, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
-        
-    @pyqtSlot()
-    def _order_plot_next_orig(self):
+
+    def _do_plot_shift(self, shift: int):
         if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):
-            self.curr_displ_orig_num += 1
+            if len(self._analysis_worker.data.simpler_locs.all_orig_loc_list) == 0:
+                _lgr.warning("No valid clusters has been found")
+                return
+            self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
             self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
             self._view.plot_orig_wclust(self._analysis_worker.data.simpler_locs, self._analysis_worker.data.cluster_res, self.curr_displ_orig_num)
         elif self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
-            self.curr_displ_orig_num += 1
+            self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig
             self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
             self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
 
-        
+    @pyqtSlot()
+    def _order_plot_next_orig(self):
+        self._do_plot_shift(1)
+
     @pyqtSlot()
     def _order_plot_prev_orig(self):
-        if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):
-            self.curr_displ_orig_num -= 1
-            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
-            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
-            self._view.plot_orig_wclust(self._analysis_worker.data.simpler_locs, self._analysis_worker.data.cluster_res, self.curr_displ_orig_num)
-        elif self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
-            self.curr_displ_orig_num -= 1
-            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig
-            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
-            self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
-        
+        self._do_plot_shift(-1)

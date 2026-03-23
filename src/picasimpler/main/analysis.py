@@ -135,7 +135,7 @@ class AnalysisWorker(QObject):
         if self.data.is_data_file_open:
             self.load_metadata()
             self.params.r_th_sq = (self.params.spat_tol_nm / self.params.px_size_nm)**2
-        
+
     def load_hdf5_todf(self):
         """
         This function opens the hdf5 containing all the picked structures
@@ -143,26 +143,29 @@ class AnalysisWorker(QObject):
         try:
             with pd.HDFStore(self.data.picks_data_path, 'r') as store:
                 hdf5_node_list = [node._v_pathname for node in store._handle.walk_nodes()]
-                if '/locs' in hdf5_node_list:
-                    _lgr.info('hdf5 file has expected structure')
-                    df_data = store['/locs']
-                    # count total number of picks
-                    tot_picks = df_data['group'].iloc[-1] + 1
-                    _lgr.info(f"Total number of picks: {tot_picks}")
-                    self.data.df_raw = df_data
-                    self.data.tot_picks = tot_picks
-                    self.data.is_data_file_open = True
-                else:
+                if '/locs' not in hdf5_node_list:
                     _lgr.error('hdf5 file does not have expected structure')
+                    # FIXME: this cleans previous file is lodaded
                     self.data.df_raw = None
                     self.data.tot_picks = 0
                     self.data.is_data_file_open = False
+                _lgr.info('hdf5 file has expected structure')
+                df_data = store['/locs']
+                # count total number of picks
+                tot_picks = df_data['group'].iloc[-1] + 1
+                _lgr.info(f"Total number of picks: {tot_picks}")
+                self.data.df_raw = df_data
+                self.data.tot_picks = tot_picks
+                self.data.is_data_file_open = True
         except Exception as e:
-            _lgr.error(f"Error opening hdf5 file because of: {e}")
+            if isinstance(e, KeyError) and str(e) == "'group'":
+                _lgr.error(f"Error opening hdf5 file: picks were not found in file")
+            else:
+                _lgr.error(f"Error {type(e)} opening hdf5 file: {e}")
             self.data.df_raw = None
             self.data.tot_picks = 0
             self.data.is_data_file_open = False
-    
+
     def load_metadata(self):
         """
         this function loads the metadata from the yaml file

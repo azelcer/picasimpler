@@ -26,6 +26,7 @@ class Presenter(QObject):
         self.tot_elem_curr_analysis_step = 0
         self.curr_displ_orig_num = None
         self.analysis_status = AnalysisStatus.PRE_ANALYSIS
+        self._view.update_analysis_status_onui(self.analysis_status.msg)
         
     def show_ui(self):
         self._view.show()
@@ -66,12 +67,15 @@ class Presenter(QObject):
                 filter="(*.hdf5)"
             )
             if filepath_str:
-                self._reset_analysis()
-                self._view.update_analysis_status_onui(self.analysis_status.msg)
-                self._view.reset_ui()
                 self.data_path = Path(filepath_str)
                 self.metadata_path = self.data_path.parent / Path(self.data_path.stem + ".yaml")
-                self._view.update_data_file_onui(self.data_path)
+                self._reset_analysis()
+                self._prep_analysis()
+                if self.analysis_status==AnalysisStatus.DATA_LOADED:
+                    self._view.update_analysis_status_onui(self.analysis_status.msg)
+                    self._view.reset_ui()
+                    self._view.update_data_file_onui(self.data_path)
+                    self._view.update_analysis_status_onui(self.analysis_status.msg)
             
     def _reset_analysis(self):
         """
@@ -93,6 +97,11 @@ class Presenter(QObject):
         self._analysis_thread = QThread()
         # start loading data for analysis
         self._analysis_worker.load_data()
+        if self._analysis_worker.data.is_data_file_open and self._analysis_worker.data.is_metadata_file_open:
+            self.analysis_status = AnalysisStatus.DATA_LOADED
+        else:
+            self._reset_analysis()
+            return
         # make signal connections
         self._make_analysis_connect()
         self._analysis_worker.moveToThread(self._analysis_thread)
@@ -102,25 +111,15 @@ class Presenter(QObject):
         """
         this function tells the analysis worker to perform all the filtering steps needed before site clustering
         """
-        if not self.analysis_status.is_analysing:
-            self._reset_analysis()
-            self._prep_analysis()
-            # actual analysis
-            if self._analysis_worker.data.is_data_file_open and self._analysis_worker.data.is_metadata_file_open:
-                self.signals.request_start_filtering.emit()
-            else:
-                self._analysis_thread.quit()
-                self._analysis_thread.wait()
-                self._analysis_worker = None
+        if not self.analysis_status.is_analysing and self.analysis_status.passed_analysis_step(AnalysisStatus.DATA_LOADED):
+            self.signals.request_start_filtering.emit()
             
     def _start_clustering(self):
         """
         This function tells the analysis worker to start site clusterization procedure
         """
-        if not self.analysis_status.is_analysing:
-            if self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
+        if not self.analysis_status.is_analysing and self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
                 self.signals.request_start_clustering.emit()
-                
             
     @pyqtSlot(AnalysisStatus, int)
     def _on_new_analysis_step(self, analysis_status: AnalysisStatus, tot_elem_curr_analysis_step: int):

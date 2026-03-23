@@ -314,7 +314,7 @@ class AnalysisWorker(QObject):
         for pick_idx in range(self.data.tot_orig):
             pick_kept = True
             for n_clust in range(self.params.n_clust_exp, 0, -1):
-                gmm = GaussianMixture(n_components=n_clust, covariance_type='full')
+                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=1, init_params='k-means++')
                 gmm.fit(self.data.simpler_locs.all_orig_loc_list[pick_idx])
                 last_bic = gmm.bic(self.data.simpler_locs.all_orig_loc_list[pick_idx])
                 if n_clust == self.params.n_clust_exp: # compute BIC for the expected number of clusters

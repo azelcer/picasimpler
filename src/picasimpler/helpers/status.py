@@ -22,7 +22,8 @@ class AnalysisStatus(Enum):
         obj.is_analysing = is_analysing
         return obj
     
-    PRE_ANALYSIS = (auto(), "Ready to analyze", False)
+    PRE_ANALYSIS = (auto(), "Please browse file", False)
+    DATA_LOADED = (auto(), "Ready to analyze", False)
     KIN_FILT = (auto(), "Kinetics filtering", True)
     SIMPLER_FILT = (auto(), "SIMPLER localization filtering", True)
     FILT_DONE = (auto(), "All filtering steps completed", False)

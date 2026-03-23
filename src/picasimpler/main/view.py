@@ -2,9 +2,9 @@ from pathlib import Path
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QMainWindow
 import pyqtgraph as pg
-from UI.calibration_ui import Ui_MainWindow
+from picasimpler.UI.calibration_ui import Ui_MainWindow
 
-from analysis import ClusterData
+from picasimpler.main.analysis import ClusterData
 
 class View(QMainWindow):
     """

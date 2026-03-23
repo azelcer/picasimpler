@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 
 import logging as _lgn
 from helpers import pyqt_helpers as _pqth
-from simpler_tools import SimplerAnalysisParameters
+from picasimpler.dev.simpler_tools import SimplerAnalysisParameters
 
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.DEBUG)

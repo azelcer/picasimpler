@@ -16,7 +16,7 @@ from PyQt5 import QtGui as _QtGui
 
 import logging as _lgn
 
-from simpler_tools import SIMPLERData
+from picasimpler.dev.simpler_tools import SIMPLERData
 
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.DEBUG)

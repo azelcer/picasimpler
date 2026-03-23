@@ -3,9 +3,9 @@ from pathlib import Path
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
 
-from view import View
-from analysis import AnalysisWorker
-from analysis_status import AnalysisStatus
+from picasimpler.main.view import View
+from picasimpler.main.analysis import AnalysisWorker
+from picasimpler.helpers.analysis_status import AnalysisStatus
 
 class PresenterSignals(QObject):
     request_start_analysis = pyqtSignal()
@@ -89,7 +89,6 @@ class Presenter(QObject):
         self._analysis_worker = AnalysisWorker(self.data_path, self.metadata_path)
         self._analysis_thread = QThread()
         # start loading data for analysis
-        self.analysis_status = AnalysisStatus.LOADING_DATA
         self._analysis_worker.load_data()
         # make signal connections
         self._make_analysis_connect()

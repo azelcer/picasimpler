@@ -30,7 +30,7 @@ from PyQt5 import QtGui as _QtGui
 
 import logging as _lgn
 
-from simpler_tools import SIMPLERData
+from picasimpler.dev.simpler_tools import SIMPLERData
 
 
 from widgets.plot_widget import DataPlotWidget

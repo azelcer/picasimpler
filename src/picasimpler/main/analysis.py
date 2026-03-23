@@ -1,8 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 import logging as _lgn
-import h5py
 import yaml
 import time as _time
 
@@ -12,8 +10,8 @@ from scipy.spatial import distance
 from sklearn.mixture import GaussianMixture
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from analysis_status import AnalysisStatus
-from config_var import (
+from picasimpler.helpers.analysis_status import AnalysisStatus
+from picasimpler.config.config_var import (
     SPAT_TOL_NM,
     MAX_FIRST_FRAME_PERC,
     MIN_LAST_FRAME_PERC,

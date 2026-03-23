@@ -1,8 +1,8 @@
 import sys
 from PyQt6.QtWidgets import QApplication
 
-from view import View
-from presenter import Presenter
+from picasimpler.main.view import View
+from picasimpler.main.presenter import Presenter
 
 class App(QApplication):
     def __init__(self, argv) -> None:

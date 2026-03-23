@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
 )
 
 import logging as _lgn
-from simpler_tools import FluoEvent
+from picasimpler.dev.simpler_tools import FluoEvent
 
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.DEBUG)

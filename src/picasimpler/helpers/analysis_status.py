@@ -16,7 +16,6 @@ class AnalysisStatus(Enum):
     def get_msg(self):
         messages = {
             AnalysisStatus.PRE_ANALYSIS: "Ready to analyze",
-            AnalysisStatus.LOADING_DATA: "Loading data from file",
             AnalysisStatus.KIN_FILT: "Kinetics filtering",
             AnalysisStatus.SIMPLER_FILT: "SIMPLER localization filtering",
             AnalysisStatus.SITE_CLUST: "PAINT site clustering",

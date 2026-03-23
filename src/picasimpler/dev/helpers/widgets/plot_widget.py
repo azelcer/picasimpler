@@ -23,7 +23,7 @@ from matplotlib.backends.backend_qtagg import (
 from matplotlib.backend_bases import PickEvent
 import logging as _lgn
 
-from simpler_tools import SIMPLERData
+from picasimpler.dev.simpler_tools import SIMPLERData
 
 
 _lgr = _lgn.getLogger(__name__)

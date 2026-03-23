@@ -10,7 +10,7 @@ from scipy.spatial import distance
 from sklearn.mixture import GaussianMixture
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from picasimpler.helpers.analysis_status import AnalysisStatus
+from picasimpler.helpers.status import AnalysisStatus
 from picasimpler.config.config_var import (
     SPAT_TOL_NM,
     MAX_FIRST_FRAME_PERC,
@@ -29,23 +29,17 @@ class AnalysisSignals(QObject):
     # type of analysis step starting now, and total number of element in it
     tell_analysis_step_start = pyqtSignal(AnalysisStatus, int)
     tell_analysis_elem_done = pyqtSignal(int)
-    tell_analysis_step_done = pyqtSignal()
-    tell_analysis_done = pyqtSignal()
+    tell_filtering_done = pyqtSignal()
+    tell_filt_done = pyqtSignal()
+    tell_clust_done = pyqtSignal()
 
 @dataclass
-class ClusterData:
+class SIMPLERLocalizations:
     """
-    dataclass containing all the data (means and covariances) of the clusters after site clusterinzation.
-    Coordinates go from 0 to 2 and are always in this order: x, y and N (number of photons)
+    Dataclass containing all the filtered SIMPLER localizations and some methods to access them
     """
-    clust_means: np.ndarray
-    clust_covs: np.ndarray
     all_orig_loc_list: list
     
-    def __post_init__(self):
-        self.clust_means = np.asarray(self.clust_means, dtype=float)
-        self.clust_covs = np.asarray(self.clust_covs, dtype=float)
-        
     def get_loc_x(self, orig_num):
         return self.all_orig_loc_list[orig_num][:, 0]
     
@@ -54,6 +48,19 @@ class ClusterData:
     
     def get_loc_n(self, orig_num):
         return self.all_orig_loc_list[orig_num][:, 2]
+    
+@dataclass
+class ClusterResults:
+    """
+    dataclass containing all the results (means and covariances) of the clusters after site clusterization.
+    Coordinates go from 0 to 2 and are always in this order: x, y and N (number of photons)
+    """
+    clust_means: np.ndarray
+    clust_covs: np.ndarray
+    
+    def __post_init__(self):
+        self.clust_means = np.asarray(self.clust_means, dtype=float)
+        self.clust_covs = np.asarray(self.clust_covs, dtype=float)
 
 @dataclass
 class Params:
@@ -102,7 +109,8 @@ class Data:
     df_filt: pd.DataFrame = field(init=False) # dataframe after SIMPLER localization filter
     df_after_clust: pd.DataFrame = field(init=False) # dataframe after clusterization
     
-    cluster_data: ClusterData = field(init=False) # dataclass containing the cluster data 
+    simpler_locs: SIMPLERLocalizations = field(init=False) # dataclass containing the SIMPLER localizations 
+    cluster_res: ClusterResults = field(init=False) # dataclass containing the clusterization data 
     
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
@@ -266,6 +274,25 @@ class AnalysisWorker(QObject):
                 end - start, len(idx_to_discard), n_loc_initial, 100 * len(idx_to_discard) / n_loc_initial)
         self.data.df_filt =  df_filtered
         
+    def save_simpler_locs(self):
+        """
+        This function saves all SIMPLER localizations in a list of arrays (one for each origami)
+        """
+        all_orig_loc_list = []
+        # helper array to find fast all localization pertaining to an origami
+        groups = np.array(self.data.df_filt['group'])
+        groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
+        for pick_idx in range(self.data.tot_orig):
+            pick_locs_arr = np.asarray(
+                self.data.df_filt.iloc[
+                    groupjump[pick_idx]:groupjump[pick_idx + 1],
+                    self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])
+                ], dtype=float
+            )
+            pick_locs_arr_nm = self.px_to_nm(pick_locs_arr, self.params.px_size_nm)
+            all_orig_loc_list.append(pick_locs_arr_nm)
+        self.data.simpler_locs = SIMPLERLocalizations(all_orig_loc_list)
+        
     def clustering_xyn(self):
         """
         This function use GMM to cluster localizations in 3D (x, y and N space).
@@ -277,24 +304,19 @@ class AnalysisWorker(QObject):
         # variables needed to discard origamis not passing the clusterzation test
         n_orig_discarded = 0
         idx_todiscard = []
-        # here we will store all data relative to the clusterization result 
+        # here we will store all data relative to the clusterization result
+        all_orig_loc_list = []
         clust_means_list = []
         clust_covs_list = []
-        all_orig_loc_list = []
         # helper array to find fast all localization pertaining to an origami
         groups = np.array(self.data.df_filt['group'])
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
         for pick_idx in range(self.data.tot_orig):
             pick_kept = True
-            df_forfit = self.data.df_filt.iloc[
-                groupjump[pick_idx]:groupjump[pick_idx + 1],
-                self.data.df_filt.columns.get_indexer(['x', 'y', 'photons'])
-            ] # x, y and photon numbers of localization pertaining to the current origami
-            arr_forfit_nm = self.px_to_nm(np.asarray(df_forfit, dtype=float), self.params.px_size_nm)
             for n_clust in range(self.params.n_clust_exp, 0, -1):
                 gmm = GaussianMixture(n_components=n_clust, covariance_type='full')
-                gmm.fit(arr_forfit_nm)
-                last_bic = gmm.bic(arr_forfit_nm)
+                gmm.fit(self.data.simpler_locs.all_orig_loc_list[pick_idx])
+                last_bic = gmm.bic(self.data.simpler_locs.all_orig_loc_list[pick_idx])
                 if n_clust == self.params.n_clust_exp: # compute BIC for the expected number of clusters
                     ref_bic = last_bic
                     clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
@@ -305,20 +327,18 @@ class AnalysisWorker(QObject):
                     pick_kept = False
                     break
             if pick_kept:
+                all_orig_loc_list.append(self.data.simpler_locs.all_orig_loc_list[pick_idx])
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
-                all_orig_loc_list.append(arr_forfit_nm)
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
             
         self.data.tot_orig_after_clust = self.data.tot_orig - n_orig_discarded
         df_after_clust = self.data.df_filt.drop(labels=idx_todiscard, axis=0)
         df_after_clust = df_after_clust.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
-        self.data.cluster_data = ClusterData(
-            clust_means_list,
-            clust_covs_list,
-            all_orig_loc_list
-        )
+        
+        self.data.simpler_locs = SIMPLERLocalizations(all_orig_loc_list)
+        self.data.cluster_res = ClusterResults(clust_means_list, clust_covs_list)
         end = _time.time()
         _lgr.info('Time of clustering step: %s s. %s of %s (%.2f%%) origamis discarded',
                 end - start, n_orig_discarded, self.data.tot_orig, 100 * n_orig_discarded / self.data.tot_orig)
@@ -342,23 +362,29 @@ class AnalysisWorker(QObject):
         return arr_toconv
     
     @pyqtSlot()
-    def do_analysis(self):
+    def do_filt(self):
         """
-        this function calls one by one all the analysis steps (filtering based on kinetics, SIMPLER localization filtering
-        and PAINT site clustering)
+        this function calls one by one all the filtering steps (filtering based on kinetics and SIMPLER localization filtering)
         """
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.KIN_FILT, self.data.tot_picks)
         self.filter_orig()
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SIMPLER_FILT, self.data.tot_orig)
         self.filter_data()
+        self.save_simpler_locs()
+        self.signals.tell_filt_done.emit()
+        
+    @pyqtSlot()
+    def do_clust(self):
+        """
+        This function call the clusterization function
+        """
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.data.tot_orig)
         self.clustering_xyn()
-        self.signals.tell_analysis_step_done.emit()
-        self.signals.tell_analysis_done.emit()
+        self.signals.tell_clust_done.emit()
         
 if __name__=="__main__":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"
     data_path = Path(filepath_str)
     metadata_path = data_path.parent / Path(data_path.stem + ".yaml")
     analysis_worker = AnalysisWorker(data_path, metadata_path)
-    analysis_worker.do_analysis()
+    analysis_worker.do_filt()

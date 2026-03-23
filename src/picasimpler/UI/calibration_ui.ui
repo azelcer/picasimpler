@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>822</width>
+    <width>850</width>
     <height>592</height>
    </rect>
   </property>
@@ -14,34 +14,34 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QPushButton" name="analysis_button">
+   <widget class="QPushButton" name="filter_button">
     <property name="geometry">
      <rect>
-      <x>180</x>
+      <x>130</x>
       <y>160</y>
-      <width>151</width>
+      <width>101</width>
       <height>71</height>
      </rect>
     </property>
     <property name="text">
-     <string>Analize
+     <string>Filter
 dataset</string>
     </property>
    </widget>
    <widget class="PlotWidget" name="yn_widget" native="true">
     <property name="geometry">
      <rect>
-      <x>340</x>
-      <y>240</y>
-      <width>311</width>
-      <height>311</height>
+      <x>350</x>
+      <y>250</y>
+      <width>301</width>
+      <height>301</height>
      </rect>
     </property>
    </widget>
    <widget class="QLabel" name="analysis_status_label">
     <property name="geometry">
      <rect>
-      <x>340</x>
+      <x>350</x>
       <y>200</y>
       <width>311</width>
       <height>31</height>
@@ -54,7 +54,7 @@ dataset</string>
    <widget class="QLabel" name="analysis_counter_label">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>200</y>
       <width>151</width>
       <height>31</height>
@@ -67,7 +67,7 @@ dataset</string>
    <widget class="QPushButton" name="prev_orig_button">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>240</y>
       <width>71</width>
       <height>71</height>
@@ -81,7 +81,7 @@ origami</string>
    <widget class="QPushButton" name="next_orig_button">
     <property name="geometry">
      <rect>
-      <x>740</x>
+      <x>760</x>
       <y>240</y>
       <width>71</width>
       <height>71</height>
@@ -95,30 +95,31 @@ origami</string>
    <widget class="PlotWidget" name="xn_widget" native="true">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>240</y>
-      <width>311</width>
-      <height>311</height>
+      <x>40</x>
+      <y>250</y>
+      <width>301</width>
+      <height>301</height>
      </rect>
     </property>
    </widget>
    <widget class="QPushButton" name="discard_orig_button">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>320</y>
-      <width>151</width>
+      <width>71</width>
       <height>61</height>
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>Discard
+origami</string>
     </property>
    </widget>
    <widget class="QLabel" name="current_orig_label">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>430</y>
       <width>151</width>
       <height>31</height>
@@ -131,7 +132,7 @@ origami</string>
    <widget class="QLabel" name="valid_orig_label">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>520</y>
       <width>151</width>
       <height>31</height>
@@ -146,7 +147,7 @@ origami</string>
      <rect>
       <x>20</x>
       <y>160</y>
-      <width>151</width>
+      <width>101</width>
       <height>71</height>
      </rect>
     </property>
@@ -160,7 +161,7 @@ file (.hdf5)</string>
      <rect>
       <x>20</x>
       <y>110</y>
-      <width>791</width>
+      <width>811</width>
       <height>41</height>
      </rect>
     </property>
@@ -199,7 +200,7 @@ file (.hdf5)</string>
      <rect>
       <x>20</x>
       <y>40</y>
-      <width>791</width>
+      <width>811</width>
       <height>41</height>
      </rect>
     </property>
@@ -210,7 +211,7 @@ file (.hdf5)</string>
    <widget class="QLabel" name="current_orig_title_label">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>390</y>
       <width>151</width>
       <height>31</height>
@@ -223,7 +224,7 @@ file (.hdf5)</string>
    <widget class="QLabel" name="valid_orig_title_label">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>480</y>
       <width>151</width>
       <height>31</height>
@@ -236,7 +237,7 @@ file (.hdf5)</string>
    <widget class="QLabel" name="analysis_counter_title_label">
     <property name="geometry">
      <rect>
-      <x>660</x>
+      <x>680</x>
       <y>160</y>
       <width>151</width>
       <height>31</height>
@@ -249,7 +250,7 @@ file (.hdf5)</string>
    <widget class="QLabel" name="analysis_status_title_label">
     <property name="geometry">
      <rect>
-      <x>340</x>
+      <x>350</x>
       <y>160</y>
       <width>311</width>
       <height>31</height>
@@ -259,6 +260,72 @@ file (.hdf5)</string>
      <string>Analysis status:</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="cluster_button">
+    <property name="geometry">
+     <rect>
+      <x>240</x>
+      <y>160</y>
+      <width>101</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Cluster
+sites</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="color_frame">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>240</y>
+      <width>651</width>
+      <height>321</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="refit_origami">
+    <property name="geometry">
+     <rect>
+      <x>760</x>
+      <y>320</y>
+      <width>71</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Re-fit
+origami</string>
+    </property>
+   </widget>
+   <zorder>color_frame</zorder>
+   <zorder>filter_button</zorder>
+   <zorder>analysis_status_label</zorder>
+   <zorder>analysis_counter_label</zorder>
+   <zorder>prev_orig_button</zorder>
+   <zorder>next_orig_button</zorder>
+   <zorder>xn_widget</zorder>
+   <zorder>discard_orig_button</zorder>
+   <zorder>current_orig_label</zorder>
+   <zorder>valid_orig_label</zorder>
+   <zorder>browse_file_button</zorder>
+   <zorder>filename_label</zorder>
+   <zorder>file_title_label</zorder>
+   <zorder>dir_title_label</zorder>
+   <zorder>dir_label</zorder>
+   <zorder>current_orig_title_label</zorder>
+   <zorder>valid_orig_title_label</zorder>
+   <zorder>analysis_counter_title_label</zorder>
+   <zorder>analysis_status_title_label</zorder>
+   <zorder>cluster_button</zorder>
+   <zorder>yn_widget</zorder>
+   <zorder>refit_origami</zorder>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

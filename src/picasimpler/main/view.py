@@ -2,9 +2,10 @@ from pathlib import Path
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QMainWindow
 import pyqtgraph as pg
-from picasimpler.UI.calibration_ui import Ui_MainWindow
 
-from picasimpler.main.analysis import ClusterData
+from picasimpler.UI.calibration_ui import Ui_MainWindow
+from picasimpler.main.analysis import SIMPLERLocalizations, ClusterResults
+from picasimpler.helpers.status import FrameColor
 
 class View(QMainWindow):
     """
@@ -15,6 +16,15 @@ class View(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self._setup_plot_widgets()
+        self.set_color_frame(FrameColor.GRAY)
+        
+    def reset_ui(self):
+        """
+        This function calls all the basic functions which reset UI elements
+        """
+        self.set_color_frame(FrameColor.GRAY)
+        self.reset_counters_onui()
+        self.reset_plots()
         
     def _setup_plot_widgets(self):
         """
@@ -24,6 +34,15 @@ class View(QMainWindow):
         self.ui.yn_widget.invertY(True)
         self._xn_plot = self.ui.xn_widget.getPlotItem()
         self._yn_plot = self.ui.yn_widget.getPlotItem()
+        
+    def set_color_frame(self, frame_color: FrameColor):
+        """
+        This function sets the color of the frame around the scatter plots to indicate whether
+        the current origami is selcted for calibration or not
+        """
+        self.ui.color_frame.setStyleSheet(
+            "QFrame { background-color: "+ frame_color.value +"; }"
+        )
         
     def update_data_file_onui(self, data_path: Path):
         """
@@ -39,6 +58,10 @@ class View(QMainWindow):
         self.ui.analysis_status_label.setText(analysis_status_msg)
         
     def update_analysis_counter(self, elem_num, tot_elem):
+        """
+        This function changes the color of the frame containing the scatter plots
+        thta indicates whether the currenbt origami is selected for calibration
+        """
         self.ui.analysis_counter_label.setText(str(elem_num)+" / "+str(tot_elem))
         
     def update_curr_orig_count(self, curr_orig_num, tot_orig):
@@ -62,16 +85,26 @@ class View(QMainWindow):
         self._xn_plot.enableAutoRange()
         self._yn_plot.enableAutoRange()
         
-    def plot_orig_wclust(self, clust_data: ClusterData, orig_num: int):
+    def plot_orig(self, simpler_locs: SIMPLERLocalizations, orig_num: int):
         """
-        This function plots the xN and yN projections of all the localization of the chosen
-        origami, superimposed with the corresponding clusterization results
+        This function plots the xN and yN projections of all the localization of the chosen origami
         """
         self.reset_plots()
-        xn_scatter = pg.ScatterPlotItem(clust_data.get_loc_x(orig_num), clust_data.get_loc_n(orig_num))
-        yn_scatter = pg.ScatterPlotItem(clust_data.get_loc_y(orig_num), clust_data.get_loc_n(orig_num))
-        xn_clust_centers = pg.ScatterPlotItem(clust_data.clust_means[orig_num, :, 0], clust_data.clust_means[orig_num, :, 2], pen='y')
-        yn_clust_centers = pg.ScatterPlotItem(clust_data.clust_means[orig_num, :, 1], clust_data.clust_means[orig_num, :, 2], pen='y')
+        xn_scatter = pg.ScatterPlotItem(simpler_locs.get_loc_x(orig_num), simpler_locs.get_loc_n(orig_num))
+        yn_scatter = pg.ScatterPlotItem(simpler_locs.get_loc_y(orig_num), simpler_locs.get_loc_n(orig_num))
+        self._xn_plot.addItem(xn_scatter)
+        self._yn_plot.addItem(yn_scatter)
+        
+    def plot_orig_wclust(self, simpler_locs: SIMPLERLocalizations, clust_res: ClusterResults, orig_num: int):
+        """
+        This function plots the xN and yN projections of all the localization of the chosen origami,
+        superimposed with the corresponding clusterization results
+        """
+        self.reset_plots()
+        xn_scatter = pg.ScatterPlotItem(simpler_locs.get_loc_x(orig_num), simpler_locs.get_loc_n(orig_num))
+        yn_scatter = pg.ScatterPlotItem(simpler_locs.get_loc_y(orig_num), simpler_locs.get_loc_n(orig_num))
+        xn_clust_centers = pg.ScatterPlotItem(clust_res.clust_means[orig_num, :, 0], clust_res.clust_means[orig_num, :, 2], pen='y')
+        yn_clust_centers = pg.ScatterPlotItem(clust_res.clust_means[orig_num, :, 1], clust_res.clust_means[orig_num, :, 2], pen='y')
         self._xn_plot.addItem(xn_scatter)
         self._yn_plot.addItem(yn_scatter)
         self._xn_plot.addItem(xn_clust_centers)

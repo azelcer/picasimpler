@@ -178,41 +178,41 @@ class Presenter(QObject):
         self.analysis_status = AnalysisStatus.FILT_DONE
         self._view.update_analysis_status_onui(self.analysis_status.msg)
         self.curr_displ_orig_num = 0
-        self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
+        self._view.plot_orig(self._analysis_worker.data.simpler_res, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
         self._view.set_color_frame(FrameColor.GRAY)
 
-    @pyqtSlot()
-    def _on_clust_done(self):
+    @pyqtSlot(bool)
+    def _on_clust_done(self, are_there_clust):
         """
         This function is called once the site clusterization is completed.
         It displayed the first origami scatter plot with clustering
         """
-        self.analysis_status = AnalysisStatus.CLUST_DONE
-        self._view.update_analysis_status_onui(self.analysis_status.msg)
-        self.curr_displ_orig_num = 0
-        if len(self._analysis_worker.data.simpler_locs.all_orig_loc_list) == 0:
+        if not are_there_clust:
+            self.analysis_status = AnalysisStatus.FILT_DONE
+            self._view.update_analysis_status_onui(self.analysis_status.msg)
             _lgr.warning("No valid clusters found")
             return
-        self._view.plot_orig_wclust(
-            self._analysis_worker.data.simpler_locs,
-            self._analysis_worker.data.cluster_res,
-            self.curr_displ_orig_num,
-            self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]
-        )
-        self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
-        self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)
+        else:
+            self.analysis_status = AnalysisStatus.CLUST_DONE
+            self._view.update_analysis_status_onui(self.analysis_status.msg)
+            self.curr_displ_orig_num = 0
+            self._view.plot_orig_wclust(
+                self._analysis_worker.data.simpler_res,
+                self._analysis_worker.data.cluster_res,
+                self.curr_displ_orig_num,
+                self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]
+            )
+            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
+            self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)
 
     def _do_plot_shift(self, shift: int):
         if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):
-            if len(self._analysis_worker.data.simpler_locs.all_orig_loc_list) == 0:
-                _lgr.warning("No valid clusters has been found")
-                return
             self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
             self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
             self._view.plot_orig_wclust(
-                self._analysis_worker.data.simpler_locs,
+                self._analysis_worker.data.simpler_res,
                 self._analysis_worker.data.cluster_res,
                 self.curr_displ_orig_num,
                 self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]
@@ -221,7 +221,7 @@ class Presenter(QObject):
             self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig
             self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
-            self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
+            self._view.plot_orig(self._analysis_worker.data.simpler_res, self.curr_displ_orig_num)
 
     @pyqtSlot()
     def _order_plot_next_orig(self):

@@ -31,23 +31,23 @@ class AnalysisSignals(QObject):
     tell_analysis_elem_done = pyqtSignal(int)
     tell_filtering_done = pyqtSignal()
     tell_filt_done = pyqtSignal()
-    tell_clust_done = pyqtSignal()
+    tell_clust_done = pyqtSignal(bool)
 
 @dataclass
-class SIMPLERLocalizations:
+class SIMPLERResults:
     """
     Dataclass containing all the filtered SIMPLER localizations and some methods to access them
     """
-    all_orig_loc_list: list
+    locs: list
     
-    def get_loc_x(self, orig_num):
-        return self.all_orig_loc_list[orig_num][:, 0]
+    def get_x(self, orig_num):
+        return self.locs[orig_num][:, 0]
     
-    def get_loc_y(self, orig_num):
-        return self.all_orig_loc_list[orig_num][:, 1]
+    def get_y(self, orig_num):
+        return self.locs[orig_num][:, 1]
     
-    def get_loc_n(self, orig_num):
-        return self.all_orig_loc_list[orig_num][:, 2]
+    def get_n(self, orig_num):
+        return self.locs[orig_num][:, 2]
     
 @dataclass
 class ClusterResults:
@@ -112,7 +112,7 @@ class Data:
     df_filt: pd.DataFrame = field(init=False) # dataframe after SIMPLER localization filter
     df_after_clust: pd.DataFrame = field(init=False) # dataframe after clusterization
     
-    simpler_locs: SIMPLERLocalizations = field(init=False) # dataclass containing the SIMPLER localizations 
+    simpler_res: SIMPLERResults = field(init=False) # dataclass containing the SIMPLER localizations 
     cluster_res: ClusterResults = field(init=False) # dataclass containing the clusterization data 
     
 class AnalysisWorker(QObject):
@@ -297,7 +297,7 @@ class AnalysisWorker(QObject):
             )
             pick_locs_arr_nm = self.px_to_nm(pick_locs_arr, self.params.px_size_nm)
             all_orig_loc_list.append(pick_locs_arr_nm)
-        self.data.simpler_locs = SIMPLERLocalizations(all_orig_loc_list)
+        self.data.simpler_res = SIMPLERResults(all_orig_loc_list)
         
     def clustering_xyn(self):
         """
@@ -321,8 +321,8 @@ class AnalysisWorker(QObject):
             pick_kept = True
             for n_clust in range(self.params.n_clust_exp, 0, -1):
                 gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=1, init_params='k-means++')
-                gmm.fit(self.data.simpler_locs.all_orig_loc_list[pick_idx])
-                last_bic = gmm.bic(self.data.simpler_locs.all_orig_loc_list[pick_idx])
+                gmm.fit(self.data.simpler_res.locs[pick_idx])
+                last_bic = gmm.bic(self.data.simpler_res.locs[pick_idx])
                 if n_clust == self.params.n_clust_exp: # compute BIC for the expected number of clusters
                     ref_bic = last_bic
                     clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
@@ -333,7 +333,7 @@ class AnalysisWorker(QObject):
                     pick_kept = False
                     break
             if pick_kept:
-                all_orig_loc_list.append(self.data.simpler_locs.all_orig_loc_list[pick_idx])
+                all_orig_loc_list.append(self.data.simpler_res.locs[pick_idx])
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
@@ -343,7 +343,7 @@ class AnalysisWorker(QObject):
         df_after_clust = df_after_clust.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
         
-        self.data.simpler_locs = SIMPLERLocalizations(all_orig_loc_list)
+        self.data.simpler_res = SIMPLERResults(all_orig_loc_list)
         self.data.cluster_res = ClusterResults(clust_means_list, clust_covs_list)
         end = _time.time()
         _lgr.info('Time of clustering step: %s s. %s of %s (%.2f%%) origamis discarded',
@@ -386,7 +386,10 @@ class AnalysisWorker(QObject):
         """
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.data.tot_orig)
         self.clustering_xyn()
-        self.signals.tell_clust_done.emit()
+        if self.data.simpler_res.locs:
+            self.signals.tell_clust_done.emit(True)
+        else:
+            self.signals.tell_clust_done.emit(True)
         
 if __name__=="__main__":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"

@@ -1,4 +1,5 @@
-import sys
+from __future__ import annotations
+
 import logging as _lgn
 from pathlib import Path
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
@@ -179,6 +180,7 @@ class Presenter(QObject):
         self.curr_displ_orig_num = 0
         self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
+        self._view.set_color_frame(FrameColor.GRAY)
 
     @pyqtSlot()
     def _on_clust_done(self):
@@ -192,8 +194,14 @@ class Presenter(QObject):
         if len(self._analysis_worker.data.simpler_locs.all_orig_loc_list) == 0:
             _lgr.warning("No valid clusters found")
             return
-        self._view.plot_orig_wclust(self._analysis_worker.data.simpler_locs, self._analysis_worker.data.cluster_res, self.curr_displ_orig_num)
+        self._view.plot_orig_wclust(
+            self._analysis_worker.data.simpler_locs,
+            self._analysis_worker.data.cluster_res,
+            self.curr_displ_orig_num,
+            self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]
+        )
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
+        self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)
 
     def _do_plot_shift(self, shift: int):
         if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):
@@ -222,3 +230,21 @@ class Presenter(QObject):
     @pyqtSlot()
     def _order_plot_prev_orig(self):
         self._do_plot_shift(-1)
+        
+    @pyqtSlot()
+    @check_analysis_status(AnalysisStatus.CLUST_DONE)
+    def _disc_selec_orig(self):
+        """
+        This function discards/select an origami based on its current state,
+        and update the corresponsing button and frame color
+        """
+        if self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]:
+            self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num] = False
+            self._view.set_color_frame(FrameColor.RED)
+            self._view.update_discard_button_toselec()
+            self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)
+        else:
+            self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num] = True
+            self._view.set_color_frame(FrameColor.GREEN)
+            self._view.update_selec_button_todiscard()
+            self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)

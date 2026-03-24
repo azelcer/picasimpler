@@ -1,5 +1,4 @@
 from pathlib import Path
-from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QMainWindow
 import pyqtgraph as pg
 
@@ -94,8 +93,9 @@ class View(QMainWindow):
         yn_scatter = pg.ScatterPlotItem(simpler_locs.get_loc_y(orig_num), simpler_locs.get_loc_n(orig_num))
         self._xn_plot.addItem(xn_scatter)
         self._yn_plot.addItem(yn_scatter)
+        self.set_color_frame(FrameColor.GRAY)
         
-    def plot_orig_wclust(self, simpler_locs: SIMPLERLocalizations, clust_res: ClusterResults, orig_num: int):
+    def plot_orig_wclust(self, simpler_locs: SIMPLERLocalizations, clust_res: ClusterResults, orig_num: int, is_selected: bool):
         """
         This function plots the xN and yN projections of all the localization of the chosen origami,
         superimposed with the corresponding clusterization results
@@ -105,8 +105,34 @@ class View(QMainWindow):
         yn_scatter = pg.ScatterPlotItem(simpler_locs.get_loc_y(orig_num), simpler_locs.get_loc_n(orig_num))
         xn_clust_centers = pg.ScatterPlotItem(clust_res.clust_means[orig_num, :, 0], clust_res.clust_means[orig_num, :, 2], pen='y')
         yn_clust_centers = pg.ScatterPlotItem(clust_res.clust_means[orig_num, :, 1], clust_res.clust_means[orig_num, :, 2], pen='y')
+        xn_clust_centers.setBrush(pg.mkBrush('y'))
+        yn_clust_centers.setBrush(pg.mkBrush('y'))
         self._xn_plot.addItem(xn_scatter)
         self._yn_plot.addItem(yn_scatter)
         self._xn_plot.addItem(xn_clust_centers)
         self._yn_plot.addItem(yn_clust_centers)
+        if is_selected:
+            self.set_color_frame(FrameColor.GREEN)
+        else:
+            self.set_color_frame(FrameColor.RED)
         
+    def update_discard_button_toselec(self):
+        """
+        This function set the text on the discard/select origami button to "select"
+        """
+        self.ui.disc_selec_orig_button.setText("Select\norigami")
+        
+    def update_selec_button_todiscard(self):
+        """
+        This function set the text on the discard/select origami button to "discard"
+        """
+        self.ui.disc_selec_orig_button.setText("Discard\norigami")
+        
+    def update_selec_orig_counter(self, selec_orig_list):
+        """
+        This function updates the counter of selected origamis, reporting the current number of
+        selected origamis on the total number of origamis
+        """
+        self.ui.selec_orig_label.setText(
+            str(sum(selec_orig_list)) + " / " + str(len(selec_orig_list))
+        )

@@ -102,7 +102,7 @@ origami</string>
      </rect>
     </property>
    </widget>
-   <widget class="QPushButton" name="discard_orig_button">
+   <widget class="QPushButton" name="disc_selec_orig_button">
     <property name="geometry">
      <rect>
       <x>680</x>
@@ -129,7 +129,7 @@ origami</string>
      <string/>
     </property>
    </widget>
-   <widget class="QLabel" name="valid_orig_label">
+   <widget class="QLabel" name="selec_orig_label">
     <property name="geometry">
      <rect>
       <x>680</x>
@@ -221,7 +221,7 @@ file (.hdf5)</string>
      <string>Current origami:</string>
     </property>
    </widget>
-   <widget class="QLabel" name="valid_orig_title_label">
+   <widget class="QLabel" name="selec_orig_title_label">
     <property name="geometry">
      <rect>
       <x>680</x>
@@ -231,7 +231,7 @@ file (.hdf5)</string>
      </rect>
     </property>
     <property name="text">
-     <string>Valid origamis:</string>
+     <string>Selected origamis:</string>
     </property>
    </widget>
    <widget class="QLabel" name="analysis_counter_title_label">
@@ -311,16 +311,16 @@ origami</string>
    <zorder>prev_orig_button</zorder>
    <zorder>next_orig_button</zorder>
    <zorder>xn_widget</zorder>
-   <zorder>discard_orig_button</zorder>
+   <zorder>disc_selec_orig_button</zorder>
    <zorder>current_orig_label</zorder>
-   <zorder>valid_orig_label</zorder>
+   <zorder>selec_orig_label</zorder>
    <zorder>browse_file_button</zorder>
    <zorder>filename_label</zorder>
    <zorder>file_title_label</zorder>
    <zorder>dir_title_label</zorder>
    <zorder>dir_label</zorder>
    <zorder>current_orig_title_label</zorder>
-   <zorder>valid_orig_title_label</zorder>
+   <zorder>selec_orig_title_label</zorder>
    <zorder>analysis_counter_title_label</zorder>
    <zorder>analysis_status_title_label</zorder>
    <zorder>cluster_button</zorder>

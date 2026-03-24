@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import Enum, auto
 
 class AnalysisStatus(Enum):
@@ -30,7 +32,7 @@ class AnalysisStatus(Enum):
     SITE_CLUST = (auto(), "PAINT site clustering", True)
     CLUST_DONE = (auto(), "Clusterization completed", False)
     
-    def passed_analysis_step(self, reference_step):
+    def passed_analysis_step(self, reference_step: AnalysisStatus):
         return self.value >= reference_step.value
     
 class FrameColor(Enum):

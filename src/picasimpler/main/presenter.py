@@ -2,10 +2,16 @@ import sys
 from pathlib import Path
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
+from functools import wraps
 
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, FrameColor
+
+_lgn.basicConfig()
+_lgr = _lgn.getLogger(__name__)
+_lgr.setLevel(_lgn.INFO)
+
 
 class PresenterSignals(QObject):
     request_start_filtering = pyqtSignal()
@@ -28,6 +34,23 @@ class Presenter(QObject):
         self.analysis_status = AnalysisStatus.PRE_ANALYSIS
         self._view.update_analysis_status_onui(self.analysis_status.msg)
         
+    def check_analysis_status(ref_analysis_status: AnalysisStatus):
+        """
+        This decorator wraps a function in a if statement that gets executed only if the
+        analysis status has passed the reference step given as an argument.
+        Optionally, if must_not_analysing is True, it wraps with another if statement that checks
+        whether the program is not analyzing right now
+        """
+        def check_analysis_status_innderdecor(decorated_func):
+            @wraps(decorated_func)
+            def wrapper_func(self: Presenter, *args, **kwargs):
+                if self.analysis_status.passed_analysis_step(ref_analysis_status) and not self.analysis_status.is_analysing:
+                    return decorated_func(self, *args, **kwargs)
+                else:
+                    return
+            return wrapper_func
+        return check_analysis_status_innderdecor
+        
     def show_ui(self):
         self._view.show()
         
@@ -41,6 +64,7 @@ class Presenter(QObject):
         self._view.ui.cluster_button.clicked.connect(self._start_clustering)
         self._view.ui.next_orig_button.clicked.connect(self._order_plot_next_orig)
         self._view.ui.prev_orig_button.clicked.connect(self._order_plot_prev_orig)
+        self._view.ui.disc_selec_orig_button.clicked.connect(self._disc_selec_orig)
         
     def _make_analysis_connect(self):
         """
@@ -55,27 +79,27 @@ class Presenter(QObject):
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
         self._analysis_worker.signals.tell_clust_done.connect(self._on_clust_done)
         
-    def _browse_file(self, *args):
+    @pyqtSlot()
+    def _browse_file(self):
         """
         this function opens a window to choose the hdf5 file used for calibration
         """
-        if not self.analysis_status.is_analysing:
-            filepath_str, _ = QFileDialog.getOpenFileName(
-                self._view,
-                directory=str(Path.home()), # home directory, OS independent
-                caption="Select calibration file",
-                filter="(*.hdf5)"
-            )
-            if filepath_str:
-                self.data_path = Path(filepath_str)
-                self.metadata_path = self.data_path.parent / Path(self.data_path.stem + ".yaml")
-                self._reset_analysis()
-                self._prep_analysis()
-                if self.analysis_status==AnalysisStatus.DATA_LOADED:
-                    self._view.update_analysis_status_onui(self.analysis_status.msg)
-                    self._view.reset_ui()
-                    self._view.update_data_file_onui(self.data_path)
-                    self._view.update_analysis_status_onui(self.analysis_status.msg)
+        filepath_str, _ = QFileDialog.getOpenFileName(
+            self._view,
+            directory=str(Path.home()), # home directory, OS independent
+            caption="Select calibration file",
+            filter="(*.hdf5)"
+        )
+        if filepath_str:
+            self.data_path = Path(filepath_str)
+            self.metadata_path = self.data_path.parent / Path(self.data_path.stem + ".yaml")
+            self._reset_analysis()
+            self._prep_analysis()
+            if self.analysis_status==AnalysisStatus.DATA_LOADED:
+                self._view.update_analysis_status_onui(self.analysis_status.msg)
+                self._view.reset_ui()
+                self._view.update_data_file_onui(self.data_path)
+                self._view.update_analysis_status_onui(self.analysis_status.msg)
             
     def _reset_analysis(self):
         """
@@ -107,19 +131,21 @@ class Presenter(QObject):
         self._analysis_worker.moveToThread(self._analysis_thread)
         self._analysis_thread.start()
             
+    @pyqtSlot()
+    @check_analysis_status(AnalysisStatus.DATA_LOADED)
     def _start_filtering(self):
         """
         this function tells the analysis worker to perform all the filtering steps needed before site clustering
         """
-        if not self.analysis_status.is_analysing and self.analysis_status.passed_analysis_step(AnalysisStatus.DATA_LOADED):
-            self.signals.request_start_filtering.emit()
-            
+        self.signals.request_start_filtering.emit()
+    
+    @pyqtSlot()
+    @check_analysis_status(AnalysisStatus.FILT_DONE)
     def _start_clustering(self):
         """
         This function tells the analysis worker to start site clusterization procedure
         """
-        if not self.analysis_status.is_analysing and self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
-                self.signals.request_start_clustering.emit()
+        self.signals.request_start_clustering.emit()
             
     @pyqtSlot(AnalysisStatus, int)
     def _on_new_analysis_step(self, analysis_status: AnalysisStatus, tot_elem_curr_analysis_step: int):
@@ -152,7 +178,7 @@ class Presenter(QObject):
         self.curr_displ_orig_num = 0
         self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
-        
+
     @pyqtSlot()
     def _on_clust_done(self):
         """
@@ -168,17 +194,28 @@ class Presenter(QObject):
     @pyqtSlot()
     def _order_plot_next_orig(self):
         if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):
-            self.curr_displ_orig_num += 1
+            if len(self._analysis_worker.data.simpler_locs.all_orig_loc_list) == 0:
+                _lgr.warning("No valid clusters has been found")
+                return
+            self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
             self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
-            self._view.plot_orig_wclust(self._analysis_worker.data.simpler_locs, self._analysis_worker.data.cluster_res, self.curr_displ_orig_num)
+            self._view.plot_orig_wclust(
+                self._analysis_worker.data.simpler_locs,
+                self._analysis_worker.data.cluster_res,
+                self.curr_displ_orig_num,
+                self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]
+            )
         elif self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
-            self.curr_displ_orig_num += 1
+            self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig
             self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
             self._view.plot_orig(self._analysis_worker.data.simpler_locs, self.curr_displ_orig_num)
 
-        
+    @pyqtSlot()
+    def _order_plot_next_orig(self):
+        self._do_plot_shift(1)
+
     @pyqtSlot()
     def _order_plot_prev_orig(self):
         if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):

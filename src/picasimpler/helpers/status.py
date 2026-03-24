@@ -28,10 +28,10 @@ class AnalysisStatus(Enum):
     
     PRE_ANALYSIS = (auto(), "Please browse file", False)
     DATA_LOADED = (auto(), "Ready to analyze", False)
-    KIN_FILT = (auto(), "Kinetics filtering", True)
-    SIMPLER_FILT = (auto(), "SIMPLER localization filtering", True)
+    KIN_FILT = (auto(), "Kinetics filtering...", True)
+    SIMPLER_FILT = (auto(), "SIMPLER localization filtering...", True)
     FILT_DONE = (auto(), "All filtering steps completed", False)
-    SITE_CLUST = (auto(), "Site clustering", True)
+    SITE_CLUST = (auto(), "Site clustering...", True)
     CLUST_DONE = (auto(), "Clusterization completed", False)
     
     def passed_analysis_step(self, reference_step: AnalysisStatus):
@@ -41,16 +41,29 @@ class FrameColor(Enum):
     """
     This Enum class contains all the possible colors of the frame
     indicating whether an origami is selected for calibration or not.
-    Colors must be written as strings in the format: "rgb(r, g, b)".
+    Colors must be written as tuples in the format: (r, g, b).
     """
-    GRAY = "rgb(200, 200, 200)"
-    RED = "rgb(215,27,96)"
-    GREEN = "rgb(5,254,4)"
+    
+    rgb_str: str
+    
+    def __new__(cls, *rgb):
+        obj = object.__new__(cls)
+        obj.rgb_str = "rgb" + str(rgb)
+        return obj
+        
+    
+    GRAY = (200, 200, 200)
+    RED = (215, 27, 96)
+    GREEN = (5, 254, 4)
     
 if __name__=="__main__":
     for memb in AnalysisStatus.__members__.values():
         print(memb.value)
         print(memb.msg)
         print(memb.is_analysing)
+        
+    for memb in FrameColor.__members__.values():
+        print(memb.value)
+        print(memb.rgb_str)
         
 

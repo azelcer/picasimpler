@@ -40,7 +40,7 @@ class View(QMainWindow):
         the current origami is selcted for calibration or not
         """
         self.ui.color_frame.setStyleSheet(
-            "QFrame { background-color: "+ frame_color.value +"; }"
+            "QFrame { background-color: "+ frame_color.rgb_str +"; }"
         )
         
     def update_data_file_onui(self, data_path: Path):

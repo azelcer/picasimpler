@@ -34,7 +34,6 @@ class Presenter(QObject):
         self.tot_elem_curr_analysis_step = 0
         self.curr_displ_orig_num = None
         self.analysis_status = AnalysisStatus.PRE_ANALYSIS
-        self._view.update_analysis_status_onui(self.analysis_status.msg)
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -52,6 +51,15 @@ class Presenter(QObject):
                     return
             return wrapper_func
         return check_analysis_status_innderdecor
+        
+    @property
+    def analysis_status(self: Presenter):
+        return self._analysis_status
+    
+    @analysis_status.setter
+    def analysis_status(self, status: AnalysisStatus):
+        self._analysis_status = status
+        self._view.update_analysis_status_onui(status.msg)
         
     def show_ui(self):
         self._view.show()
@@ -98,10 +106,8 @@ class Presenter(QObject):
             self._reset_analysis()
             self._prep_analysis()
             if self.analysis_status==AnalysisStatus.DATA_LOADED:
-                self._view.update_analysis_status_onui(self.analysis_status.msg)
                 self._view.reset_ui()
                 self._view.update_data_file_onui(self.data_path)
-                self._view.update_analysis_status_onui(self.analysis_status.msg)
             
     def _reset_analysis(self):
         """
@@ -159,7 +165,6 @@ class Presenter(QObject):
         self.analysis_status = analysis_status
         self.tot_elem_curr_analysis_step = tot_elem_curr_analysis_step
         self._view.update_analysis_counter(0, self.tot_elem_curr_analysis_step)
-        self._view.update_analysis_status_onui(self.analysis_status.msg)
         
     @pyqtSlot(int)
     def _on_new_analysis_elem(self, elem_num: int):
@@ -176,7 +181,6 @@ class Presenter(QObject):
         It displays the first origami scatter plot without clustering
         """
         self.analysis_status = AnalysisStatus.FILT_DONE
-        self._view.update_analysis_status_onui(self.analysis_status.msg)
         self.curr_displ_orig_num = 0
         self._view.plot_orig(self._analysis_worker.data.simpler_res, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
@@ -190,12 +194,10 @@ class Presenter(QObject):
         """
         if not are_there_clust:
             self.analysis_status = AnalysisStatus.FILT_DONE
-            self._view.update_analysis_status_onui(self.analysis_status.msg)
             _lgr.warning("No valid clusters found")
             return
         else:
             self.analysis_status = AnalysisStatus.CLUST_DONE
-            self._view.update_analysis_status_onui(self.analysis_status.msg)
             self.curr_displ_orig_num = 0
             self._view.plot_orig_wclust(
                 self._analysis_worker.data.simpler_res,

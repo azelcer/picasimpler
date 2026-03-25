@@ -8,12 +8,18 @@ import h5py
 import numpy as np
 from scipy.spatial import distance as _distance, KDTree
 from scipy.cluster import hierarchy
+from scipy.interpolate import RegularGridInterpolator as _RGI
 import yaml
 import logging as _lgn
 import warnings as _warnings
 from sklearn import cluster 
 from sklearn.cluster import DBSCAN as _DBSCAN, KMeans as _KMeans
 from scipy.ndimage import map_coordinates
+from data.calibration_data import (
+    NA_data as _NA_data,
+    calibrated_WL as _calibrated_WL,
+    calibrated_z as _calibrated_z
+)
 
 
 _lgn.basicConfig()
@@ -336,6 +342,45 @@ def xy_from_N(
     return centers
 
 
+def tilts_form_xy(origami_positions: np.ndarray, xy_positions: np.ndarray):
+    """Calcula los ángulos respecto al eje x y al plano del origami.
+
+    un ángulo de 0 significa que el origami está acostado o paralelo al eje x.
+
+
+    Parameters
+    ----------
+    origami_positions : np.ndarray
+        Posiciones en la cadena del origami. Por ejemplo si el tiene 3 sitios
+        separados por 50 nm debería ser [0, 50.0, 100.0]
+    xy_positions : np.ndarray
+        pares de posiciones (x,y) medidas para el mismo origami
+
+    Returns
+    -------
+    theta : float
+        ángulo respecto al sustrato
+    phi : TYPE
+        ángulo respecto al eje x
+
+    """
+
+    if origami_positions.shape[0] != xy_positions.shape[0]:
+        raise ValueError("El largo de la lista de distancias y de posiciones no coinciden")
+
+    M = np.column_stack((np.ones(origami_positions.shape[0]), origami_positions))
+    coeffs, residuals, rank, s = np.linalg.lstsq(
+        M, xy_positions, rcond=None
+    )  # incognita: vector [A,B]
+    A, B = coeffs[1]  # coefs[1] tiene (x, y) del punto de unión de origami
+
+    # recupero los ángulos (en grados)
+    phi = np.degrees((np.arctan2(B, A)))
+    theta = np.degrees(np.arccos(A / np.cos(np.radians(phi))))
+
+    return theta, phi
+
+
 def calibrate_origami(data):
     # encontrar muestras colocalizadas (con un radio apto angulos)
     origamis, all_positions = cluster_xy_positions(
@@ -499,6 +544,14 @@ class SIMPLERData:
             return []
         return self._sites
 
+    def get_site_locations(self, site_idx: int):
+        if self._sites is None:
+            return []
+        if len(self._sites) < site_idx + 1:
+            _lgr.warning("Invalid site index %s", self._site_idx)
+            return []
+        return np.concatenate([_._localization_list for _ in self._sites[site_idx]])
+
     def get_ungrouped_filter(self):
         rv = np.ones_like(self.data, dtype=bool)
         if self._runs:
@@ -542,6 +595,46 @@ class SIMPLERData:
         cluster, xy = cluster_xy_positions(
             data_filtered, cluster_threshold, px_size
         )
+
+
+def simpler_params_from_expt_params(
+    lambda_em: float,
+    lambda_ex: float,
+    ang_i: float,
+    n_i: float,
+    n_s: float,
+    NA: float,
+    alpha: float,
+):
+    angle = np.deg2rad(ang_i)
+    # Z
+    z_fit = np.arange(5, 500, 0.5)
+    
+    # Lambda
+    i_lambda_em = np.argmin(np.abs(_calibrated_WL - lambda_em))
+
+    # Axial dependence of the excitation field
+    d = lambda_ex / (4 * np.pi * np.sqrt(n_i**2 * (np.sin(angle)**2) - n_s**2))
+    I_exc = alpha * np.exp(-z_fit / d) + (1 - alpha)
+    NA_values = _NA_data.keys()
+    interp = _RGI((NA_values, _calibrated_WL, _calibrated_z), np.array([_ for _  in _NA_data.values()]))
+    # Axial dependece of the fraction of fluorescence collected by a microscope objetive
+
+    DFi_interp = interp1d(z, DFi)(z_fit)
+    I_total = I_exc * DFi_interp
+
+    # Fit F to "F = alphaF*exp(-z/dF)+(1-alphaF)"
+    def fitF(x, a, b, c):
+        return a * np.exp(-b * x) + c
+
+    popt, pcov = curve_fit(fitF, z_fit, I_total, p0=[0.6, 0.01, 0.05])
+
+    self.alphaF = 1 - popt[2]
+    self.dF = 1 / popt[1]
+
+    self.sendupdatecalSignal.emit(self.dF, self.alphaF)
+
+    return self.dF, self.alphaF
 
 
 if __name__ == "__main__":

@@ -89,6 +89,7 @@ class SIMPLERPlotWidget(QFrame):
         data_x, data_y, photons, z = zip(*[(data[_]["x"], data[_]["y"], data[_]["photons"], data["z"]) for _ in locations])
         data_x = _np.array(data_x)
         data_y = _np.array(data_y)
+        photons = _np.array(photons)
         # mean_x = _np.average(data_x)
         # mean_y = _np.average(data_y)
         # self._I_scatter.set_data(data_x - mean_x, data_y - mean_y)

@@ -52,7 +52,7 @@ class FrameColor(Enum):
         return obj
         
     
-    GRAY = (200, 200, 200)
+    GRAY = (50, 50, 50)
     RED = (215, 27, 96)
     GREEN = (5, 254, 4)
     

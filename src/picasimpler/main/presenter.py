@@ -85,9 +85,11 @@ class Presenter(QObject):
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
-        self._analysis_worker.signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
         self._analysis_worker.signals.tell_clust_done.connect(self._on_clust_done)
+        # connect signals from other analysis helper classes to presenter
+        self._analysis_worker.simpler_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
+        self._analysis_worker.clust_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         
     @pyqtSlot()
     def _browse_file(self):
@@ -182,7 +184,7 @@ class Presenter(QObject):
         """
         self.analysis_status = AnalysisStatus.FILT_DONE
         self.curr_displ_orig_num = 0
-        self._view.plot_orig(self._analysis_worker.data.simpler_res, self.curr_displ_orig_num)
+        self._view.plot_orig(self._analysis_worker.simpler, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
         self._view.set_color_frame(FrameColor.GRAY)
 
@@ -200,30 +202,30 @@ class Presenter(QObject):
             self.analysis_status = AnalysisStatus.CLUST_DONE
             self.curr_displ_orig_num = 0
             self._view.plot_orig_wclust(
-                self._analysis_worker.data.simpler_res,
-                self._analysis_worker.data.cluster_res,
+                self._analysis_worker.simpler,
+                self._analysis_worker.clust,
                 self.curr_displ_orig_num,
-                self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]
+                self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num]
             )
-            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
-            self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)
+            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.clust.tot_orig_kept)
+            self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
 
     def _do_plot_shift(self, shift: int):
         if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):
             self.curr_displ_orig_num += shift
-            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig_after_clust
-            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig_after_clust)
+            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.clust.tot_orig_kept
+            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.clust.tot_orig_kept)
             self._view.plot_orig_wclust(
-                self._analysis_worker.data.simpler_res,
-                self._analysis_worker.data.cluster_res,
+                self._analysis_worker.simpler,
+                self._analysis_worker.clust,
                 self.curr_displ_orig_num,
-                self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]
+                self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num]
             )
         elif self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
             self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig
             self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
-            self._view.plot_orig(self._analysis_worker.data.simpler_res, self.curr_displ_orig_num)
+            self._view.plot_orig(self._analysis_worker.simpler, self.curr_displ_orig_num)
 
     @pyqtSlot()
     def _order_plot_next_orig(self):
@@ -240,13 +242,13 @@ class Presenter(QObject):
         This function discards/select an origami based on its current state,
         and update the corresponsing button and frame color
         """
-        if self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num]:
-            self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num] = False
+        if self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num]:
+            self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num] = False
             self._view.set_color_frame(FrameColor.RED)
             self._view.update_discard_button_toselec()
-            self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)
+            self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
         else:
-            self._analysis_worker.data.cluster_res.selec_orig_list[self.curr_displ_orig_num] = True
+            self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num] = True
             self._view.set_color_frame(FrameColor.GREEN)
             self._view.update_selec_button_todiscard()
-            self._view.update_selec_orig_counter(self._analysis_worker.data.cluster_res.selec_orig_list)
+            self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)

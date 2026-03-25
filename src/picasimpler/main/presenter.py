@@ -75,6 +75,7 @@ class Presenter(QObject):
         self._view.ui.next_orig_button.clicked.connect(self._order_plot_next_orig)
         self._view.ui.prev_orig_button.clicked.connect(self._order_plot_prev_orig)
         self._view.ui.disc_selec_orig_button.clicked.connect(self._disc_selec_orig)
+        self._view.ui.save_clust_button.clicked.connect(self._order_save_clust)
         
     def _make_analysis_connect(self):
         """
@@ -252,3 +253,12 @@ class Presenter(QObject):
             self._view.set_color_frame(UIColor.G)
             self._view.update_selec_button_todiscard()
             self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
+            
+    @pyqtSlot()
+    @check_analysis_status(AnalysisStatus.CLUST_DONE)
+    def _order_save_clust(self):
+        """
+        This function, if clusterization is done, orders the analysis worker to save clusterization results
+        in a .npy file
+        """
+        self._analysis_worker.save_clust()

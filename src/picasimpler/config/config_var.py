@@ -1,3 +1,5 @@
+from pathlib import Path
+
 # SIMPLER filtering
 SPAT_TOL_NM = 30.0
 # kinetics filtering
@@ -11,3 +13,5 @@ MIN_GOOD_LOC = 100
 N_CLUST_EXP = 4
 # origami structure
 Z_SITES_NM = [9.3, 43.7, 79.9, 116.3]
+# result directory
+RES_DIR = Path("results")

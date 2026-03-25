@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>850</width>
-    <height>592</height>
+    <width>902</width>
+    <height>670</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,10 +17,10 @@
    <widget class="QPushButton" name="filter_button">
     <property name="geometry">
      <rect>
-      <x>130</x>
-      <y>160</y>
-      <width>101</width>
-      <height>71</height>
+      <x>140</x>
+      <y>200</y>
+      <width>111</width>
+      <height>51</height>
      </rect>
     </property>
     <property name="text">
@@ -31,19 +31,19 @@ dataset</string>
    <widget class="PlotWidget" name="yn_widget" native="true">
     <property name="geometry">
      <rect>
-      <x>350</x>
-      <y>250</y>
-      <width>301</width>
-      <height>301</height>
+      <x>380</x>
+      <y>280</y>
+      <width>331</width>
+      <height>331</height>
      </rect>
     </property>
    </widget>
    <widget class="QLabel" name="analysis_status_label">
     <property name="geometry">
      <rect>
-      <x>350</x>
-      <y>200</y>
-      <width>311</width>
+      <x>20</x>
+      <y>160</y>
+      <width>331</width>
       <height>31</height>
      </rect>
     </property>
@@ -54,9 +54,9 @@ dataset</string>
    <widget class="QLabel" name="analysis_counter_label">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>200</y>
-      <width>151</width>
+      <x>360</x>
+      <y>160</y>
+      <width>311</width>
       <height>31</height>
      </rect>
     </property>
@@ -67,60 +67,63 @@ dataset</string>
    <widget class="QPushButton" name="prev_orig_button">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>240</y>
+      <x>740</x>
+      <y>260</y>
       <width>71</width>
-      <height>71</height>
+      <height>61</height>
      </rect>
     </property>
     <property name="text">
      <string>Previous
-origami</string>
+origami
+(&lt;-)</string>
     </property>
    </widget>
    <widget class="QPushButton" name="next_orig_button">
     <property name="geometry">
      <rect>
-      <x>760</x>
-      <y>240</y>
+      <x>820</x>
+      <y>260</y>
       <width>71</width>
-      <height>71</height>
+      <height>61</height>
      </rect>
     </property>
     <property name="text">
      <string>Next
-origami</string>
+origami
+(-&gt;)</string>
     </property>
    </widget>
    <widget class="PlotWidget" name="xn_widget" native="true">
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>250</y>
-      <width>301</width>
-      <height>301</height>
+      <y>280</y>
+      <width>331</width>
+      <height>331</height>
      </rect>
     </property>
    </widget>
    <widget class="QPushButton" name="disc_selec_orig_button">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>320</y>
+      <x>740</x>
+      <y>330</y>
       <width>71</width>
       <height>61</height>
      </rect>
     </property>
     <property name="text">
      <string>Discard
-origami</string>
+origami
+(space)</string>
     </property>
    </widget>
    <widget class="QLabel" name="current_orig_label">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>430</y>
+      <x>740</x>
+      <y>440</y>
       <width>151</width>
       <height>31</height>
      </rect>
@@ -132,8 +135,8 @@ origami</string>
    <widget class="QLabel" name="selec_orig_label">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>520</y>
+      <x>740</x>
+      <y>530</y>
       <width>151</width>
       <height>31</height>
      </rect>
@@ -146,9 +149,9 @@ origami</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>160</y>
-      <width>101</width>
-      <height>71</height>
+      <y>200</y>
+      <width>111</width>
+      <height>51</height>
      </rect>
     </property>
     <property name="text">
@@ -160,9 +163,9 @@ file (.hdf5)</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>110</y>
+      <y>100</y>
       <width>811</width>
-      <height>41</height>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
@@ -173,7 +176,7 @@ file (.hdf5)</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>80</y>
+      <y>70</y>
       <width>161</width>
       <height>31</height>
      </rect>
@@ -201,7 +204,7 @@ file (.hdf5)</string>
       <x>20</x>
       <y>40</y>
       <width>811</width>
-      <height>41</height>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
@@ -211,8 +214,8 @@ file (.hdf5)</string>
    <widget class="QLabel" name="current_orig_title_label">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>390</y>
+      <x>740</x>
+      <y>400</y>
       <width>151</width>
       <height>31</height>
      </rect>
@@ -224,8 +227,8 @@ file (.hdf5)</string>
    <widget class="QLabel" name="selec_orig_title_label">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>480</y>
+      <x>740</x>
+      <y>490</y>
       <width>151</width>
       <height>31</height>
      </rect>
@@ -237,9 +240,9 @@ file (.hdf5)</string>
    <widget class="QLabel" name="analysis_counter_title_label">
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>160</y>
-      <width>151</width>
+      <x>360</x>
+      <y>130</y>
+      <width>311</width>
       <height>31</height>
      </rect>
     </property>
@@ -250,9 +253,9 @@ file (.hdf5)</string>
    <widget class="QLabel" name="analysis_status_title_label">
     <property name="geometry">
      <rect>
-      <x>350</x>
-      <y>160</y>
-      <width>311</width>
+      <x>20</x>
+      <y>130</y>
+      <width>331</width>
       <height>31</height>
      </rect>
     </property>
@@ -263,10 +266,10 @@ file (.hdf5)</string>
    <widget class="QPushButton" name="cluster_button">
     <property name="geometry">
      <rect>
-      <x>240</x>
-      <y>160</y>
-      <width>101</width>
-      <height>71</height>
+      <x>260</x>
+      <y>200</y>
+      <width>111</width>
+      <height>51</height>
      </rect>
     </property>
     <property name="text">
@@ -278,9 +281,9 @@ sites</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>240</y>
-      <width>651</width>
-      <height>321</height>
+      <y>260</y>
+      <width>711</width>
+      <height>371</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -293,8 +296,8 @@ sites</string>
    <widget class="QPushButton" name="refit_origami">
     <property name="geometry">
      <rect>
-      <x>760</x>
-      <y>320</y>
+      <x>820</x>
+      <y>330</y>
       <width>71</width>
       <height>61</height>
      </rect>
@@ -302,6 +305,33 @@ sites</string>
     <property name="text">
      <string>Re-fit
 origami</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="save_clust_button">
+    <property name="geometry">
+     <rect>
+      <x>380</x>
+      <y>200</y>
+      <width>111</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Save
+clusters</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="calib_button">
+    <property name="geometry">
+     <rect>
+      <x>500</x>
+      <y>200</y>
+      <width>111</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Calibrate</string>
     </property>
    </widget>
    <zorder>color_frame</zorder>
@@ -326,6 +356,8 @@ origami</string>
    <zorder>cluster_button</zorder>
    <zorder>yn_widget</zorder>
    <zorder>refit_origami</zorder>
+   <zorder>save_clust_button</zorder>
+   <zorder>calib_button</zorder>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
@@ -341,6 +373,8 @@ origami</string>
   <tabstop>browse_file_button</tabstop>
   <tabstop>filter_button</tabstop>
   <tabstop>cluster_button</tabstop>
+  <tabstop>save_clust_button</tabstop>
+  <tabstop>calib_button</tabstop>
   <tabstop>prev_orig_button</tabstop>
   <tabstop>next_orig_button</tabstop>
   <tabstop>disc_selec_orig_button</tabstop>

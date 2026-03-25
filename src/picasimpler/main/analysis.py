@@ -21,7 +21,8 @@ from picasimpler.config.config_var import (
     MIN_PERC_LOC_INCLUST,
     MIN_GOOD_LOC,
     N_CLUST_EXP,
-    Z_SITES_NM
+    Z_SITES_NM,
+    RES_DIR
 )
 
 _lgn.basicConfig()
@@ -283,6 +284,7 @@ class Params:
     min_good_loc: int
     n_clust_exp: int
     z_sites_nm: list
+    res_dir: Path
     
     # movie parameters
     n_frames: int = field(init=False) # number of frames in movie
@@ -333,7 +335,8 @@ class AnalysisWorker(QObject):
             MIN_PERC_LOC_INCLUST,
             MIN_GOOD_LOC,
             N_CLUST_EXP,
-            Z_SITES_NM
+            Z_SITES_NM,
+            RES_DIR
         )
         self.data = Data(picks_data_path, metadata_path)
         self.simpler: SIMPLER = SIMPLER(self.simpler_signals)
@@ -456,7 +459,17 @@ class AnalysisWorker(QObject):
             self.signals.tell_clust_done.emit(True)
         else:
             self.signals.tell_clust_done.emit(True)
-        
+            
+    @pyqtSlot()
+    def save_clust(self):
+        """
+        This function saves the array of clusterization results of the selected origamis only as a .npy 
+        """
+        clust_means_res_filename = self.data.picks_data_path.stem + "_clusters.npy"
+        clust_covs_res_filename = self.data.picks_data_path.stem + "_covs.npy"
+        np.save(Path(self.params.res_dir) / Path(clust_means_res_filename), self.clust.clust_means[self.clust.selec_orig_list,:,:])
+        np.save(Path(self.params.res_dir) / Path(clust_covs_res_filename), self.clust.clust_covs[self.clust.selec_orig_list,:,:,:])
+
 if __name__=="__main__":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"
     data_path = Path(filepath_str)

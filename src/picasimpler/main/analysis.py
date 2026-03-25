@@ -227,6 +227,42 @@ class Clusterization:
         _lgr.info('Time of clustering step: %s s. %s of %s (%.2f%%) origamis discarded',
                 end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust)
 
+    def tilts_form_xy(self, origami_positions: np.ndarray, xy_positions: np.ndarray):
+        """Calcula los ángulos respecto al eje x y al plano del origami.
+
+        un ángulo de 0 significa que el origami está acostado o paralelo al eje x.
+
+        Parameters
+        ----------
+        origami_positions : np.ndarray
+            Posiciones en la cadena del origami. Por ejemplo si el tiene 3 sitios
+            separados por 50 nm debería ser [0, 50.0, 100.0]
+        xy_positions : np.ndarray
+            pares de posiciones (x,y) medidas para el mismo origami
+
+        Returns
+        -------
+        theta : float
+            ángulo respecto al sustrato EN RADIANES
+        phi : float
+            ángulo respecto al eje x EN RADIANES
+        """
+
+        if origami_positions.shape[0] != xy_positions.shape[0]:
+            raise ValueError("El largo de la lista de distancias y de posiciones no coinciden")
+
+        M = np.column_stack((np.ones(origami_positions.shape[0]), origami_positions))
+        coeffs, residuals, rank, s = np.linalg.lstsq(
+            M, xy_positions, rcond=None
+        )
+        A, B = coeffs[1]  # coefs[0] tiene (x, y) del punto de unión de origami
+
+        # recupero los ángulos (en grados)
+        phi = np.arctan2(B, A)
+        theta = np.arccos(A / np.cos(np.radians(phi)))
+        return theta, phi
+
+
 @dataclass
 class Params:
     """

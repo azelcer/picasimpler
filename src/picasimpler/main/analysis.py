@@ -228,7 +228,8 @@ class Clusterization:
                 end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust)
 
     def tilts_form_xy(self, origami_positions: np.ndarray, xy_positions: np.ndarray):
-        """Calcula los ángulos respecto al eje x y al plano del origami.
+        """
+        Calcula los ángulos respecto al eje x y al plano del origami.
 
         un ángulo de 0 significa que el origami está acostado o paralelo al eje x.
 

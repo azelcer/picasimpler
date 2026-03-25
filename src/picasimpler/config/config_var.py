@@ -10,4 +10,4 @@ MIN_PERC_LOC_INCLUST = 0.1
 MIN_GOOD_LOC = 100
 N_CLUST_EXP = 4
 # origami structure
-H_SITES_NM = [9.3, 43.7, 79.9, 116.3]
+Z_SITES_NM = [9.3, 43.7, 79.9, 116.3]

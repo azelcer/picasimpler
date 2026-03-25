@@ -21,7 +21,7 @@ from picasimpler.config.config_var import (
     MIN_PERC_LOC_INCLUST,
     MIN_GOOD_LOC,
     N_CLUST_EXP,
-    H_SITES_NM
+    Z_SITES_NM
 )
 
 _lgn.basicConfig()
@@ -140,7 +140,7 @@ class Clusterization:
         self.locs_noise: list | None = None
         self.clust_means: np.ndarray | None = None
         self.clust_covs: np.ndarray | None = None
-        self.selec_orig_list: list | None = None
+        self.selec_orig_list: list[bool] | None = None
 
     def get_clust_x(self, orig_num):
         return self.locs_clust[orig_num][:, 0]
@@ -200,7 +200,7 @@ class Clusterization:
         for orig_idx in range(tot_orig_bf_clust):
             pick_kept = True
             for n_clust in range(n_clust_exp, 0, -1):
-                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=1, init_params='k-means++')
+                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=1, max_iter=300, init_params='k-means++')
                 gmm.fit(self.locs_clust[orig_idx])
                 last_bic = gmm.bic(self.locs_clust[orig_idx])
                 if n_clust == n_clust_exp: # compute BIC for the expected number of clusters
@@ -249,7 +249,7 @@ class Clusterization:
         """
 
         if origami_positions.shape[0] != xy_positions.shape[0]:
-            raise ValueError("El largo de la lista de distancias y de posiciones no coinciden")
+            raise ValueError("Length of the z and (x,y) positions of the origami sites do not coincide")
 
         M = np.column_stack((np.ones(origami_positions.shape[0]), origami_positions))
         coeffs, residuals, rank, s = np.linalg.lstsq(
@@ -282,7 +282,7 @@ class Params:
     min_perc_loc_inclust: float
     min_good_loc: int
     n_clust_exp: int
-    h_sites_nm: list
+    z_sites_nm: list
     
     # movie parameters
     n_frames: int = field(init=False) # number of frames in movie
@@ -333,7 +333,7 @@ class AnalysisWorker(QObject):
             MIN_PERC_LOC_INCLUST,
             MIN_GOOD_LOC,
             N_CLUST_EXP,
-            H_SITES_NM
+            Z_SITES_NM
         )
         self.data = Data(picks_data_path, metadata_path)
         self.simpler: SIMPLER = SIMPLER(self.simpler_signals)
@@ -462,6 +462,7 @@ if __name__=="__main__":
     data_path = Path(filepath_str)
     metadata_path = data_path.parent / Path(data_path.stem + ".yaml")
     analysis_worker = AnalysisWorker(data_path, metadata_path)
+    analysis_worker.load_data()
     analysis_worker.do_filt()
     analysis_worker.do_clust()
     

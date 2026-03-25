@@ -8,7 +8,7 @@ from functools import wraps
 
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
-from picasimpler.helpers.status import AnalysisStatus, FrameColor
+from picasimpler.helpers.status import AnalysisStatus, UIColor
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
@@ -186,7 +186,7 @@ class Presenter(QObject):
         self.curr_displ_orig_num = 0
         self._view.plot_orig(self._analysis_worker.simpler, self.curr_displ_orig_num)
         self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
-        self._view.set_color_frame(FrameColor.GRAY)
+        self._view.set_color_frame(UIColor.GRAY)
 
     @pyqtSlot(bool)
     def _on_clust_done(self, are_there_clust):
@@ -244,11 +244,11 @@ class Presenter(QObject):
         """
         if self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num]:
             self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num] = False
-            self._view.set_color_frame(FrameColor.RED)
+            self._view.set_color_frame(UIColor.R)
             self._view.update_discard_button_toselec()
             self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
         else:
             self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num] = True
-            self._view.set_color_frame(FrameColor.GREEN)
+            self._view.set_color_frame(UIColor.G)
             self._view.update_selec_button_todiscard()
             self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)

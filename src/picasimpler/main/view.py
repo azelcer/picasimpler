@@ -1,11 +1,12 @@
 from pathlib import Path
 from PyQt6 import QtCore
 from PyQt6.QtWidgets import QMainWindow
+from PyQt6.QtGui import QShortcut, QKeySequence
 import pyqtgraph as pg
 
 from picasimpler.UI.calibration_ui import Ui_MainWindow
 from picasimpler.main.analysis import SIMPLER, Clusterization
-from picasimpler.helpers.status import FrameColor
+from picasimpler.helpers.status import UIColor
 
 _translate = QtCore.QCoreApplication.translate
 
@@ -17,15 +18,27 @@ class View(QMainWindow):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self.create_shortcuts()
         self._setup_plot_widgets()
-        self.set_color_frame(FrameColor.GRAY)
+        self.set_color_frame(UIColor.GRAY)
         self.setWindowTitle(_translate("MainWindow", "SIMPLER calibration GUI"))
+        
+    def create_shortcuts(self):
+        """
+        This fucntion connects some keyboard inputs to buttons in the GUI
+        """
+        prev_orig_shcut = QShortcut(QKeySequence(QtCore.Qt.Key.Key_Left), self)
+        prev_orig_shcut.activated.connect(self.ui.prev_orig_button.click)
+        next_orig_shcut = QShortcut(QKeySequence(QtCore.Qt.Key.Key_Right), self)
+        next_orig_shcut.activated.connect(self.ui.next_orig_button.click)
+        disc_selec_orig_shcut = QShortcut(QKeySequence(QtCore.Qt.Key.Key_Space), self)
+        disc_selec_orig_shcut.activated.connect(self.ui.disc_selec_orig_button.click)
         
     def reset_ui(self):
         """
         This function calls all the basic functions which reset UI elements
         """
-        self.set_color_frame(FrameColor.GRAY)
+        self.set_color_frame(UIColor.GRAY)
         self.reset_counters_onui()
         self.reset_plots()
         
@@ -38,13 +51,13 @@ class View(QMainWindow):
         self._xn_plot = self.ui.xn_widget.getPlotItem()
         self._yn_plot = self.ui.yn_widget.getPlotItem()
         
-    def set_color_frame(self, frame_color: FrameColor):
+    def set_color_frame(self, frame_color: UIColor):
         """
         This function sets the color of the frame around the scatter plots to indicate whether
         the current origami is selcted for calibration or not
         """
         self.ui.color_frame.setStyleSheet(
-            "QFrame { background-color: "+ frame_color.rgb_str +"; }"
+            "QFrame { background-color: "+ frame_color.rgba_str +"; }"
         )
         
     def update_data_file_onui(self, data_path: Path):
@@ -93,11 +106,21 @@ class View(QMainWindow):
         This function plots the xN and yN projections of all the localization of the chosen origami
         """
         self.reset_plots()
-        xn_scatter = pg.ScatterPlotItem(simpler.get_loc_x(orig_num), simpler.get_loc_n(orig_num))
-        yn_scatter = pg.ScatterPlotItem(simpler.get_loc_y(orig_num), simpler.get_loc_n(orig_num))
+        xn_scatter = pg.ScatterPlotItem(
+            simpler.get_loc_x(orig_num),
+            simpler.get_loc_n(orig_num),
+            brush=UIColor.V.brush,
+            pen=UIColor.V.pen
+        )
+        yn_scatter = pg.ScatterPlotItem(
+            simpler.get_loc_y(orig_num),
+            simpler.get_loc_n(orig_num),
+            brush=UIColor.V.brush,
+            pen=UIColor.V.pen
+        )
         self._xn_plot.addItem(xn_scatter)
         self._yn_plot.addItem(yn_scatter)
-        self.set_color_frame(FrameColor.GRAY)
+        self.set_color_frame(UIColor.GRAY)
         
     def plot_orig_wclust(self, simpler: SIMPLER, clust: Clusterization, orig_num: int, is_selected: bool):
         """
@@ -105,20 +128,54 @@ class View(QMainWindow):
         superimposed with the corresponding clusterization results
         """
         self.reset_plots()
-        xn_scatter = pg.ScatterPlotItem(clust.get_loc_x(orig_num), clust.get_loc_n(orig_num))
-        yn_scatter = pg.ScatterPlotItem(clust.get_loc_y(orig_num), clust.get_loc_n(orig_num))
-        xn_clust_centers = pg.ScatterPlotItem(clust.clust_means[orig_num, :, 0], clust.clust_means[orig_num, :, 2], pen='y')
-        yn_clust_centers = pg.ScatterPlotItem(clust.clust_means[orig_num, :, 1], clust.clust_means[orig_num, :, 2], pen='y')
-        xn_clust_centers.setBrush(pg.mkBrush('y'))
-        yn_clust_centers.setBrush(pg.mkBrush('y'))
-        self._xn_plot.addItem(xn_scatter)
-        self._yn_plot.addItem(yn_scatter)
+        xn_scatter_clust = pg.ScatterPlotItem(
+            clust.get_clust_x(orig_num),
+            clust.get_clust_n(orig_num),
+            brush=UIColor.B.brush,
+            pen=UIColor.B.pen
+        )
+        yn_scatter_clust = pg.ScatterPlotItem(
+            clust.get_clust_y(orig_num),
+            clust.get_clust_n(orig_num),
+            brush=UIColor.B.brush,
+            pen=UIColor.B.pen
+        )
+        xn_scatter_noise = pg.ScatterPlotItem(
+            clust.get_noise_x(orig_num),
+            clust.get_noise_n(orig_num),
+            brush=UIColor.LB.brush,
+            pen=UIColor.LB.pen
+        )
+        yn_scatter_noise = pg.ScatterPlotItem(
+            clust.get_noise_y(orig_num),
+            clust.get_noise_n(orig_num),
+            brush=UIColor.LB.brush,
+            pen=UIColor.LB.pen
+        )
+        xn_clust_centers = pg.ScatterPlotItem(
+            clust.clust_means[orig_num, :, 0],
+            clust.clust_means[orig_num, :, 2],
+            brush=UIColor.Y.brush,
+            pen=UIColor.Y.pen
+        )
+        yn_clust_centers = pg.ScatterPlotItem(
+            clust.clust_means[orig_num, :, 1],
+            clust.clust_means[orig_num, :, 2],
+            brush=UIColor.Y.brush,
+            pen=UIColor.Y.pen
+        )
+        self._xn_plot.addItem(xn_scatter_clust)
+        self._yn_plot.addItem(yn_scatter_clust)
+        self._xn_plot.addItem(xn_scatter_noise)
+        self._yn_plot.addItem(yn_scatter_noise)
         self._xn_plot.addItem(xn_clust_centers)
         self._yn_plot.addItem(yn_clust_centers)
         if is_selected:
-            self.set_color_frame(FrameColor.GREEN)
+            self.set_color_frame(UIColor.G)
+            self.update_selec_button_todiscard()
         else:
-            self.set_color_frame(FrameColor.RED)
+            self.set_color_frame(UIColor.R)
+            self.update_discard_button_toselec()
         
     def update_discard_button_toselec(self):
         """

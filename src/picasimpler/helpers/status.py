@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from enum import Enum, auto
 
+import pyqtgraph as pg
+from PyQt6.QtGui import QPen, QBrush
+
+from picasimpler.helpers.conversions import hex_to_rgba
+
 def _cust_auto(enum_cls, prog_order):
     if type(prog_order) is auto:
         return len(enum_cls.__members__) + 1
@@ -31,30 +36,41 @@ class AnalysisStatus(Enum):
     KIN_FILT = (auto(), "Kinetics filtering...", True)
     SIMPLER_FILT = (auto(), "SIMPLER localization filtering...", True)
     FILT_DONE = (auto(), "All filtering steps completed", False)
+    PRE_CLUST = (auto(), "Pre-clustering de-noising...", True)
     SITE_CLUST = (auto(), "Site clustering...", True)
     CLUST_DONE = (auto(), "Clusterization completed", False)
     
     def passed_analysis_step(self, reference_step: AnalysisStatus):
         return self.value >= reference_step.value
     
-class FrameColor(Enum):
+class UIColor(Enum):
     """
-    This Enum class contains all the possible colors of the frame
-    indicating whether an origami is selected for calibration or not.
-    Colors must be written as tuples in the format: (r, g, b).
+    This Enum class contains all the possible colors for plots and UI elements,
+    in hexadecimal format, but it has methods to access the rgb format too.
     """
     
-    rgb_str: str
+    rgba: tuple
+    rgba_str: str
+    pen: QPen
+    brush: QBrush
     
-    def __new__(cls, *rgb):
+    def __new__(cls, value):
         obj = object.__new__(cls)
-        obj.rgb_str = "rgb" + str(rgb)
+        obj._value_ = value
+        obj.rgba = hex_to_rgba(value)
+        obj.rgba_str = "rgba" + str(obj.rgba)
+        obj.pen = pg.mkPen(color=value)
+        obj.brush = pg.mkBrush(color=value)
         return obj
-        
     
-    GRAY = (50, 50, 50)
-    RED = (215, 27, 96)
-    GREEN = (5, 254, 4)
+    GRAY = "#323232"
+    R = "#D71B60"
+    G = "#05FE04"
+    B = "#4a2dbe66"
+    LB = "#2dbeb766"
+    V = "#821ec066"
+    Y = "#ffff00"
+    OG = "#ff8800"
     
 if __name__=="__main__":
     for memb in AnalysisStatus.__members__.values():
@@ -62,8 +78,8 @@ if __name__=="__main__":
         print(memb.msg)
         print(memb.is_analysing)
         
-    for memb in FrameColor.__members__.values():
+    for memb in UIColor.__members__.values():
         print(memb.value)
-        print(memb.rgb_str)
+        print(memb.rgba_str)
         
 

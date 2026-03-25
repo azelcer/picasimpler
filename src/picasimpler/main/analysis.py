@@ -3,11 +3,11 @@ import pandas as pd
 import logging as _lgn
 import yaml
 import time as _time
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from scipy.spatial import distance
 from sklearn.mixture import GaussianMixture
+from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from picasimpler.helpers.status import AnalysisStatus
@@ -18,6 +18,8 @@ from picasimpler.config.config_var import (
     MIN_LAST_FRAME_PERC,
     FRAME_MEDIAN_PERC_RANGE,
     MAX_ON_FRAMES_PERC,
+    MIN_PERC_LOC_INCLUST,
+    MIN_GOOD_LOC,
     N_CLUST_EXP,
     H_SITES_NM
 )
@@ -134,20 +136,20 @@ class Clusterization:
     def __init__(self, signals: ClusterizationSignals):
         self.signals: ClusterizationSignals = signals
         self.tot_orig_kept: int = 0
-        self.locs: list | None = None
+        self.locs_clust: list | None = None
         self.locs_noise: list | None = None
         self.clust_means: np.ndarray | None = None
         self.clust_covs: np.ndarray | None = None
         self.selec_orig_list: list | None = None
 
-    def get_loc_x(self, orig_num):
-        return self.locs[orig_num][:, 0]
+    def get_clust_x(self, orig_num):
+        return self.locs_clust[orig_num][:, 0]
     
-    def get_loc_y(self, orig_num):
-        return self.locs[orig_num][:, 1]
+    def get_clust_y(self, orig_num):
+        return self.locs_clust[orig_num][:, 1]
     
-    def get_loc_n(self, orig_num):
-        return self.locs[orig_num][:, 2]
+    def get_clust_n(self, orig_num):
+        return self.locs_clust[orig_num][:, 2]
     
     def get_noise_x(self, orig_num):
         return self.locs_noise[orig_num][:, 0]
@@ -166,24 +168,41 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
-    def do_clust_xyn(self, locs: list, n_clust_exp: int):
+    def pre_clust_denoise(self, locs: list, min_perc_loc_insite: float, min_good_loc: int):
+        """
+        This function applies HDBSCAN to separate major clusters (without mecessarily resolving them!) from scattered
+        noise and unwanted smaller clusters (such as double events)
+        """
+        self.locs_clust = []
+        self.locs_noise = []
+        for orig_idx in range(len(locs)):
+            min_clust_size = int(min_perc_loc_insite*len(locs[orig_idx]))
+            hdbsc = HDBSCAN(min_cluster_size=min_clust_size).fit(locs[orig_idx])
+            if len(locs[orig_idx][hdbsc.labels_!=-1]) > min_good_loc:
+                self.locs_clust.append(locs[orig_idx][hdbsc.labels_!=-1])
+                self.locs_noise.append(locs[orig_idx][hdbsc.labels_==-1])
+            self.signals.tell_analysis_elem_done.emit(orig_idx)
+        self.tot_orig_kept = len(self.locs_clust)
+
+    def do_clust_xyn(self, n_clust_exp: int):
         """
         This function loops over all origamis and cluster their data in 3D (x, y, N).
         """
         start = _time.time()
-        tot_orig_bf_clust = len(locs)
+        tot_orig_bf_clust = len(self.locs_clust)
         # variables needed to discard origamis not passing the clusterzation test
         n_orig_discarded = 0
         # here we will store all data relative to the clusterization result
         kept_orig_loc_list = []
+        kept_orig_noise_list = []
         clust_means_list = []
         clust_covs_list = []
-        for pick_idx in range(tot_orig_bf_clust):
+        for orig_idx in range(tot_orig_bf_clust):
             pick_kept = True
             for n_clust in range(n_clust_exp, 0, -1):
                 gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=1, init_params='k-means++')
-                gmm.fit(locs[pick_idx])
-                last_bic = gmm.bic(locs[pick_idx])
+                gmm.fit(self.locs_clust[orig_idx])
+                last_bic = gmm.bic(self.locs_clust[orig_idx])
                 if n_clust == n_clust_exp: # compute BIC for the expected number of clusters
                     ref_bic = last_bic
                     clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
@@ -193,12 +212,14 @@ class Clusterization:
                     pick_kept = False
                     break
             if pick_kept:
-                kept_orig_loc_list.append(locs[pick_idx])
+                kept_orig_loc_list.append(self.locs_clust[orig_idx])
+                kept_orig_noise_list.append(self.locs_noise[orig_idx])
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
-            self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
+            self.signals.tell_analysis_elem_done.emit(orig_idx + 1)
         self.tot_orig_kept = len(kept_orig_loc_list)
-        self.locs = kept_orig_loc_list
+        self.locs_clust = kept_orig_loc_list
+        self.locs_noise = kept_orig_noise_list
         self.clust_means = np.asarray(clust_means_list, dtype=float)
         self.clust_covs = np.asarray(clust_covs_list, dtype=float)
         self.selec_orig_list = [True]*self.clust_means.shape[0]
@@ -222,6 +243,8 @@ class Params:
     spat_tol_nm: float # how far can two locs be to be considered the same event
     
     # clustering parameters
+    min_perc_loc_inclust: float
+    min_good_loc: int
     n_clust_exp: int
     h_sites_nm: list
     
@@ -271,6 +294,8 @@ class AnalysisWorker(QObject):
             FRAME_MEDIAN_PERC_RANGE,
             MAX_ON_FRAMES_PERC,
             SPAT_TOL_NM,
+            MIN_PERC_LOC_INCLUST,
+            MIN_GOOD_LOC,
             N_CLUST_EXP,
             H_SITES_NM
         )
@@ -387,8 +412,10 @@ class AnalysisWorker(QObject):
         """
         This function call the clusterization function
         """
-        self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.data.tot_orig)
-        self.clust.do_clust_xyn(self.simpler.locs, self.params.n_clust_exp)
+        self.signals.tell_analysis_step_start.emit(AnalysisStatus.PRE_CLUST, self.data.tot_orig)
+        self.clust.pre_clust_denoise(self.simpler.locs, self.params.min_perc_loc_inclust, self.params.min_good_loc)
+        self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
+        self.clust.do_clust_xyn(self.params.n_clust_exp)
         if self.simpler.locs:
             self.signals.tell_clust_done.emit(True)
         else:

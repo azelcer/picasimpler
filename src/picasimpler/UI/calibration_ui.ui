@@ -337,6 +337,15 @@ origami</string>
    <container>1</container>
   </customwidget>
  </customwidgets>
+ <tabstops>
+  <tabstop>browse_file_button</tabstop>
+  <tabstop>filter_button</tabstop>
+  <tabstop>cluster_button</tabstop>
+  <tabstop>prev_orig_button</tabstop>
+  <tabstop>next_orig_button</tabstop>
+  <tabstop>disc_selec_orig_button</tabstop>
+  <tabstop>refit_origami</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

@@ -118,6 +118,12 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        MainWindow.setTabOrder(self.browse_file_button, self.filter_button)
+        MainWindow.setTabOrder(self.filter_button, self.cluster_button)
+        MainWindow.setTabOrder(self.cluster_button, self.prev_orig_button)
+        MainWindow.setTabOrder(self.prev_orig_button, self.next_orig_button)
+        MainWindow.setTabOrder(self.next_orig_button, self.disc_selec_orig_button)
+        MainWindow.setTabOrder(self.disc_selec_orig_button, self.refit_origami)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate

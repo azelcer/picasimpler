@@ -8,6 +8,7 @@ from picasimpler.main.presenter import Presenter
 class App(QApplication):
     def __init__(self, argv) -> None:
         super(App, self).__init__(argv)
+        # MVP Pattern
         self.view = View()
         self.presenter = Presenter(self.view)
 

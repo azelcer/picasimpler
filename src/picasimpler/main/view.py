@@ -1,14 +1,18 @@
 from pathlib import Path
-from PyQt6 import QtCore
+from PyQt6.QtCore import Qt, QObject, pyqtSignal, QCoreApplication
 from PyQt6.QtWidgets import QMainWindow
 from PyQt6.QtGui import QShortcut, QKeySequence
 import pyqtgraph as pg
 
 from picasimpler.UI.calibration_ui import Ui_MainWindow
 from picasimpler.main.analysis import SIMPLER, Clusterization
-from picasimpler.helpers.status import UIColor
+from picasimpler.helpers.status import AnalysisStatus, UIColor
+from picasimpler.helpers.validators import NumberValidators
 
-_translate = QtCore.QCoreApplication.translate
+_translate = QCoreApplication.translate
+
+class ViewSignals(QObject):
+    send_min_perc_loc_inclust_fromui = pyqtSignal(float)
 
 class View(QMainWindow):
     """
@@ -17,22 +21,36 @@ class View(QMainWindow):
     def __init__(self):
         super().__init__()
         self.ui = Ui_MainWindow()
+        self.signals = ViewSignals()
         self.ui.setupUi(self)
-        self.create_shortcuts()
+        self._create_shortcuts()
         self._setup_plot_widgets()
+        self._setup_validators()
         self.set_color_frame(UIColor.GRAY)
         self.setWindowTitle(_translate("MainWindow", "SIMPLER calibration GUI"))
         
-    def create_shortcuts(self):
+    def _create_shortcuts(self):
         """
         This fucntion connects some keyboard inputs to buttons in the GUI
         """
-        prev_orig_shcut = QShortcut(QKeySequence(QtCore.Qt.Key.Key_Left), self)
+        prev_orig_shcut = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
         prev_orig_shcut.activated.connect(self.ui.prev_orig_button.click)
-        next_orig_shcut = QShortcut(QKeySequence(QtCore.Qt.Key.Key_Right), self)
+        next_orig_shcut = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
         next_orig_shcut.activated.connect(self.ui.next_orig_button.click)
-        disc_selec_orig_shcut = QShortcut(QKeySequence(QtCore.Qt.Key.Key_Space), self)
+        disc_selec_orig_shcut = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         disc_selec_orig_shcut.activated.connect(self.ui.disc_selec_orig_button.click)
+        
+    def _setup_validators(self):
+        """
+        This function set validators for QLineEdits, establishing which numbers can be written
+        """
+        # pre-clustering de-noising parameter must be positive, finite and no scientfic notation allowed
+        self.ui.preclust_tol_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        # photon numbers must be integer, positive, finite and no scientfic notation allowed
+        self.ui.n1_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.n2_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.n3_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.n4_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         
     def reset_ui(self):
         """
@@ -48,6 +66,10 @@ class View(QMainWindow):
         """
         self.ui.xn_widget.invertY(True)
         self.ui.yn_widget.invertY(True)
+        self.ui.xn_widget.setLabel("left", "N")
+        self.ui.xn_widget.setLabel("bottom", "x [nm]")
+        self.ui.yn_widget.setLabel("left", "N")
+        self.ui.yn_widget.setLabel("bottom", "y [nm]")
         self._xn_plot = self.ui.xn_widget.getPlotItem()
         self._yn_plot = self.ui.yn_widget.getPlotItem()
         
@@ -60,27 +82,27 @@ class View(QMainWindow):
             "QFrame { background-color: "+ frame_color.rgba_str +"; }"
         )
         
-    def update_data_file_onui(self, data_path: Path):
+    def upd_data_file_onui(self, data_path: Path):
         """
         This function updates the file name and parent directory reported on UI
         """
         self.ui.dir_label.setText(str(data_path.parent))            
         self.ui.filename_label.setText(data_path.stem)
         
-    def update_analysis_status_onui(self, analysis_status_msg: str):
+    def upd_analysis_status_onui(self, analysis_status: AnalysisStatus):
         """
         This function updates the analysis status reported on UI
         """
-        self.ui.analysis_status_label.setText(analysis_status_msg)
+        self.ui.analysis_status_label.setText(analysis_status.msg)
         
-    def update_analysis_counter(self, elem_num, tot_elem):
+    def upd_analysis_counter(self, elem_num, tot_elem):
         """
         This function changes the color of the frame containing the scatter plots
         thta indicates whether the currenbt origami is selected for calibration
         """
         self.ui.analysis_counter_label.setText(str(elem_num)+" / "+str(tot_elem))
         
-    def update_curr_orig_count(self, curr_orig_num, tot_orig):
+    def upd_curr_orig_count(self, curr_orig_num, tot_orig):
         self.ui.current_orig_label.setText(
             str(curr_orig_num) + " / " + str(tot_orig)
         )
@@ -172,24 +194,24 @@ class View(QMainWindow):
         self._yn_plot.addItem(yn_clust_centers)
         if is_selected:
             self.set_color_frame(UIColor.G)
-            self.update_selec_button_todiscard()
+            self.upd_selec_button_todiscard()
         else:
             self.set_color_frame(UIColor.R)
-            self.update_discard_button_toselec()
+            self.upd_discard_button_toselec()
         
-    def update_discard_button_toselec(self):
+    def upd_discard_button_toselec(self):
         """
         This function set the text on the discard/select origami button to "select"
         """
         self.ui.disc_selec_orig_button.setText("Select\norigami")
         
-    def update_selec_button_todiscard(self):
+    def upd_selec_button_todiscard(self):
         """
         This function set the text on the discard/select origami button to "discard"
         """
         self.ui.disc_selec_orig_button.setText("Discard\norigami")
         
-    def update_selec_orig_counter(self, selec_orig_list):
+    def upd_selec_orig_counter(self, selec_orig_list):
         """
         This function updates the counter of selected origamis, reporting the current number of
         selected origamis on the total number of origamis
@@ -197,3 +219,6 @@ class View(QMainWindow):
         self.ui.selec_orig_label.setText(
             str(sum(selec_orig_list)) + " / " + str(len(selec_orig_list))
         )
+
+    def upd_preclust_tol(self, tol):
+        self.ui.preclust_tol_lineedit.setText(str(tol))

@@ -5,13 +5,7 @@ from enum import Enum, auto
 import pyqtgraph as pg
 from PyQt6.QtGui import QPen, QBrush
 
-from picasimpler.helpers.conversions import hex_to_rgba
-
-def _cust_auto(enum_cls, prog_order):
-    if type(prog_order) is auto:
-        return len(enum_cls.__members__) + 1
-    else:
-        raise TypeError(f"First element of Enum member must be auto(), got {type(prog_order).__name__!r}")
+from picasimpler.helpers.utils import hex_to_rgba, cust_auto
 
 class AnalysisStatus(Enum):
     """
@@ -26,7 +20,7 @@ class AnalysisStatus(Enum):
     
     def __new__(cls, prog_order, msg, is_analysing):
         obj = object.__new__(cls)
-        obj._value_ = _cust_auto(cls, prog_order)
+        obj._value_ = cust_auto(cls, prog_order)
         obj.msg = msg
         obj.is_analysing = is_analysing
         return obj

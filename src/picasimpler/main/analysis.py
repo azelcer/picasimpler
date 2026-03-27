@@ -11,7 +11,7 @@ from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from picasimpler.helpers.status import AnalysisStatus
-from picasimpler.helpers.conversions import px_to_nm
+from picasimpler.helpers.utils import px_to_nm
 from picasimpler.config.config_var import (
     SPAT_TOL_NM,
     MAX_FIRST_FRAME_PERC,
@@ -48,6 +48,9 @@ class SIMPLER:
     
     def get_loc_n(self, orig_num):
         return self.locs[orig_num][:, 2]
+    
+    def get_loc_log_n(self, orig_num):
+        return np.log10(self.locs[orig_num][:, 2])
     
     def save_locs(self, df: pd.DataFrame, px_size_nm: int):
         """
@@ -152,6 +155,9 @@ class Clusterization:
     def get_clust_n(self, orig_num):
         return self.locs_clust[orig_num][:, 2]
     
+    def get_clust_log_n(self, orig_num):
+        return np.log10(self.locs_clust[orig_num][:, 2])
+    
     def get_noise_x(self, orig_num):
         return self.locs_noise[orig_num][:, 0]
     
@@ -160,6 +166,9 @@ class Clusterization:
     
     def get_noise_n(self, orig_num):
         return self.locs_noise[orig_num][:, 2]
+    
+    def get_noise_log_n(self, orig_num):
+        return np.log10(self.locs_noise[orig_num][:, 2])
 
     @staticmethod
     def reorder_clust(means, sigmas):
@@ -177,8 +186,8 @@ class Clusterization:
         self.locs_clust = []
         self.locs_noise = []
         for orig_idx in range(len(locs)):
-            min_clust_size = int(min_perc_loc_insite*len(locs[orig_idx]))
-            hdbsc = HDBSCAN(min_cluster_size=min_clust_size).fit(locs[orig_idx])
+            min_clust_size = np.max((1, int(min_perc_loc_insite*len(locs[orig_idx]))))
+            hdbsc = HDBSCAN(min_cluster_size=np.max((min_clust_size, 2))).fit(locs[orig_idx])
             if len(locs[orig_idx][hdbsc.labels_!=-1]) > min_good_loc:
                 self.locs_clust.append(locs[orig_idx][hdbsc.labels_!=-1])
                 self.locs_noise.append(locs[orig_idx][hdbsc.labels_==-1])
@@ -342,6 +351,10 @@ class AnalysisWorker(QObject):
         self.simpler: SIMPLER = SIMPLER(self.simpler_signals)
         self.clust: Clusterization = Clusterization(self.clust_signals)
 
+    @pyqtSlot(float)
+    def upd_min_perc_loc_inclust(self, value):
+        self.params.min_perc_loc_inclust = value
+
     def load_data(self):
         """
         This function calls other functions to load data and metadata from file
@@ -460,7 +473,6 @@ class AnalysisWorker(QObject):
         else:
             self.signals.tell_clust_done.emit(True)
             
-    @pyqtSlot()
     def save_clust(self):
         """
         This function saves the array of clusterization results of the selected origamis only as a .npy 
@@ -469,6 +481,10 @@ class AnalysisWorker(QObject):
         clust_covs_res_filename = self.data.picks_data_path.stem + "_covs.npy"
         np.save(Path(self.params.res_dir) / Path(clust_means_res_filename), self.clust.clust_means[self.clust.selec_orig_list,:,:])
         np.save(Path(self.params.res_dir) / Path(clust_covs_res_filename), self.clust.clust_covs[self.clust.selec_orig_list,:,:,:])
+        
+    def do_calib(self):
+        _lgr.warning("SIMPLER calibration is not implemented yet!")
+    
 
 if __name__=="__main__":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"

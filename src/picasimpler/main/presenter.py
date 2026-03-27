@@ -9,6 +9,8 @@ from functools import wraps
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor
+from picasimpler.helpers.utils import safe_float
+from picasimpler.config.config_var import MIN_PERC_LOC_INCLUST, MAX_MIN_PERC_LOC_INCLUST
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
@@ -18,6 +20,7 @@ _lgr.setLevel(_lgn.INFO)
 class PresenterSignals(QObject):
     request_start_filtering = pyqtSignal()
     request_start_clustering = pyqtSignal()
+    send_min_perc_loc_inclust_toanalysis = pyqtSignal(float)
 
 class Presenter(QObject):
     """
@@ -28,12 +31,14 @@ class Presenter(QObject):
         self._view = view
         self.signals = PresenterSignals()
         self._make_ui_connect()
+
         # initialize some variables
         self._analysis_worker = None
         self._analysis_thread = None
         self.tot_elem_curr_analysis_step = 0
         self.curr_displ_orig_num = None
         self.analysis_status = AnalysisStatus.PRE_ANALYSIS
+        self.min_perc_loc_inclust = MIN_PERC_LOC_INCLUST
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -59,7 +64,17 @@ class Presenter(QObject):
     @analysis_status.setter
     def analysis_status(self, status: AnalysisStatus):
         self._analysis_status = status
-        self._view.update_analysis_status_onui(status.msg)
+        self._view.upd_analysis_status_onui(status)
+        
+    @property
+    def min_perc_loc_inclust(self: Presenter):
+        return self._min_perc_loc_inclust
+    
+    @min_perc_loc_inclust.setter
+    def min_perc_loc_inclust(self, tol: float):
+        self._min_perc_loc_inclust = min((tol, MAX_MIN_PERC_LOC_INCLUST))
+        self.signals.send_min_perc_loc_inclust_toanalysis.emit(self._min_perc_loc_inclust)
+        self._view.upd_preclust_tol(self._min_perc_loc_inclust)
         
     def show_ui(self):
         self._view.show()
@@ -69,13 +84,23 @@ class Presenter(QObject):
         this functions makes all the connection with the signals coming from the UI
         """
         # connect signals from UI to presenter
+        # analysis buttons
         self._view.ui.browse_file_button.clicked.connect(self._browse_file)
         self._view.ui.filter_button.clicked.connect(self._start_filtering)
         self._view.ui.cluster_button.clicked.connect(self._start_clustering)
+        self._view.ui.save_clust_button.clicked.connect(self._order_save_clust)
+        self._view.ui.calib_button.clicked.connect(self._order_calibration)
+        # origami navigation buttons
         self._view.ui.next_orig_button.clicked.connect(self._order_plot_next_orig)
         self._view.ui.prev_orig_button.clicked.connect(self._order_plot_prev_orig)
         self._view.ui.disc_selec_orig_button.clicked.connect(self._disc_selec_orig)
-        self._view.ui.save_clust_button.clicked.connect(self._order_save_clust)
+        # parameters inputs from UI
+        self._view.ui.preclust_tol_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_min_perc_loc_inclust_fromui.emit(
+                safe_float(self._view.ui.preclust_tol_lineedit.text())
+            )
+        )
+        self._view.signals.send_min_perc_loc_inclust_fromui.connect(self.upd_min_perc_loc_inclust)
         
     def _make_analysis_connect(self):
         """
@@ -84,6 +109,7 @@ class Presenter(QObject):
         # connect signals from presenter to analysis worker
         self.signals.request_start_filtering.connect(self._analysis_worker.do_filt)
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
+        self.signals.send_min_perc_loc_inclust_toanalysis.connect(self._analysis_worker.upd_min_perc_loc_inclust)
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
@@ -110,7 +136,7 @@ class Presenter(QObject):
             self._prep_analysis()
             if self.analysis_status==AnalysisStatus.DATA_LOADED:
                 self._view.reset_ui()
-                self._view.update_data_file_onui(self.data_path)
+                self._view.upd_data_file_onui(self.data_path)
             
     def _reset_analysis(self):
         """
@@ -167,7 +193,7 @@ class Presenter(QObject):
         """
         self.analysis_status = analysis_status
         self.tot_elem_curr_analysis_step = tot_elem_curr_analysis_step
-        self._view.update_analysis_counter(0, self.tot_elem_curr_analysis_step)
+        self._view.upd_analysis_counter(0, self.tot_elem_curr_analysis_step)
         
     @pyqtSlot(int)
     def _on_new_analysis_elem(self, elem_num: int):
@@ -175,7 +201,7 @@ class Presenter(QObject):
         This function is called everytime a new individual element is analyzed within an
         analysis step. It tells the View to update the counter on the UI
         """
-        self._view.update_analysis_counter(elem_num, self.tot_elem_curr_analysis_step)
+        self._view.upd_analysis_counter(elem_num, self.tot_elem_curr_analysis_step)
         
     @pyqtSlot()
     def _on_filt_done(self):
@@ -186,7 +212,7 @@ class Presenter(QObject):
         self.analysis_status = AnalysisStatus.FILT_DONE
         self.curr_displ_orig_num = 0
         self._view.plot_orig(self._analysis_worker.simpler, self.curr_displ_orig_num)
-        self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
+        self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
         self._view.set_color_frame(UIColor.GRAY)
 
     @pyqtSlot(bool)
@@ -208,14 +234,14 @@ class Presenter(QObject):
                 self.curr_displ_orig_num,
                 self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num]
             )
-            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.clust.tot_orig_kept)
-            self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
+            self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.clust.tot_orig_kept)
+            self._view.upd_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
 
     def _do_plot_shift(self, shift: int):
         if self.analysis_status.passed_analysis_step(AnalysisStatus.CLUST_DONE):
             self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.clust.tot_orig_kept
-            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.clust.tot_orig_kept)
+            self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.clust.tot_orig_kept)
             self._view.plot_orig_wclust(
                 self._analysis_worker.simpler,
                 self._analysis_worker.clust,
@@ -225,7 +251,7 @@ class Presenter(QObject):
         elif self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
             self.curr_displ_orig_num += shift
             self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig
-            self._view.update_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
+            self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
             self._view.plot_orig(self._analysis_worker.simpler, self.curr_displ_orig_num)
 
     @pyqtSlot()
@@ -246,13 +272,13 @@ class Presenter(QObject):
         if self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num]:
             self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num] = False
             self._view.set_color_frame(UIColor.R)
-            self._view.update_discard_button_toselec()
-            self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
+            self._view.upd_discard_button_toselec()
+            self._view.upd_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
         else:
             self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num] = True
             self._view.set_color_frame(UIColor.G)
-            self._view.update_selec_button_todiscard()
-            self._view.update_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
+            self._view.upd_selec_button_todiscard()
+            self._view.upd_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
             
     @pyqtSlot()
     @check_analysis_status(AnalysisStatus.CLUST_DONE)
@@ -262,3 +288,16 @@ class Presenter(QObject):
         in a .npy file
         """
         self._analysis_worker.save_clust()
+        
+    @pyqtSlot()
+    @check_analysis_status(AnalysisStatus.CLUST_DONE)
+    def _order_calibration(self):
+        """
+        This function, if clusterization is done, orders the analysis worker to perform the final
+        SIMPLER calibration
+        """
+        self._analysis_worker.do_calib()
+        
+    @pyqtSlot(float)
+    def upd_min_perc_loc_inclust(self, value):
+        self.min_perc_loc_inclust = value

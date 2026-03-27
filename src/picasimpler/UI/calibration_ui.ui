@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>902</width>
-    <height>670</height>
+    <width>926</width>
+    <height>692</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,9 +18,9 @@
     <property name="geometry">
      <rect>
       <x>140</x>
-      <y>200</y>
+      <y>140</y>
       <width>111</width>
-      <height>51</height>
+      <height>61</height>
      </rect>
     </property>
     <property name="text">
@@ -32,7 +32,7 @@ dataset</string>
     <property name="geometry">
      <rect>
       <x>380</x>
-      <y>280</y>
+      <y>300</y>
       <width>331</width>
       <height>331</height>
      </rect>
@@ -42,8 +42,8 @@ dataset</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>160</y>
-      <width>331</width>
+      <y>240</y>
+      <width>351</width>
       <height>31</height>
      </rect>
     </property>
@@ -54,9 +54,9 @@ dataset</string>
    <widget class="QLabel" name="analysis_counter_label">
     <property name="geometry">
      <rect>
-      <x>360</x>
-      <y>160</y>
-      <width>311</width>
+      <x>380</x>
+      <y>240</y>
+      <width>111</width>
       <height>31</height>
      </rect>
     </property>
@@ -68,8 +68,8 @@ dataset</string>
     <property name="geometry">
      <rect>
       <x>740</x>
-      <y>260</y>
-      <width>71</width>
+      <y>140</y>
+      <width>81</width>
       <height>61</height>
      </rect>
     </property>
@@ -82,9 +82,9 @@ origami
    <widget class="QPushButton" name="next_orig_button">
     <property name="geometry">
      <rect>
-      <x>820</x>
-      <y>260</y>
-      <width>71</width>
+      <x>830</x>
+      <y>140</y>
+      <width>81</width>
       <height>61</height>
      </rect>
     </property>
@@ -98,7 +98,7 @@ origami
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>280</y>
+      <y>300</y>
       <width>331</width>
       <height>331</height>
      </rect>
@@ -108,23 +108,23 @@ origami
     <property name="geometry">
      <rect>
       <x>740</x>
-      <y>330</y>
-      <width>71</width>
+      <y>210</y>
+      <width>81</width>
       <height>61</height>
      </rect>
     </property>
     <property name="text">
      <string>Discard
 origami
-(space)</string>
+(space bar)</string>
     </property>
    </widget>
    <widget class="QLabel" name="current_orig_label">
     <property name="geometry">
      <rect>
-      <x>740</x>
-      <y>440</y>
-      <width>151</width>
+      <x>500</x>
+      <y>240</y>
+      <width>111</width>
       <height>31</height>
      </rect>
     </property>
@@ -135,9 +135,9 @@ origami
    <widget class="QLabel" name="selec_orig_label">
     <property name="geometry">
      <rect>
-      <x>740</x>
-      <y>530</y>
-      <width>151</width>
+      <x>620</x>
+      <y>240</y>
+      <width>111</width>
       <height>31</height>
      </rect>
     </property>
@@ -149,9 +149,9 @@ origami
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>200</y>
+      <y>140</y>
       <width>111</width>
-      <height>51</height>
+      <height>61</height>
      </rect>
     </property>
     <property name="text">
@@ -164,7 +164,7 @@ file (.hdf5)</string>
      <rect>
       <x>20</x>
       <y>100</y>
-      <width>811</width>
+      <width>891</width>
       <height>31</height>
      </rect>
     </property>
@@ -203,7 +203,7 @@ file (.hdf5)</string>
      <rect>
       <x>20</x>
       <y>40</y>
-      <width>811</width>
+      <width>891</width>
       <height>31</height>
      </rect>
     </property>
@@ -214,9 +214,9 @@ file (.hdf5)</string>
    <widget class="QLabel" name="current_orig_title_label">
     <property name="geometry">
      <rect>
-      <x>740</x>
-      <y>400</y>
-      <width>151</width>
+      <x>500</x>
+      <y>210</y>
+      <width>111</width>
       <height>31</height>
      </rect>
     </property>
@@ -227,9 +227,9 @@ file (.hdf5)</string>
    <widget class="QLabel" name="selec_orig_title_label">
     <property name="geometry">
      <rect>
-      <x>740</x>
-      <y>490</y>
-      <width>151</width>
+      <x>620</x>
+      <y>210</y>
+      <width>111</width>
       <height>31</height>
      </rect>
     </property>
@@ -240,9 +240,9 @@ file (.hdf5)</string>
    <widget class="QLabel" name="analysis_counter_title_label">
     <property name="geometry">
      <rect>
-      <x>360</x>
-      <y>130</y>
-      <width>311</width>
+      <x>380</x>
+      <y>210</y>
+      <width>111</width>
       <height>31</height>
      </rect>
     </property>
@@ -254,8 +254,8 @@ file (.hdf5)</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>130</y>
-      <width>331</width>
+      <y>210</y>
+      <width>111</width>
       <height>31</height>
      </rect>
     </property>
@@ -267,9 +267,9 @@ file (.hdf5)</string>
     <property name="geometry">
      <rect>
       <x>260</x>
-      <y>200</y>
+      <y>140</y>
       <width>111</width>
-      <height>51</height>
+      <height>61</height>
      </rect>
     </property>
     <property name="text">
@@ -281,7 +281,7 @@ sites</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>260</y>
+      <y>280</y>
       <width>711</width>
       <height>371</height>
      </rect>
@@ -296,43 +296,152 @@ sites</string>
    <widget class="QPushButton" name="refit_origami">
     <property name="geometry">
      <rect>
-      <x>820</x>
-      <y>330</y>
-      <width>71</width>
+      <x>830</x>
+      <y>210</y>
+      <width>81</width>
       <height>61</height>
      </rect>
     </property>
     <property name="text">
      <string>Re-fit
-origami</string>
+origami
+(R)</string>
     </property>
    </widget>
    <widget class="QPushButton" name="save_clust_button">
     <property name="geometry">
      <rect>
       <x>380</x>
-      <y>200</y>
+      <y>140</y>
       <width>111</width>
-      <height>51</height>
+      <height>61</height>
      </rect>
     </property>
     <property name="text">
-     <string>Save
-clusters</string>
+     <string>Save cluster
+results (.npy)</string>
     </property>
    </widget>
    <widget class="QPushButton" name="calib_button">
     <property name="geometry">
      <rect>
       <x>500</x>
-      <y>200</y>
+      <y>140</y>
       <width>111</width>
-      <height>51</height>
+      <height>61</height>
      </rect>
     </property>
     <property name="text">
-     <string>Calibrate</string>
+     <string>Calibrate
+SIMPLER</string>
     </property>
+   </widget>
+   <widget class="QFrame" name="guess_frame">
+    <property name="geometry">
+     <rect>
+      <x>740</x>
+      <y>280</y>
+      <width>171</width>
+      <height>261</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QCheckBox" name="manual_guess_checkbox">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>100</y>
+       <width>151</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Use manual guesses
+for photon numbers</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="preclust_tol_title_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>151</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Pre-clustering de-noising
+parameter</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="guess_title_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>150</y>
+       <width>131</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Photon number guesses:</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="n1_guess_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>180</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="n2_guess_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>180</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="n3_guess_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>220</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="n4_guess_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>220</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="preclust_tol_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
    </widget>
    <zorder>color_frame</zorder>
    <zorder>filter_button</zorder>
@@ -358,6 +467,7 @@ clusters</string>
    <zorder>refit_origami</zorder>
    <zorder>save_clust_button</zorder>
    <zorder>calib_button</zorder>
+   <zorder>guess_frame</zorder>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
@@ -367,6 +477,11 @@ clusters</string>
    <extends>QWidget</extends>
    <header>pyqtgraph</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>CustomQLineEdit</class>
+   <extends>QLineEdit</extends>
+   <header location="global">picasimpler/UI/custom_widgets.h</header>
   </customwidget>
  </customwidgets>
  <tabstops>

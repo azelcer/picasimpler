@@ -6,6 +6,7 @@ import time as _time
 from dataclasses import dataclass, field
 from pathlib import Path
 from scipy.spatial import distance
+from scipy.optimize import curve_fit
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -245,8 +246,9 @@ class Clusterization:
         Parameters
         ----------
         origami_positions : np.ndarray
-            Site positions along the origami in nm. For example, if the origami has 3 sites
-            50 nm apart, t should be [0, 50.0, 100.0]
+            Site positions along the origami in nm. For example, if the origami
+            has 3 sites 50 nm apart the first one at 10 nm from the link point,
+            it should be [10., 60.0, 110.0]
         xy_positions : np.ndarray
             tuples of the x and y positions of the site clusters of the origami
 
@@ -265,12 +267,74 @@ class Clusterization:
         coeffs, residuals, rank, s = np.linalg.lstsq(
             M, xy_positions, rcond=None
         )
-        A, B = coeffs[1]  # coefs[0] tiene (x, y) del punto de unión de origami
+        A, B = coeffs[1]  # coefs[0] holds (x, y) of the origami at z=0
 
-        # recupero los ángulos (en grados)
         phi = np.arctan2(B, A)
         theta = np.arccos(A / np.cos(np.radians(phi)))
         return theta, phi
+
+    def z_from_tilt(self, theta: float, sites_distances: np.ndarray):
+        """Computes z positions from a tilt angle and a set of distances.
+
+        Parameters
+        ----------
+        theta: float
+            Tilt angle in radians. 0 means parallel to substrate, pi/2 means vertical
+        sites_distances: np.ndarray
+            Distances of each site from the origami link point
+
+        Returns
+        -------
+        np.ndarray holding the z positions of each site
+        """
+        return sites_distances * np.sin(theta)[:, np.newaxis]
+
+    def fit_N(
+        self,
+        z_data: np.ndarray,
+        N_data: np.ndarray,
+        p0: tuple[float, float] = (0.5, 10.0),
+    ):
+        """Calculate SIMPLER effective params from known z and N.
+
+        This function fits N instead of z and should be used when N0 of each
+        origami is unknown.
+
+        Parameters
+        ----------
+            z_data: np.ndarray
+                Calculated z positions, either for each site (shape
+                [#origamis * #sites]), or for each origami (shape [#origamis, #sites])
+            N_data: np.ndarray
+                Number of measured measured photons for each z.
+            p0: tuple[float, float], OPTIONAL
+                Initial guesses for alpha_F and d_F
+            plot   : bool
+
+        Returns
+        -------
+        Tuple (alpha_F, d_F, (sigma_alfa, sigma_d_f)) , SIMPLER parameters
+
+        TODO: add z_0 to account for constant linker added distance.
+        """
+        z_data = np.asarray(z_data)
+        N_data = np.asarray(N_data)
+
+        flat_z = z_data.ravel()
+        # Normalize data
+        F_data = (N_data / N_data[:, 0, np.newaxis]).ravel()
+
+        # Model function
+        def F(z, alpha_F, d_F):
+            num = alpha_F * np.exp(-z / d_F) + (1 - alpha_F)
+            den = alpha_F * np.exp(-z[0] / d_F) + (1 - alpha_F)
+            return num / den
+        # Fit
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0)
+        alpha_F_fit, d_F_fit = popt
+
+        perr = np.sqrt(np.diag(pcov))
+        return alpha_F_fit, d_F_fit, perr
 
 
 @dataclass
@@ -278,7 +342,7 @@ class Params:
     """
     dataclass containing the parameters for the calibration
     """
-    
+
     # kinetics filtering parameters
     max_first_frame_perc: float
     min_last_frame_perc: float
@@ -472,7 +536,7 @@ class AnalysisWorker(QObject):
             self.signals.tell_clust_done.emit(True)
         else:
             self.signals.tell_clust_done.emit(True)
-            
+
     def save_clust(self):
         """
         This function saves the array of clusterization results of the selected origamis only as a .npy 
@@ -484,9 +548,21 @@ class AnalysisWorker(QObject):
         
     def do_calib(self):
         _lgr.warning("SIMPLER calibration is not implemented yet!")
-    
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
+    clus = Clusterization(None)
+    # clust_means [#origami, # site, (x, y, N)]
+    clus.clust_means = np.load("../../../results/R2_2_MMStack_Pos0.ome_locs_picked_standing_clusters.npy")
+    clus.clust_covs = np.load("../../../results/R2_2_MMStack_Pos0.ome_locs_picked_standing_covs.npy")
+    positions = np.array(Z_SITES_NM)
+    angles = np.array([clus.tilts_form_xy(positions, o_pos[:, 0:2])[0] for o_pos in clus.clust_means])
+    z = clus.z_from_tilt(angles, positions)
+    alpha_f, d_f, errors = clus.fit_N(z, clus.clust_means[:, :, 2])
+    print(alpha_f, d_f, errors)
+
+
+if __name__=="__main__X":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"
     data_path = Path(filepath_str)
     metadata_path = data_path.parent / Path(data_path.stem + ".yaml")
@@ -494,4 +570,3 @@ if __name__=="__main__":
     analysis_worker.load_data()
     analysis_worker.do_filt()
     analysis_worker.do_clust()
-    

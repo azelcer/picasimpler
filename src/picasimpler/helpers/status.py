@@ -7,6 +7,7 @@ from PyQt6.QtGui import QPen, QBrush
 
 from picasimpler.helpers.utils import hex_to_rgba, cust_auto
 
+
 class AnalysisStatus(Enum):
     """
     This Enum class contains all the possible statuses of the analysis.
@@ -14,17 +15,17 @@ class AnalysisStatus(Enum):
     and each one has a message and a bool that states whether it is an active analysis step,
     meaning the analysis worker is busy
     """
-    
     msg: str
     is_analysing: bool
-    
+
     def __new__(cls, prog_order, msg, is_analysing):
+
         obj = object.__new__(cls)
         obj._value_ = cust_auto(cls, prog_order)
         obj.msg = msg
         obj.is_analysing = is_analysing
         return obj
-    
+
     PRE_ANALYSIS = (auto(), "Please browse file", False)
     DATA_LOADED = (auto(), "Ready to analyze", False)
     KIN_FILT = (auto(), "Kinetics filtering...", True)
@@ -33,10 +34,11 @@ class AnalysisStatus(Enum):
     PRE_CLUST = (auto(), "Pre-clustering de-noising...", True)
     SITE_CLUST = (auto(), "Site clustering...", True)
     CLUST_DONE = (auto(), "Clusterization completed", False)
-    
+
     def passed_analysis_step(self, reference_step: AnalysisStatus):
         return self.value >= reference_step.value
-    
+
+
 class UIColor(Enum):
     """
     This Enum class contains all the possible colors for plots and UI elements,

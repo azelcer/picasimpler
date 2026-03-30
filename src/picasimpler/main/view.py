@@ -13,6 +13,7 @@ _translate = QCoreApplication.translate
 
 class ViewSignals(QObject):
     send_preclust_gamma_fromui = pyqtSignal(float)
+    send_preclust_eps_fromui = pyqtSignal(float)
 
 class View(QMainWindow):
     """
@@ -223,3 +224,6 @@ class View(QMainWindow):
 
     def upd_preclust_gamma_onui(self, tol):
         self.ui.preclust_gamma_lineedit.setText(str(tol))
+        
+    def upd_preclust_eps_onui(self, tol):
+        self.ui.preclust_eps_lineedit.setText(str(tol))

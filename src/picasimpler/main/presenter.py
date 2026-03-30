@@ -10,7 +10,7 @@ from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor
 from picasimpler.helpers.utils import safe_float
-from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA
+from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA, PRECLUST_EPS_DEF
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
@@ -21,6 +21,7 @@ class PresenterSignals(QObject):
     request_start_filtering = pyqtSignal()
     request_start_clustering = pyqtSignal()
     send_preclust_gamma_toanalysis = pyqtSignal(float)
+    send_preclust_eps_toanalysis = pyqtSignal(float)
 
 class Presenter(QObject):
     """
@@ -39,6 +40,7 @@ class Presenter(QObject):
         self.curr_displ_orig_num = None
         self.analysis_status = AnalysisStatus.PRE_ANALYSIS
         self.preclust_gamma = PRECLUST_GAMMA_DEF
+        self.preclust_eps = PRECLUST_EPS_DEF
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -71,10 +73,20 @@ class Presenter(QObject):
         return self._preclust_gamma
     
     @preclust_gamma.setter
-    def preclust_gamma(self, tol: float):
-        self._preclust_gamma = min((tol, MAX_PRECLUST_GAMMA))
+    def preclust_gamma(self, value: float):
+        self._preclust_gamma = min((value, MAX_PRECLUST_GAMMA))
         self.signals.send_preclust_gamma_toanalysis.emit(self._preclust_gamma)
         self._view.upd_preclust_gamma_onui(self._preclust_gamma)
+        
+    @property
+    def preclust_eps(self: Presenter):
+        return self._preclust_eps
+    
+    @preclust_eps.setter
+    def preclust_eps(self, value: float):
+        self._preclust_eps = value
+        self.signals.send_preclust_eps_toanalysis.emit(self._preclust_eps)
+        self._view.upd_preclust_eps_onui(self._preclust_eps)
         
     def show_ui(self):
         self._view.show()
@@ -100,7 +112,13 @@ class Presenter(QObject):
                 safe_float(self._view.ui.preclust_gamma_lineedit.text())
             )
         )
+        self._view.ui.preclust_eps_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_preclust_eps_fromui.emit(
+                safe_float(self._view.ui.preclust_eps_lineedit.text())
+            )
+        )
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
+        self._view.signals.send_preclust_eps_fromui.connect(self.upd_preclust_eps)
         
     def _make_analysis_connect(self):
         """
@@ -110,6 +128,7 @@ class Presenter(QObject):
         self.signals.request_start_filtering.connect(self._analysis_worker.do_filt)
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
+        self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
@@ -301,3 +320,7 @@ class Presenter(QObject):
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
         self.preclust_gamma = value
+        
+    @pyqtSlot(float)
+    def upd_preclust_eps(self, value):
+        self.preclust_eps = value

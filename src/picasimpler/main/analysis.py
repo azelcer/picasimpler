@@ -20,6 +20,7 @@ from picasimpler.config.config_var import (
     FRAME_MEDIAN_PERC_RANGE,
     MAX_ON_FRAMES_PERC,
     PRECLUST_GAMMA_DEF,
+    PRECLUST_EPS_DEF,
     MIN_GOOD_LOC,
     N_CLUST_EXP,
     Z_SITES_NM,
@@ -180,7 +181,7 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
-    def pre_clust_denoise(self, locs: list, preclust_gamma: float, min_good_loc: int, lambda_ref_val_nm: float):
+    def pre_clust_denoise(self, locs: list, preclust_gamma: float, preclust_eps: float, min_good_loc: int, lambda_ref_val_nm: float):
         """
         This function applies HDBSCAN to separate major clusters (without mecessarily resolving them!) from scattered
         noise and unwanted smaller clusters (such as double events).
@@ -190,7 +191,7 @@ class Clusterization:
         self.locs_clust = []
         self.locs_noise = []
         for orig_idx in range(len(locs)):
-            min_clust_size = np.max((1, int(preclust_gamma*len(locs[orig_idx]))))
+            min_clust_size = int(preclust_gamma*len(locs[orig_idx]))
             loc_rescal = np.stack(
                 (locs[orig_idx][:, 0],
                 locs[orig_idx][:, 1],
@@ -198,6 +199,7 @@ class Clusterization:
             )
             hdbsc = HDBSCAN(
                 min_cluster_size=np.max((min_clust_size, 2)),
+                cluster_selection_epsilon=preclust_eps,
                 allow_single_cluster=True
             ).fit(loc_rescal)
             if len(locs[orig_idx][hdbsc.labels_!=-1]) > min_good_loc:
@@ -365,6 +367,7 @@ class Params:
     
     # clustering parameters
     preclust_gamma: float
+    preclust_eps: float
     min_good_loc: int
     n_clust_exp: int
     z_sites_nm: list
@@ -418,6 +421,7 @@ class AnalysisWorker(QObject):
             MAX_ON_FRAMES_PERC,
             SPAT_TOL_NM,
             PRECLUST_GAMMA_DEF,
+            PRECLUST_EPS_DEF,
             MIN_GOOD_LOC,
             N_CLUST_EXP,
             Z_SITES_NM,
@@ -431,6 +435,10 @@ class AnalysisWorker(QObject):
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
         self.params.preclust_gamma = value
+        
+    @pyqtSlot(float)
+    def upd_preclust_eps(self, value):
+        self.params.preclust_eps = value
 
     def load_data(self):
         """
@@ -542,7 +550,13 @@ class AnalysisWorker(QObject):
         This function call the clusterization function
         """
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.PRE_CLUST, self.data.tot_orig)
-        self.clust.pre_clust_denoise(self.simpler.locs, self.params.preclust_gamma, self.params.min_good_loc, self.params.lambda_ref_val_nm)
+        self.clust.pre_clust_denoise(
+            self.simpler.locs,
+            self.params.preclust_gamma,
+            self.params.preclust_eps,
+            self.params.min_good_loc,
+            self.params.lambda_ref_val_nm
+        )
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
         self.clust.do_clust_xyn(self.params.n_clust_exp)
         if self.simpler.locs:

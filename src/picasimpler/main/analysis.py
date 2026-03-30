@@ -554,6 +554,19 @@ class AnalysisWorker(QObject):
         _lgr.warning("SIMPLER calibration is not implemented yet!")
 
 
+def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
+    import matplotlib.pyplot as plt
+    y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))
+    F_values = N_values / N_values[:, 0, np.newaxis]
+    plt.plot(z_values.ravel(), F_values.ravel(), ".", ms=8, label="Data")
+    plt.plot(z_values.ravel(), y_values.ravel(), "x", label="Fit")
+    plt.ylabel(r"$F(z) = \frac{N(z)}{N(z_1)}$")
+    plt.xlabel("z")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
 if __name__ == "__main__":
     clus = Clusterization(None)
     # clust_means [#origami, # site, (x, y, N)]
@@ -562,8 +575,9 @@ if __name__ == "__main__":
     positions = np.array(Z_SITES_NM)
     angles = np.array([clus.tilts_form_xy(positions, o_pos[:, 0:2])[0] for o_pos in clus.clust_means])
     z = clus.z_from_tilt(angles, positions)
-    alpha_f, d_f, errors = clus.fit_N(z, clus.clust_means[:, :, 2])
-    print(alpha_f, d_f, errors)
+    alpha_F, d_F, errors = clus.fit_N(z, clus.clust_means[:, :, 2])
+    print(alpha_F, d_F, errors)
+    plot_origami_fit(z, clus.clust_means[:, :, 2], alpha_F, d_F)
 
 
 if __name__ == "__main__X":

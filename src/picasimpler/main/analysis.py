@@ -11,7 +11,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from picasimpler.helpers.status import AnalysisStatus
+from picasimpler.helpers.status import AnalysisStatus, MessageType
 from picasimpler.helpers.utils import px_to_nm
 from picasimpler.config.config_var import (
     SPAT_TOL_NM,
@@ -421,6 +421,7 @@ class AnalysisSignals(QObject):
     tell_filt_done = pyqtSignal()
     tell_clust_done = pyqtSignal(bool)
     tell_refit_done = pyqtSignal()
+    tell_msg_toprint = pyqtSignal(object, str)
     
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
@@ -473,23 +474,28 @@ class AnalysisWorker(QObject):
                 hdf5_node_list = [node._v_pathname for node in store._handle.walk_nodes()]
                 if '/locs' not in hdf5_node_list:
                     _lgr.error('hdf5 file does not have expected structure')
+                    self.signals.tell_msg_toprint.emit(MessageType.ERROR, "hdf5 file does not have expected structure")
                     # FIXME: this cleans previous file is lodaded
                     self.data.df_raw = None
                     self.data.tot_picks = 0
                     self.data.is_data_file_open = False
                 _lgr.info('hdf5 file has expected structure')
+                self.signals.tell_msg_toprint.emit(MessageType.INFO, "hdf5 file has expected structure")
                 df_data = store['/locs']
                 # count total number of picks
                 tot_picks = df_data['group'].iloc[-1] + 1
                 _lgr.info(f"Total number of picks: {tot_picks}")
+                self.signals.tell_msg_toprint.emit(MessageType.INFO, f"Total number of picks: {tot_picks}")
                 self.data.df_raw = df_data
                 self.data.tot_picks = tot_picks
                 self.data.is_data_file_open = True
         except Exception as e:
             if isinstance(e, KeyError) and str(e) == "'group'":
-                _lgr.error(f"Error opening hdf5 file: picks were not found in file")
+                _lgr.error("Error opening hdf5 file: picks were not found in file")
+                self.signals.tell_msg_toprint.emit(MessageType.ERROR, "Error opening hdf5 file: picks were not found in file")
             else:
                 _lgr.error(f"Error {type(e)} opening hdf5 file: {e}")
+                self.signals.tell_msg_toprint.emit(MessageType.ERROR, f"Error {type(e)} opening hdf5 file: {e}")
             self.data.df_raw = None
             self.data.tot_picks = 0
             self.data.is_data_file_open = False
@@ -507,12 +513,17 @@ class AnalysisWorker(QObject):
                 _lgr.info(f"Number of frames in movie: {frames}")
                 _lgr.info(f"Exposure time in ms: {exp_time_ms}")
                 _lgr.info(f"Pixel size in nm: {px_size_nm}")
+                self.signals.tell_msg_toprint.emit(MessageType.INFO, "Movie metadata readed correctly.")
+                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Number of frames in movie: {frames}")
+                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Exposure time in ms: {exp_time_ms}")
+                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Pixel size in nm: {px_size_nm}")
                 self.params.n_frames = frames
                 self.params.exp_time_ms = exp_time_ms
                 self.params.px_size_nm = px_size_nm
                 self.data.is_metadata_file_open = True
         except Exception as e:
             _lgr.error(f"Error opening yaml file because of: {e}")
+            self.signals.tell_msg_toprint.emit(MessageType.ERROR, f"Error opening yaml file because of: {e}")
             self.params.n_frames = None
             self.params.exp_time_ms = None
             self.params.px_size_nm = None
@@ -545,6 +556,7 @@ class AnalysisWorker(QObject):
         df_orig = self.data.df_raw.loc[self.data.df_raw['group'].isin(picks_tokeep)]
         n_orig = len(picks_tokeep)
         _lgr.info(f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
+        self.signals.tell_msg_toprint.emit(MessageType.INFO, f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
         self.data.df_orig = df_orig
         self.data.tot_orig = n_orig
 
@@ -603,11 +615,13 @@ class AnalysisWorker(QObject):
         )
         if new_labels is None:
             _lgr.warning("Re-fit failed at pre-clustering de-noising step, try changing parameters")
+            self.signals.tell_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")
             return
         else:
             new_means, new_covs = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1], self.params.n_clust_exp)
             if new_means is None:
                 _lgr.warning("Re-fit failed at GMM clustering step, try changing parameters")
+                self.signals.tell_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at GMM clustering step, try changing parameters")
             else:
                 # if new fit passed all steps, update old results with new
                 self.clust.locs_clust[orig_num] = locs_unlabel[new_labels!=-1]

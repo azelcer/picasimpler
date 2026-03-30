@@ -8,7 +8,7 @@ from functools import wraps
 
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
-from picasimpler.helpers.status import AnalysisStatus, UIColor
+from picasimpler.helpers.status import AnalysisStatus, UIColor, MessageType
 from picasimpler.helpers.utils import safe_float_to0
 from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA, PRECLUST_EPS_DEF
 
@@ -138,11 +138,19 @@ class Presenter(QObject):
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
         self._analysis_worker.signals.tell_clust_done.connect(self._on_clust_done)
         self._analysis_worker.signals.tell_refit_done.connect(self._on_refit_done)
+        self._analysis_worker.signals.tell_msg_toprint.connect(self._print_to_ui)
         # connect signals from other analysis helper classes to presenter
         self._analysis_worker.simpler_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         self._analysis_worker.clust_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         # connect signals from presenter to other analysis helper classes
         self.signals.request_refit_origami.connect(self._analysis_worker.refit_orig)
+        
+    @pyqtSlot(MessageType, str)
+    def _print_to_ui(self, msg_type: MessageType, msg_toprint: str):
+        '''
+        This function prints a message on the message box in the UI
+        '''
+        self._view.upd_msg_onui(msg_type, msg_toprint)
         
     @pyqtSlot()
     def _browse_file(self):
@@ -182,6 +190,7 @@ class Presenter(QObject):
         # analysis thread preparation, to allow dynamic updating of the GUI
         self._analysis_worker = AnalysisWorker(self.data_path, self.metadata_path)
         self._analysis_thread = QThread()
+        self._make_analysis_connect()
         # start loading data for analysis
         self._analysis_worker.load_data()
         if self._analysis_worker.data.is_data_file_open and self._analysis_worker.data.is_metadata_file_open:
@@ -190,7 +199,6 @@ class Presenter(QObject):
             self._reset_analysis()
             return
         # make signal connections
-        self._make_analysis_connect()
         self._analysis_worker.moveToThread(self._analysis_thread)
         self._analysis_thread.start()
             
@@ -297,7 +305,7 @@ class Presenter(QObject):
         """
         if self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num]:
             self._analysis_worker.clust.selec_orig_list[self.curr_displ_orig_num] = False
-            self._view.set_color_frame(UIColor.R)
+            self._view.set_color_frame(UIColor.MAG)
             self._view.upd_discard_button_toselec()
             self._view.upd_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
         else:

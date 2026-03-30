@@ -12,7 +12,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(926, 692)
+        MainWindow.resize(1212, 692)
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.filter_button = QtWidgets.QPushButton(parent=self.centralwidget)
@@ -136,6 +136,17 @@ class Ui_MainWindow(object):
         self.calib_fromfile_button = QtWidgets.QPushButton(parent=self.centralwidget)
         self.calib_fromfile_button.setGeometry(QtCore.QRect(620, 140, 111, 61))
         self.calib_fromfile_button.setObjectName("calib_fromfile_button")
+        self.frame = QtWidgets.QFrame(parent=self.centralwidget)
+        self.frame.setGeometry(QtCore.QRect(920, 10, 271, 641))
+        self.frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.frame.setObjectName("frame")
+        self.messages_title_label = QtWidgets.QLabel(parent=self.frame)
+        self.messages_title_label.setGeometry(QtCore.QRect(10, 10, 81, 16))
+        self.messages_title_label.setObjectName("messages_title_label")
+        self.messages_textedit = QtWidgets.QTextEdit(parent=self.frame)
+        self.messages_textedit.setGeometry(QtCore.QRect(10, 40, 251, 591))
+        self.messages_textedit.setObjectName("messages_textedit")
         self.color_frame.raise_()
         self.filter_button.raise_()
         self.analysis_status_label.raise_()
@@ -162,6 +173,7 @@ class Ui_MainWindow(object):
         self.calib_button.raise_()
         self.guess_frame.raise_()
         self.calib_fromfile_button.raise_()
+        self.frame.raise_()
         MainWindow.setCentralWidget(self.centralwidget)
         self.statusbar = QtWidgets.QStatusBar(parent=MainWindow)
         self.statusbar.setObjectName("statusbar")
@@ -219,5 +231,6 @@ class Ui_MainWindow(object):
         self.calib_fromfile_button.setText(_translate("MainWindow", "Calibrate\n"
 "SIMPLER\n"
 "from file (.npy)"))
+        self.messages_title_label.setText(_translate("MainWindow", "Messages:"))
 from picasimpler.UI.custom_widgets import CustomQLineEdit
 from pyqtgraph import PlotWidget

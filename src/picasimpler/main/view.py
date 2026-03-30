@@ -6,7 +6,7 @@ import pyqtgraph as pg
 
 from picasimpler.UI.calibration_ui import Ui_MainWindow
 from picasimpler.main.analysis import SIMPLER, Clusterization
-from picasimpler.helpers.status import AnalysisStatus, UIColor
+from picasimpler.helpers.status import AnalysisStatus, UIColor, MessageType
 from picasimpler.helpers.validators import NumberValidators
 
 _translate = QCoreApplication.translate
@@ -27,6 +27,7 @@ class View(QMainWindow):
         self._create_shortcuts()
         self._setup_plot_widgets()
         self._setup_validators()
+        self.ui.messages_textedit.setReadOnly(True)
         self.set_color_frame(UIColor.GRAY)
         self.setWindowTitle(_translate("MainWindow", "SIMPLER calibration GUI"))
         
@@ -85,6 +86,19 @@ class View(QMainWindow):
         self.ui.color_frame.setStyleSheet(
             "QFrame { background-color: "+ frame_color.rgba_str +"; }"
         )
+        
+    def upd_msg_onui(self, msg_type: MessageType, msg_toprint: str):
+        """
+        This function adds a message on the message box on the UI, with corresponding colored title
+        """
+        if msg_type == MessageType.SIMPLE:
+            self.ui.messages_textedit.setTextColor(UIColor.W.col)
+            self.ui.messages_textedit.append(msg_toprint)
+        else:
+            self.ui.messages_textedit.setTextColor(msg_type.col)
+            self.ui.messages_textedit.append(msg_type.title + ':')
+            self.ui.messages_textedit.setTextColor(UIColor.W.col)
+            self.ui.messages_textedit.append(msg_toprint)
         
     def upd_data_file_onui(self, data_path: Path):
         """
@@ -157,14 +171,14 @@ class View(QMainWindow):
         xn_scatter_clust = pg.ScatterPlotItem(
             clust.get_clust_x(orig_num),
             clust.get_clust_n(orig_num),
-            brush=UIColor.B.brush,
-            pen=UIColor.B.pen
+            brush=UIColor.IND.brush,
+            pen=UIColor.IND.pen
         )
         yn_scatter_clust = pg.ScatterPlotItem(
             clust.get_clust_y(orig_num),
             clust.get_clust_n(orig_num),
-            brush=UIColor.B.brush,
-            pen=UIColor.B.pen
+            brush=UIColor.IND.brush,
+            pen=UIColor.IND.pen
         )
         xn_scatter_noise = pg.ScatterPlotItem(
             clust.get_noise_x(orig_num),
@@ -200,7 +214,7 @@ class View(QMainWindow):
             self.set_color_frame(UIColor.G)
             self.upd_selec_button_todiscard()
         else:
-            self.set_color_frame(UIColor.R)
+            self.set_color_frame(UIColor.MAG)
             self.upd_discard_button_toselec()
         
     def upd_discard_button_toselec(self):

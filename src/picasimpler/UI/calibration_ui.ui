@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>926</width>
+    <width>1212</width>
     <height>692</height>
    </rect>
   </property>
@@ -494,6 +494,45 @@ SIMPLER
 from file (.npy)</string>
     </property>
    </widget>
+   <widget class="QFrame" name="frame">
+    <property name="geometry">
+     <rect>
+      <x>920</x>
+      <y>10</y>
+      <width>271</width>
+      <height>641</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QLabel" name="messages_title_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>81</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Messages:</string>
+     </property>
+    </widget>
+    <widget class="QTextEdit" name="messages_textedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>251</width>
+       <height>591</height>
+      </rect>
+     </property>
+    </widget>
+   </widget>
    <zorder>color_frame</zorder>
    <zorder>filter_button</zorder>
    <zorder>analysis_status_label</zorder>
@@ -520,6 +559,7 @@ from file (.npy)</string>
    <zorder>calib_button</zorder>
    <zorder>guess_frame</zorder>
    <zorder>calib_fromfile_button</zorder>
+   <zorder>frame</zorder>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

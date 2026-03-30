@@ -24,13 +24,22 @@ def cust_auto(enum_cls, prog_order):
     if type(prog_order) in [auto, int]:
         return len(enum_cls.__members__) + 1
     else:
-        raise TypeError(f"First element of Enum member must be auto(), got {type(prog_order).__name__!r}")
+        raise TypeError(f"First element of Enum member must be auto() or int, got {type(prog_order).__name__!r}")
     
-def safe_float(expr: str):
+def safe_float_to0(expr: str):
     """
     This function converts strings to floats as would float do, but add the empty string to 0 case
     """
     if (expr is None) or (expr==""):
         return 0
+    else:
+        return float(expr)
+    
+def safe_float_tonone(expr: str):
+    """
+    This function converts strings to floats as would float do, but add the empty string to None case
+    """
+    if (expr is None) or (expr==""):
+        return None
     else:
         return float(expr)

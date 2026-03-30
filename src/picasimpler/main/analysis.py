@@ -11,7 +11,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from picasimpler.helpers.status import AnalysisStatus
+from picasimpler.helpers.status import AnalysisStatus, MessageType
 from picasimpler.helpers.utils import px_to_nm
 from picasimpler.config.config_var import (
     SPAT_TOL_NM,
@@ -19,10 +19,12 @@ from picasimpler.config.config_var import (
     MIN_LAST_FRAME_PERC,
     FRAME_MEDIAN_PERC_RANGE,
     MAX_ON_FRAMES_PERC,
-    MIN_PERC_LOC_INCLUST,
+    PRECLUST_GAMMA_DEF,
+    PRECLUST_EPS_DEF,
     MIN_GOOD_LOC,
     N_CLUST_EXP,
     Z_SITES_NM,
+    LAMBDA_REF_VAL_NM,
     RES_DIR
 )
 
@@ -72,7 +74,7 @@ class SIMPLER:
             all_orig_loc_list.append(pick_locs_arr_nm)
         self.locs = all_orig_loc_list
     
-    def filter_locs_inpick(self, df_pick, r_th_sq):
+    def filter_locs_inorig(self, df_pick, r_th_sq):
         """
         this function filters all localization inside a pick, keeping only events with at least 3 frames and throwing
         away the first and last frame.
@@ -106,7 +108,7 @@ class SIMPLER:
         abs_idx_to_discard = np.array(df_pick.index)[rel_idx_to_discard]
         return abs_idx_to_discard
             
-    def filter_data(self, df: pd.DataFrame, px_size_nm: int, r_th_sq: float):
+    def filter_locs(self, df: pd.DataFrame, px_size_nm: int, r_th_sq: float):
         """
         This function filters all data, pick by pick, using SIMPLER criteria
         """
@@ -117,7 +119,7 @@ class SIMPLER:
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
         for pick_idx in range(len(groupjump) - 1):
             idx_to_discard = np.concatenate(
-                (idx_to_discard, self.filter_locs_inpick(df.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]], r_th_sq)),
+                (idx_to_discard, self.filter_locs_inorig(df.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]], r_th_sq)),
                 axis=0
             )
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
@@ -179,21 +181,59 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
-    def pre_clust_denoise(self, locs: list, min_perc_loc_insite: float, min_good_loc: int):
+    def pre_clust_denoise_inorig(self, locs: list, preclust_gamma: float, preclust_eps: float, min_good_loc: int, lambda_ref_val_nm: float):
+        """
+        This function executes pre-clustering de-noising for a single origami
+        """
+        min_clust_size = int(preclust_gamma*len(locs))
+        loc_rescal = np.stack(
+            (locs[:, 0],
+            locs[:, 1],
+            lambda_ref_val_nm*np.log(locs[:, 2])), axis=1
+        )
+        hdbsc = HDBSCAN(
+            min_cluster_size=np.max((min_clust_size, 2)),
+            cluster_selection_epsilon=preclust_eps,
+            allow_single_cluster=True
+        ).fit(loc_rescal)
+        if len(locs[hdbsc.labels_!=-1]) > min_good_loc:
+            return hdbsc.labels_
+        else:
+            return
+
+    def pre_clust_denoise(self, locs: list, preclust_gamma: float, preclust_eps: float, min_good_loc: int, lambda_ref_val_nm: float):
         """
         This function applies HDBSCAN to separate major clusters (without mecessarily resolving them!) from scattered
-        noise and unwanted smaller clusters (such as double events)
+        noise and unwanted smaller clusters (such as double events).
+        It first rescales the N dimension (using a reference value for the penetration length) to make the clustering
+        problem more isotropic.
         """
         self.locs_clust = []
         self.locs_noise = []
         for orig_idx in range(len(locs)):
-            min_clust_size = np.max((1, int(min_perc_loc_insite*len(locs[orig_idx]))))
-            hdbsc = HDBSCAN(min_cluster_size=np.max((min_clust_size, 2))).fit(locs[orig_idx])
-            if len(locs[orig_idx][hdbsc.labels_!=-1]) > min_good_loc:
-                self.locs_clust.append(locs[orig_idx][hdbsc.labels_!=-1])
-                self.locs_noise.append(locs[orig_idx][hdbsc.labels_==-1])
+            labels = self.pre_clust_denoise_inorig(locs[orig_idx], preclust_gamma, preclust_eps, min_good_loc, lambda_ref_val_nm)
+            if labels is not None:
+                self.locs_clust.append(locs[orig_idx][labels!=-1])
+                self.locs_noise.append(locs[orig_idx][labels==-1])
             self.signals.tell_analysis_elem_done.emit(orig_idx)
         self.tot_orig_kept = len(self.locs_clust)
+
+    def gmm_clust_inorig(self, locs: np.ndarray, n_clust_exp: int):
+        """
+        This function use GMM to cluster data in a single origami
+        """
+        for n_clust in range(n_clust_exp, 0, -1):
+            gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
+            gmm.fit(locs)
+            last_bic = gmm.bic(locs)
+            if n_clust == n_clust_exp: # compute BIC for the expected number of clusters
+                ref_bic = last_bic
+                clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
+            # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
+            elif last_bic < ref_bic:
+                return None, None
+        return clust_means, clust_covs
+
 
     def do_clust_xyn(self, n_clust_exp: int):
         """
@@ -201,34 +241,21 @@ class Clusterization:
         """
         start = _time.time()
         tot_orig_bf_clust = len(self.locs_clust)
-        # variables needed to discard origamis not passing the clusterzation test
-        n_orig_discarded = 0
         # here we will store all data relative to the clusterization result
         kept_orig_loc_list = []
         kept_orig_noise_list = []
         clust_means_list = []
         clust_covs_list = []
         for orig_idx in range(tot_orig_bf_clust):
-            pick_kept = True
-            for n_clust in range(n_clust_exp, 0, -1):
-                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=1, max_iter=300, init_params='k-means++')
-                gmm.fit(self.locs_clust[orig_idx])
-                last_bic = gmm.bic(self.locs_clust[orig_idx])
-                if n_clust == n_clust_exp: # compute BIC for the expected number of clusters
-                    ref_bic = last_bic
-                    clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
-                # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
-                elif last_bic < ref_bic:
-                    n_orig_discarded += 1
-                    pick_kept = False
-                    break
-            if pick_kept:
+            clust_means, clust_covs = self.gmm_clust_inorig(self.locs_clust[orig_idx], n_clust_exp)
+            if clust_means is not None:
                 kept_orig_loc_list.append(self.locs_clust[orig_idx])
                 kept_orig_noise_list.append(self.locs_noise[orig_idx])
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
             self.signals.tell_analysis_elem_done.emit(orig_idx + 1)
         self.tot_orig_kept = len(kept_orig_loc_list)
+        n_orig_discarded = tot_orig_bf_clust - self.tot_orig_kept
         self.locs_clust = kept_orig_loc_list
         self.locs_noise = kept_orig_noise_list
         self.clust_means = np.asarray(clust_means_list, dtype=float)
@@ -354,10 +381,12 @@ class Params:
     spat_tol_nm: float # how far can two locs be to be considered the same event
 
     # clustering parameters
-    min_perc_loc_inclust: float
+    preclust_gamma: float
+    preclust_eps: float
     min_good_loc: int
     n_clust_exp: int
     z_sites_nm: list
+    lambda_ref_val_nm: float
     res_dir: Path
 
     # movie parameters
@@ -395,6 +424,9 @@ class AnalysisSignals(QObject):
     tell_filt_done = pyqtSignal()
     tell_clust_done = pyqtSignal(bool)
 
+    tell_refit_done = pyqtSignal()
+    tell_msg_toprint = pyqtSignal(object, str)
+
 
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
@@ -409,10 +441,12 @@ class AnalysisWorker(QObject):
             FRAME_MEDIAN_PERC_RANGE,
             MAX_ON_FRAMES_PERC,
             SPAT_TOL_NM,
-            MIN_PERC_LOC_INCLUST,
+            PRECLUST_GAMMA_DEF,
+            PRECLUST_EPS_DEF,
             MIN_GOOD_LOC,
             N_CLUST_EXP,
             Z_SITES_NM,
+            LAMBDA_REF_VAL_NM,
             RES_DIR
         )
         self.data = Data(picks_data_path, metadata_path)
@@ -420,8 +454,12 @@ class AnalysisWorker(QObject):
         self.clust: Clusterization = Clusterization(self.clust_signals)
 
     @pyqtSlot(float)
-    def upd_min_perc_loc_inclust(self, value):
-        self.params.min_perc_loc_inclust = value
+    def upd_preclust_gamma(self, value):
+        self.params.preclust_gamma = value
+        
+    @pyqtSlot(float)
+    def upd_preclust_eps(self, value):
+        self.params.preclust_eps = value
 
     def load_data(self):
         """
@@ -441,23 +479,28 @@ class AnalysisWorker(QObject):
                 hdf5_node_list = [node._v_pathname for node in store._handle.walk_nodes()]
                 if '/locs' not in hdf5_node_list:
                     _lgr.error('hdf5 file does not have expected structure')
+                    self.signals.tell_msg_toprint.emit(MessageType.ERROR, "hdf5 file does not have expected structure")
                     # FIXME: this cleans previous file is lodaded
                     self.data.df_raw = None
                     self.data.tot_picks = 0
                     self.data.is_data_file_open = False
                 _lgr.info('hdf5 file has expected structure')
+                self.signals.tell_msg_toprint.emit(MessageType.INFO, "hdf5 file has expected structure")
                 df_data = store['/locs']
                 # count total number of picks
                 tot_picks = df_data['group'].iloc[-1] + 1
                 _lgr.info(f"Total number of picks: {tot_picks}")
+                self.signals.tell_msg_toprint.emit(MessageType.INFO, f"Total number of picks: {tot_picks}")
                 self.data.df_raw = df_data
                 self.data.tot_picks = tot_picks
                 self.data.is_data_file_open = True
         except Exception as e:
             if isinstance(e, KeyError) and str(e) == "'group'":
                 _lgr.error("Error opening hdf5 file: picks were not found in file")
+                self.signals.tell_msg_toprint.emit(MessageType.ERROR, "Error opening hdf5 file: picks were not found in file")
             else:
                 _lgr.error(f"Error {type(e)} opening hdf5 file: {e}")
+                self.signals.tell_msg_toprint.emit(MessageType.ERROR, f"Error {type(e)} opening hdf5 file: {e}")
             self.data.df_raw = None
             self.data.tot_picks = 0
             self.data.is_data_file_open = False
@@ -475,12 +518,17 @@ class AnalysisWorker(QObject):
                 _lgr.info(f"Number of frames in movie: {frames}")
                 _lgr.info(f"Exposure time in ms: {exp_time_ms}")
                 _lgr.info(f"Pixel size in nm: {px_size_nm}")
+                self.signals.tell_msg_toprint.emit(MessageType.INFO, "Movie metadata readed correctly.")
+                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Number of frames in movie: {frames}")
+                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Exposure time in ms: {exp_time_ms}")
+                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Pixel size in nm: {px_size_nm}")
                 self.params.n_frames = frames
                 self.params.exp_time_ms = exp_time_ms
                 self.params.px_size_nm = px_size_nm
                 self.data.is_metadata_file_open = True
         except Exception as e:
             _lgr.error(f"Error opening yaml file because of: {e}")
+            self.signals.tell_msg_toprint.emit(MessageType.ERROR, f"Error opening yaml file because of: {e}")
             self.params.n_frames = None
             self.params.exp_time_ms = None
             self.params.px_size_nm = None
@@ -495,24 +543,25 @@ class AnalysisWorker(QObject):
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
         for pick_idx in range(self.data.tot_picks):
             pick_df = self.data.df_raw.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]]
-            first_frame_perc = np.min(pick_df['frame'])/self.params.n_frames
-            last_frame_perc = np.max(pick_df['frame'])/self.params.n_frames
-            med_frame_perc = np.median(pick_df['frame'])/self.params.n_frames
+            first_frame_perc = np.min(pick_df['frame']) / self.params.n_frames
+            last_frame_perc = np.max(pick_df['frame']) / self.params.n_frames
+            med_frame_perc = np.median(pick_df['frame']) / self.params.n_frames
             unique_frames = set(pick_df['frame'])
-            num_on_frames_perc = len(unique_frames)/self.params.n_frames
+            num_on_frames_perc = len(unique_frames) / self.params.n_frames
             # to be considered an origami, the pick has to pass all following kinetics test
             if not (
-                (first_frame_perc>self.params.max_first_frame_perc) or
-                (last_frame_perc<self.params.min_last_frame_perc) or
-                (med_frame_perc<self.params.frame_median_perc_range[0]) or
-                (med_frame_perc>self.params.frame_median_perc_range[1]) or
-                (num_on_frames_perc>self.params.max_on_frames_perc)
+                (first_frame_perc > self.params.max_first_frame_perc) or
+                (last_frame_perc < self.params.min_last_frame_perc) or
+                (med_frame_perc < self.params.frame_median_perc_range[0]) or
+                (med_frame_perc > self.params.frame_median_perc_range[1]) or
+                (num_on_frames_perc > self.params.max_on_frames_perc)
             ):
                 picks_tokeep.append(pick_idx)
                 self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
         df_orig = self.data.df_raw.loc[self.data.df_raw['group'].isin(picks_tokeep)]
         n_orig = len(picks_tokeep)
         _lgr.info(f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
+        self.signals.tell_msg_toprint.emit(MessageType.INFO, f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
         self.data.df_orig = df_orig
         self.data.tot_orig = n_orig
 
@@ -524,7 +573,7 @@ class AnalysisWorker(QObject):
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.KIN_FILT, self.data.tot_picks)
         self.filter_kin_orig()
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SIMPLER_FILT, self.data.tot_orig)
-        self.simpler.filter_data(self.data.df_orig, self.params.px_size_nm, self.params.r_th_sq)
+        self.simpler.filter_locs(self.data.df_orig, self.params.px_size_nm, self.params.r_th_sq)
         self.signals.tell_filt_done.emit()
 
     @pyqtSlot()
@@ -533,7 +582,13 @@ class AnalysisWorker(QObject):
         This function call the clusterization function
         """
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.PRE_CLUST, self.data.tot_orig)
-        self.clust.pre_clust_denoise(self.simpler.locs, self.params.min_perc_loc_inclust, self.params.min_good_loc)
+        self.clust.pre_clust_denoise(
+            self.simpler.locs,
+            self.params.preclust_gamma,
+            self.params.preclust_eps,
+            self.params.min_good_loc,
+            self.params.lambda_ref_val_nm
+        )
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
         self.clust.do_clust_xyn(self.params.n_clust_exp)
         if self.simpler.locs:
@@ -549,7 +604,38 @@ class AnalysisWorker(QObject):
         clust_covs_res_filename = self.data.picks_data_path.stem + "_covs.npy"
         np.save(Path(self.params.res_dir) / Path(clust_means_res_filename), self.clust.clust_means[self.clust.selec_orig_list,:,:])
         np.save(Path(self.params.res_dir) / Path(clust_covs_res_filename), self.clust.clust_covs[self.clust.selec_orig_list,:,:,:])
-
+        
+    @pyqtSlot(int)
+    def refit_orig(self, orig_num: int):
+        """
+        This function re-fits (both pre-clustering de-noising and GMM clustering) the currently displayed origami
+        """
+        locs_unlabel = np.concatenate((self.clust.locs_clust[orig_num], self.clust.locs_noise[orig_num]))
+        new_labels = self.clust.pre_clust_denoise_inorig(
+            locs_unlabel,
+            self.params.preclust_gamma,
+            self.params.preclust_eps,
+            self.params.min_good_loc,
+            self.params.lambda_ref_val_nm
+        )
+        if new_labels is None:
+            _lgr.warning("Re-fit failed at pre-clustering de-noising step, try changing parameters")
+            self.signals.tell_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")
+            return
+        else:
+            new_means, new_covs = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1], self.params.n_clust_exp)
+            if new_means is None:
+                _lgr.warning("Re-fit failed at GMM clustering step, try changing parameters")
+                self.signals.tell_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at GMM clustering step, try changing parameters")
+            else:
+                # if new fit passed all steps, update old results with new
+                self.clust.locs_clust[orig_num] = locs_unlabel[new_labels!=-1]
+                self.clust.locs_noise[orig_num] = locs_unlabel[new_labels==-1]
+                self.clust.clust_means[orig_num, :, :] = new_means
+                self.clust.clust_covs[orig_num, :, :, :] = new_covs
+                self.signals.tell_refit_done.emit()
+        
+    @pyqtSlot()
     def do_calib(self):
         _lgr.warning("SIMPLER calibration is not implemented yet!")
 

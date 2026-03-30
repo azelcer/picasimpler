@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum, auto
 
 import pyqtgraph as pg
-from PyQt6.QtGui import QPen, QBrush
+from PyQt6.QtGui import QPen, QBrush, QColor
 
 from picasimpler.helpers.utils import hex_to_rgba, cust_auto
 
@@ -47,6 +47,7 @@ class UIColor(Enum):
     
     rgba: tuple
     rgba_str: str
+    col: QColor
     pen: QPen
     brush: QBrush
     
@@ -55,18 +56,47 @@ class UIColor(Enum):
         obj._value_ = value
         obj.rgba = hex_to_rgba(value)
         obj.rgba_str = "rgba" + str(obj.rgba)
+        obj.col = QColor(*obj.rgba)
         obj.pen = pg.mkPen(color=value)
         obj.brush = pg.mkBrush(color=value)
         return obj
     
+    W = "#FFFFFF"
     GRAY = "#323232"
-    R = "#D71B60"
+    DR ="#B10000"
+    MAG = "#D71B60"
     G = "#05FE04"
-    B = "#4a2dbe66"
+    DG = "#348B01FF"
+    B = "#1582e9ff"
+    IND = "#4a2dbe66"
     LB = "#2dbeb766"
     V = "#821ec066"
     Y = "#ffff00"
     OG = "#ff8800"
+    
+class MessageType(Enum):
+    '''
+    Enum class to list all type of message that can be printed on UI,
+    with respective default colors
+    '''
+    
+    title: str
+    col: QColor
+    
+    def __new__(
+        cls, description: str|None, title, color: QColor|None
+    ):
+        msg_obj = object.__new__(cls)
+        msg_obj._value_ = description
+        msg_obj.title = title
+        msg_obj.col = color
+        return msg_obj
+    
+    SIMPLE = 'simple message', None, None
+    INFO = 'info message', 'Info', UIColor.B.col
+    STATUS = 'status message', 'Status', UIColor.DG.col
+    WARNING = 'warning message', 'Warning', UIColor.OG.col
+    ERROR = 'error message', 'ERROR', UIColor.DR.col
     
 if __name__=="__main__":
     for memb in AnalysisStatus.__members__.values():

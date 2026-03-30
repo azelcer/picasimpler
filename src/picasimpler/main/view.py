@@ -6,13 +6,14 @@ import pyqtgraph as pg
 
 from picasimpler.UI.calibration_ui import Ui_MainWindow
 from picasimpler.main.analysis import SIMPLER, Clusterization
-from picasimpler.helpers.status import AnalysisStatus, UIColor
+from picasimpler.helpers.status import AnalysisStatus, UIColor, MessageType
 from picasimpler.helpers.validators import NumberValidators
 
 _translate = QCoreApplication.translate
 
 class ViewSignals(QObject):
-    send_min_perc_loc_inclust_fromui = pyqtSignal(float)
+    send_preclust_gamma_fromui = pyqtSignal(float)
+    send_preclust_eps_fromui = pyqtSignal(float)
 
 class View(QMainWindow):
     """
@@ -26,6 +27,7 @@ class View(QMainWindow):
         self._create_shortcuts()
         self._setup_plot_widgets()
         self._setup_validators()
+        self.ui.messages_textedit.setReadOnly(True)
         self.set_color_frame(UIColor.GRAY)
         self.setWindowTitle(_translate("MainWindow", "SIMPLER calibration GUI"))
         
@@ -39,13 +41,16 @@ class View(QMainWindow):
         next_orig_shcut.activated.connect(self.ui.next_orig_button.click)
         disc_selec_orig_shcut = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         disc_selec_orig_shcut.activated.connect(self.ui.disc_selec_orig_button.click)
+        refit_orig_shcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        refit_orig_shcut.activated.connect(self.ui.refit_origami.click)
         
     def _setup_validators(self):
         """
         This function set validators for QLineEdits, establishing which numbers can be written
         """
         # pre-clustering de-noising parameter must be positive, finite and no scientfic notation allowed
-        self.ui.preclust_tol_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.preclust_gamma_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.preclust_eps_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         # photon numbers must be integer, positive, finite and no scientfic notation allowed
         self.ui.n1_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         self.ui.n2_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
@@ -81,6 +86,19 @@ class View(QMainWindow):
         self.ui.color_frame.setStyleSheet(
             "QFrame { background-color: "+ frame_color.rgba_str +"; }"
         )
+        
+    def upd_msg_onui(self, msg_type: MessageType, msg_toprint: str):
+        """
+        This function adds a message on the message box on the UI, with corresponding colored title
+        """
+        if msg_type == MessageType.SIMPLE:
+            self.ui.messages_textedit.setTextColor(UIColor.W.col)
+            self.ui.messages_textedit.append(msg_toprint)
+        else:
+            self.ui.messages_textedit.setTextColor(msg_type.col)
+            self.ui.messages_textedit.append(msg_type.title + ':')
+            self.ui.messages_textedit.setTextColor(UIColor.W.col)
+            self.ui.messages_textedit.append(msg_toprint)
         
     def upd_data_file_onui(self, data_path: Path):
         """
@@ -153,14 +171,14 @@ class View(QMainWindow):
         xn_scatter_clust = pg.ScatterPlotItem(
             clust.get_clust_x(orig_num),
             clust.get_clust_n(orig_num),
-            brush=UIColor.B.brush,
-            pen=UIColor.B.pen
+            brush=UIColor.IND.brush,
+            pen=UIColor.IND.pen
         )
         yn_scatter_clust = pg.ScatterPlotItem(
             clust.get_clust_y(orig_num),
             clust.get_clust_n(orig_num),
-            brush=UIColor.B.brush,
-            pen=UIColor.B.pen
+            brush=UIColor.IND.brush,
+            pen=UIColor.IND.pen
         )
         xn_scatter_noise = pg.ScatterPlotItem(
             clust.get_noise_x(orig_num),
@@ -196,7 +214,7 @@ class View(QMainWindow):
             self.set_color_frame(UIColor.G)
             self.upd_selec_button_todiscard()
         else:
-            self.set_color_frame(UIColor.R)
+            self.set_color_frame(UIColor.MAG)
             self.upd_discard_button_toselec()
         
     def upd_discard_button_toselec(self):
@@ -220,5 +238,8 @@ class View(QMainWindow):
             str(sum(selec_orig_list)) + " / " + str(len(selec_orig_list))
         )
 
-    def upd_preclust_tol(self, tol):
-        self.ui.preclust_tol_lineedit.setText(str(tol))
+    def upd_preclust_gamma_onui(self, tol):
+        self.ui.preclust_gamma_lineedit.setText(str(tol))
+        
+    def upd_preclust_eps_onui(self, tol):
+        self.ui.preclust_eps_lineedit.setText(str(tol))

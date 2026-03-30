@@ -10,7 +10,7 @@ from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor
 from picasimpler.helpers.utils import safe_float
-from picasimpler.config.config_var import MIN_PERC_LOC_INCLUST, MAX_MIN_PERC_LOC_INCLUST
+from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
@@ -20,7 +20,7 @@ _lgr.setLevel(_lgn.INFO)
 class PresenterSignals(QObject):
     request_start_filtering = pyqtSignal()
     request_start_clustering = pyqtSignal()
-    send_min_perc_loc_inclust_toanalysis = pyqtSignal(float)
+    send_preclust_gamma_toanalysis = pyqtSignal(float)
 
 class Presenter(QObject):
     """
@@ -38,7 +38,7 @@ class Presenter(QObject):
         self.tot_elem_curr_analysis_step = 0
         self.curr_displ_orig_num = None
         self.analysis_status = AnalysisStatus.PRE_ANALYSIS
-        self.min_perc_loc_inclust = MIN_PERC_LOC_INCLUST
+        self.preclust_gamma = PRECLUST_GAMMA_DEF
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -67,14 +67,14 @@ class Presenter(QObject):
         self._view.upd_analysis_status_onui(status)
         
     @property
-    def min_perc_loc_inclust(self: Presenter):
-        return self._min_perc_loc_inclust
+    def preclust_gamma(self: Presenter):
+        return self._preclust_gamma
     
-    @min_perc_loc_inclust.setter
-    def min_perc_loc_inclust(self, tol: float):
-        self._min_perc_loc_inclust = min((tol, MAX_MIN_PERC_LOC_INCLUST))
-        self.signals.send_min_perc_loc_inclust_toanalysis.emit(self._min_perc_loc_inclust)
-        self._view.upd_preclust_tol(self._min_perc_loc_inclust)
+    @preclust_gamma.setter
+    def preclust_gamma(self, tol: float):
+        self._preclust_gamma = min((tol, MAX_PRECLUST_GAMMA))
+        self.signals.send_preclust_gamma_toanalysis.emit(self._preclust_gamma)
+        self._view.upd_preclust_gamma_onui(self._preclust_gamma)
         
     def show_ui(self):
         self._view.show()
@@ -95,12 +95,12 @@ class Presenter(QObject):
         self._view.ui.prev_orig_button.clicked.connect(self._order_plot_prev_orig)
         self._view.ui.disc_selec_orig_button.clicked.connect(self._disc_selec_orig)
         # parameters inputs from UI
-        self._view.ui.preclust_tol_lineedit.manual_editing_finished.connect(
-            lambda: self._view.signals.send_min_perc_loc_inclust_fromui.emit(
-                safe_float(self._view.ui.preclust_tol_lineedit.text())
+        self._view.ui.preclust_gamma_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_preclust_gamma_fromui.emit(
+                safe_float(self._view.ui.preclust_gamma_lineedit.text())
             )
         )
-        self._view.signals.send_min_perc_loc_inclust_fromui.connect(self.upd_min_perc_loc_inclust)
+        self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
         
     def _make_analysis_connect(self):
         """
@@ -109,7 +109,7 @@ class Presenter(QObject):
         # connect signals from presenter to analysis worker
         self.signals.request_start_filtering.connect(self._analysis_worker.do_filt)
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
-        self.signals.send_min_perc_loc_inclust_toanalysis.connect(self._analysis_worker.upd_min_perc_loc_inclust)
+        self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
@@ -299,5 +299,5 @@ class Presenter(QObject):
         self._analysis_worker.do_calib()
         
     @pyqtSlot(float)
-    def upd_min_perc_loc_inclust(self, value):
-        self.min_perc_loc_inclust = value
+    def upd_preclust_gamma(self, value):
+        self.preclust_gamma = value

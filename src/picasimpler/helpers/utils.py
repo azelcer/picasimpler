@@ -21,10 +21,10 @@ def cust_auto(enum_cls, prog_order):
     """
     Custom auto function for automatic ordering of Enum class members, in case they are defined as tuples
     """
-    if type(prog_order) is auto:
+    if (type(prog_order) is auto) or (type(prog_order) is int):
         return len(enum_cls.__members__) + 1
     else:
-        raise TypeError(f"First element of Enum member must be auto(), got {type(prog_order).__name__!r}")
+        raise TypeError(f"First element of Enum member must be auto() or int, got {type(prog_order).__name__!r}")
     
 def safe_float(expr: str):
     """

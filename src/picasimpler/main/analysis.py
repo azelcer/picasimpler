@@ -19,10 +19,11 @@ from picasimpler.config.config_var import (
     MIN_LAST_FRAME_PERC,
     FRAME_MEDIAN_PERC_RANGE,
     MAX_ON_FRAMES_PERC,
-    MIN_PERC_LOC_INCLUST,
+    PRECLUST_GAMMA_DEF,
     MIN_GOOD_LOC,
     N_CLUST_EXP,
     Z_SITES_NM,
+    LAMBDA_REF_VAL_NM,
     RES_DIR
 )
 
@@ -179,16 +180,26 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
-    def pre_clust_denoise(self, locs: list, min_perc_loc_insite: float, min_good_loc: int):
+    def pre_clust_denoise(self, locs: list, preclust_gamma: float, min_good_loc: int, lambda_ref_val_nm: float):
         """
         This function applies HDBSCAN to separate major clusters (without mecessarily resolving them!) from scattered
-        noise and unwanted smaller clusters (such as double events)
+        noise and unwanted smaller clusters (such as double events).
+        It first rescales the N dimension (using a reference value for the penetration length) to make the clustering
+        problem more isotropic.
         """
         self.locs_clust = []
         self.locs_noise = []
         for orig_idx in range(len(locs)):
-            min_clust_size = np.max((1, int(min_perc_loc_insite*len(locs[orig_idx]))))
-            hdbsc = HDBSCAN(min_cluster_size=np.max((min_clust_size, 2))).fit(locs[orig_idx])
+            min_clust_size = np.max((1, int(preclust_gamma*len(locs[orig_idx]))))
+            loc_rescal = np.stack(
+                (locs[orig_idx][:, 0],
+                locs[orig_idx][:, 1],
+                lambda_ref_val_nm*np.log(locs[orig_idx][:, 2])), axis=1
+            )
+            hdbsc = HDBSCAN(
+                min_cluster_size=np.max((min_clust_size, 2)),
+                allow_single_cluster=True
+            ).fit(loc_rescal)
             if len(locs[orig_idx][hdbsc.labels_!=-1]) > min_good_loc:
                 self.locs_clust.append(locs[orig_idx][hdbsc.labels_!=-1])
                 self.locs_noise.append(locs[orig_idx][hdbsc.labels_==-1])
@@ -353,10 +364,11 @@ class Params:
     spat_tol_nm: float # how far can two locs be to be considered the same event
     
     # clustering parameters
-    min_perc_loc_inclust: float
+    preclust_gamma: float
     min_good_loc: int
     n_clust_exp: int
     z_sites_nm: list
+    lambda_ref_val_nm: float
     res_dir: Path
     
     # movie parameters
@@ -405,10 +417,11 @@ class AnalysisWorker(QObject):
             FRAME_MEDIAN_PERC_RANGE,
             MAX_ON_FRAMES_PERC,
             SPAT_TOL_NM,
-            MIN_PERC_LOC_INCLUST,
+            PRECLUST_GAMMA_DEF,
             MIN_GOOD_LOC,
             N_CLUST_EXP,
             Z_SITES_NM,
+            LAMBDA_REF_VAL_NM,
             RES_DIR
         )
         self.data = Data(picks_data_path, metadata_path)
@@ -416,8 +429,8 @@ class AnalysisWorker(QObject):
         self.clust: Clusterization = Clusterization(self.clust_signals)
 
     @pyqtSlot(float)
-    def upd_min_perc_loc_inclust(self, value):
-        self.params.min_perc_loc_inclust = value
+    def upd_preclust_gamma(self, value):
+        self.params.preclust_gamma = value
 
     def load_data(self):
         """
@@ -529,7 +542,7 @@ class AnalysisWorker(QObject):
         This function call the clusterization function
         """
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.PRE_CLUST, self.data.tot_orig)
-        self.clust.pre_clust_denoise(self.simpler.locs, self.params.min_perc_loc_inclust, self.params.min_good_loc)
+        self.clust.pre_clust_denoise(self.simpler.locs, self.params.preclust_gamma, self.params.min_good_loc, self.params.lambda_ref_val_nm)
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
         self.clust.do_clust_xyn(self.params.n_clust_exp)
         if self.simpler.locs:

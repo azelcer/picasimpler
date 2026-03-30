@@ -7,8 +7,7 @@
 
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from picasimpler.UI.custom_widgets import CustomQLineEdit
-from pyqtgraph import PlotWidget
+
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -97,34 +96,43 @@ class Ui_MainWindow(object):
         self.calib_button.setGeometry(QtCore.QRect(500, 140, 111, 61))
         self.calib_button.setObjectName("calib_button")
         self.guess_frame = QtWidgets.QFrame(parent=self.centralwidget)
-        self.guess_frame.setGeometry(QtCore.QRect(740, 280, 171, 261))
+        self.guess_frame.setGeometry(QtCore.QRect(740, 280, 171, 301))
         self.guess_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.guess_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.guess_frame.setObjectName("guess_frame")
         self.manual_guess_checkbox = QtWidgets.QCheckBox(parent=self.guess_frame)
-        self.manual_guess_checkbox.setGeometry(QtCore.QRect(10, 100, 151, 41))
+        self.manual_guess_checkbox.setGeometry(QtCore.QRect(10, 150, 151, 41))
         self.manual_guess_checkbox.setObjectName("manual_guess_checkbox")
-        self.preclust_tol_title_label = QtWidgets.QLabel(parent=self.guess_frame)
-        self.preclust_tol_title_label.setGeometry(QtCore.QRect(10, 10, 151, 41))
-        self.preclust_tol_title_label.setObjectName("preclust_tol_title_label")
+        self.preclust_param_title_label = QtWidgets.QLabel(parent=self.guess_frame)
+        self.preclust_param_title_label.setGeometry(QtCore.QRect(10, 10, 151, 41))
+        self.preclust_param_title_label.setObjectName("preclust_param_title_label")
         self.guess_title_label = QtWidgets.QLabel(parent=self.guess_frame)
-        self.guess_title_label.setGeometry(QtCore.QRect(10, 150, 131, 21))
+        self.guess_title_label.setGeometry(QtCore.QRect(10, 190, 131, 21))
         self.guess_title_label.setObjectName("guess_title_label")
-        self.n1_guess_lineedit = QtWidgets.QLineEdit(parent=self.guess_frame)
-        self.n1_guess_lineedit.setGeometry(QtCore.QRect(10, 180, 71, 31))
+        self.n1_guess_lineedit = CustomQLineEdit(parent=self.guess_frame)
+        self.n1_guess_lineedit.setGeometry(QtCore.QRect(10, 220, 71, 31))
         self.n1_guess_lineedit.setObjectName("n1_guess_lineedit")
-        self.n2_guess_lineedit = QtWidgets.QLineEdit(parent=self.guess_frame)
-        self.n2_guess_lineedit.setGeometry(QtCore.QRect(90, 180, 71, 31))
+        self.n2_guess_lineedit = CustomQLineEdit(parent=self.guess_frame)
+        self.n2_guess_lineedit.setGeometry(QtCore.QRect(90, 220, 71, 31))
         self.n2_guess_lineedit.setObjectName("n2_guess_lineedit")
-        self.n3_guess_lineedit = QtWidgets.QLineEdit(parent=self.guess_frame)
-        self.n3_guess_lineedit.setGeometry(QtCore.QRect(10, 220, 71, 31))
+        self.n3_guess_lineedit = CustomQLineEdit(parent=self.guess_frame)
+        self.n3_guess_lineedit.setGeometry(QtCore.QRect(10, 260, 71, 31))
         self.n3_guess_lineedit.setObjectName("n3_guess_lineedit")
-        self.n4_guess_lineedit = QtWidgets.QLineEdit(parent=self.guess_frame)
-        self.n4_guess_lineedit.setGeometry(QtCore.QRect(90, 220, 71, 31))
+        self.n4_guess_lineedit = CustomQLineEdit(parent=self.guess_frame)
+        self.n4_guess_lineedit.setGeometry(QtCore.QRect(90, 260, 71, 31))
         self.n4_guess_lineedit.setObjectName("n4_guess_lineedit")
-        self.preclust_tol_lineedit = CustomQLineEdit(parent=self.guess_frame)
-        self.preclust_tol_lineedit.setGeometry(QtCore.QRect(10, 60, 71, 31))
-        self.preclust_tol_lineedit.setObjectName("preclust_tol_lineedit")
+        self.preclust_gamma_lineedit = CustomQLineEdit(parent=self.guess_frame)
+        self.preclust_gamma_lineedit.setGeometry(QtCore.QRect(10, 80, 71, 31))
+        self.preclust_gamma_lineedit.setObjectName("preclust_preclust_gamma_lineedit")
+        self.preclust_gamma_title_label = QtWidgets.QLabel(parent=self.guess_frame)
+        self.preclust_gamma_title_label.setGeometry(QtCore.QRect(10, 60, 47, 13))
+        self.preclust_gamma_title_label.setObjectName("preclust_gamma_title_label")
+        self.preclust_eps_title_label = QtWidgets.QLabel(parent=self.guess_frame)
+        self.preclust_eps_title_label.setGeometry(QtCore.QRect(90, 60, 47, 13))
+        self.preclust_eps_title_label.setObjectName("preclust_eps_title_label")
+        self.preclust_eps_lineedit = CustomQLineEdit(parent=self.guess_frame)
+        self.preclust_eps_lineedit.setGeometry(QtCore.QRect(90, 80, 71, 31))
+        self.preclust_eps_lineedit.setObjectName("preclust_eps_lineedit")
         self.color_frame.raise_()
         self.filter_button.raise_()
         self.analysis_status_label.raise_()
@@ -199,7 +207,10 @@ class Ui_MainWindow(object):
 "SIMPLER"))
         self.manual_guess_checkbox.setText(_translate("MainWindow", "Use manual guesses\n"
 "for photon numbers"))
-        self.preclust_tol_title_label.setText(_translate("MainWindow", "Pre-clustering de-noising\n"
-"parameter"))
+        self.preclust_param_title_label.setText(_translate("MainWindow", "Pre-clustering de-noising\n"
+"parameters"))
         self.guess_title_label.setText(_translate("MainWindow", "Photon number guesses:"))
-
+        self.preclust_gamma_title_label.setText(_translate("MainWindow", "γ"))
+        self.preclust_eps_title_label.setText(_translate("MainWindow", "ε"))
+from picasimpler.UI.custom_widgets import CustomQLineEdit
+from pyqtgraph import PlotWidget

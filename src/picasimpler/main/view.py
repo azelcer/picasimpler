@@ -12,7 +12,7 @@ from picasimpler.helpers.validators import NumberValidators
 _translate = QCoreApplication.translate
 
 class ViewSignals(QObject):
-    send_min_perc_loc_inclust_fromui = pyqtSignal(float)
+    send_preclust_gamma_fromui = pyqtSignal(float)
 
 class View(QMainWindow):
     """
@@ -45,7 +45,8 @@ class View(QMainWindow):
         This function set validators for QLineEdits, establishing which numbers can be written
         """
         # pre-clustering de-noising parameter must be positive, finite and no scientfic notation allowed
-        self.ui.preclust_tol_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.preclust_gamma_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.preclust_eps_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         # photon numbers must be integer, positive, finite and no scientfic notation allowed
         self.ui.n1_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         self.ui.n2_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
@@ -220,5 +221,5 @@ class View(QMainWindow):
             str(sum(selec_orig_list)) + " / " + str(len(selec_orig_list))
         )
 
-    def upd_preclust_tol(self, tol):
-        self.ui.preclust_tol_lineedit.setText(str(tol))
+    def upd_preclust_gamma_onui(self, tol):
+        self.ui.preclust_gamma_lineedit.setText(str(tol))

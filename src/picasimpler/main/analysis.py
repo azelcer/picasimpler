@@ -320,10 +320,8 @@ class Clusterization:
         z_data = np.asarray(z_data)
         N_data = np.asarray(N_data)
 
-        print(z_data.shape)
         flat_z = z_data[:, 1:].ravel()
         # Normalize datal
-        print(N_data.shape)
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
         z_0 = np.hstack(np.repeat(z_data[:, 0], 3))
 

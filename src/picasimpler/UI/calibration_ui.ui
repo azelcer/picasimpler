@@ -68,7 +68,7 @@ dataset</string>
     <property name="geometry">
      <rect>
       <x>740</x>
-      <y>140</y>
+      <y>520</y>
       <width>81</width>
       <height>61</height>
      </rect>
@@ -83,7 +83,7 @@ origami
     <property name="geometry">
      <rect>
       <x>830</x>
-      <y>140</y>
+      <y>520</y>
       <width>81</width>
       <height>61</height>
      </rect>
@@ -108,7 +108,7 @@ origami
     <property name="geometry">
      <rect>
       <x>740</x>
-      <y>210</y>
+      <y>590</y>
       <width>81</width>
       <height>61</height>
      </rect>
@@ -297,7 +297,7 @@ sites</string>
     <property name="geometry">
      <rect>
       <x>830</x>
-      <y>210</y>
+      <y>590</y>
       <width>81</width>
       <height>61</height>
      </rect>
@@ -305,7 +305,7 @@ sites</string>
     <property name="text">
      <string>Re-fit
 origami
-(R)</string>
+(Ctrl+R)</string>
     </property>
    </widget>
    <widget class="QPushButton" name="save_clust_button">
@@ -340,9 +340,9 @@ SIMPLER</string>
     <property name="geometry">
      <rect>
       <x>740</x>
-      <y>280</y>
+      <y>200</y>
       <width>171</width>
-      <height>301</height>
+      <height>311</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -432,7 +432,7 @@ parameters</string>
       </rect>
      </property>
     </widget>
-    <widget class="CustomQLineEdit" name="preclust_preclust_gamma_lineedit">
+    <widget class="CustomQLineEdit" name="preclust_gamma_lineedit">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -479,6 +479,21 @@ parameters</string>
      </property>
     </widget>
    </widget>
+   <widget class="QPushButton" name="calib_fromfile_button">
+    <property name="geometry">
+     <rect>
+      <x>620</x>
+      <y>140</y>
+      <width>111</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Calibrate
+SIMPLER
+from file (.npy)</string>
+    </property>
+   </widget>
    <zorder>color_frame</zorder>
    <zorder>filter_button</zorder>
    <zorder>analysis_status_label</zorder>
@@ -504,6 +519,7 @@ parameters</string>
    <zorder>save_clust_button</zorder>
    <zorder>calib_button</zorder>
    <zorder>guess_frame</zorder>
+   <zorder>calib_fromfile_button</zorder>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

@@ -74,7 +74,7 @@ class SIMPLER:
             all_orig_loc_list.append(pick_locs_arr_nm)
         self.locs = all_orig_loc_list
     
-    def filter_locs_inpick(self, df_pick, r_th_sq):
+    def filter_locs_inorig(self, df_pick, r_th_sq):
         """
         this function filters all localization inside a pick, keeping only events with at least 3 frames and throwing
         away the first and last frame.
@@ -108,7 +108,7 @@ class SIMPLER:
         abs_idx_to_discard = np.array(df_pick.index)[rel_idx_to_discard]
         return abs_idx_to_discard
             
-    def filter_data(self, df: pd.DataFrame, px_size_nm: int, r_th_sq: float):
+    def filter_locs(self, df: pd.DataFrame, px_size_nm: int, r_th_sq: float):
         """
         This function filters all data, pick by pick, using SIMPLER criteria
         """
@@ -119,7 +119,7 @@ class SIMPLER:
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
         for pick_idx in range(len(groupjump) - 1):
             idx_to_discard = np.concatenate(
-                (idx_to_discard, self.filter_locs_inpick(df.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]], r_th_sq)),
+                (idx_to_discard, self.filter_locs_inorig(df.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]], r_th_sq)),
                 axis=0
             )
             self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
@@ -181,6 +181,26 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
+    def pre_clust_denoise_inorig(self, locs: list, preclust_gamma: float, preclust_eps: float, min_good_loc: int, lambda_ref_val_nm: float):
+        """
+        This function executes pre-clustering de-noising for a single origami
+        """
+        min_clust_size = int(preclust_gamma*len(locs))
+        loc_rescal = np.stack(
+            (locs[:, 0],
+            locs[:, 1],
+            lambda_ref_val_nm*np.log(locs[:, 2])), axis=1
+        )
+        hdbsc = HDBSCAN(
+            min_cluster_size=np.max((min_clust_size, 2)),
+            cluster_selection_epsilon=preclust_eps,
+            allow_single_cluster=True
+        ).fit(loc_rescal)
+        if len(locs[hdbsc.labels_!=-1]) > min_good_loc:
+            return hdbsc.labels_
+        else:
+            return
+
     def pre_clust_denoise(self, locs: list, preclust_gamma: float, preclust_eps: float, min_good_loc: int, lambda_ref_val_nm: float):
         """
         This function applies HDBSCAN to separate major clusters (without mecessarily resolving them!) from scattered
@@ -191,22 +211,29 @@ class Clusterization:
         self.locs_clust = []
         self.locs_noise = []
         for orig_idx in range(len(locs)):
-            min_clust_size = int(preclust_gamma*len(locs[orig_idx]))
-            loc_rescal = np.stack(
-                (locs[orig_idx][:, 0],
-                locs[orig_idx][:, 1],
-                lambda_ref_val_nm*np.log(locs[orig_idx][:, 2])), axis=1
-            )
-            hdbsc = HDBSCAN(
-                min_cluster_size=np.max((min_clust_size, 2)),
-                cluster_selection_epsilon=preclust_eps,
-                allow_single_cluster=True
-            ).fit(loc_rescal)
-            if len(locs[orig_idx][hdbsc.labels_!=-1]) > min_good_loc:
-                self.locs_clust.append(locs[orig_idx][hdbsc.labels_!=-1])
-                self.locs_noise.append(locs[orig_idx][hdbsc.labels_==-1])
+            labels = self.pre_clust_denoise_inorig(locs[orig_idx], preclust_gamma, preclust_eps, min_good_loc, lambda_ref_val_nm)
+            if labels is not None:
+                self.locs_clust.append(locs[orig_idx][labels!=-1])
+                self.locs_noise.append(locs[orig_idx][labels==-1])
             self.signals.tell_analysis_elem_done.emit(orig_idx)
         self.tot_orig_kept = len(self.locs_clust)
+
+    def gmm_clust_inorig(self, locs: np.ndarray, n_clust_exp: int):
+        """
+        This function use GMM to cluster data in a single origami
+        """
+        for n_clust in range(n_clust_exp, 0, -1):
+            gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
+            gmm.fit(locs)
+            last_bic = gmm.bic(locs)
+            if n_clust == n_clust_exp: # compute BIC for the expected number of clusters
+                ref_bic = last_bic
+                clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
+            # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
+            elif last_bic < ref_bic:
+                return None, None
+        return clust_means, clust_covs
+
 
     def do_clust_xyn(self, n_clust_exp: int):
         """
@@ -214,34 +241,21 @@ class Clusterization:
         """
         start = _time.time()
         tot_orig_bf_clust = len(self.locs_clust)
-        # variables needed to discard origamis not passing the clusterzation test
-        n_orig_discarded = 0
         # here we will store all data relative to the clusterization result
         kept_orig_loc_list = []
         kept_orig_noise_list = []
         clust_means_list = []
         clust_covs_list = []
         for orig_idx in range(tot_orig_bf_clust):
-            pick_kept = True
-            for n_clust in range(n_clust_exp, 0, -1):
-                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=1, max_iter=300, init_params='k-means++')
-                gmm.fit(self.locs_clust[orig_idx])
-                last_bic = gmm.bic(self.locs_clust[orig_idx])
-                if n_clust == n_clust_exp: # compute BIC for the expected number of clusters
-                    ref_bic = last_bic
-                    clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
-                # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
-                elif last_bic < ref_bic:
-                    n_orig_discarded += 1
-                    pick_kept = False
-                    break
-            if pick_kept:
+            clust_means, clust_covs = self.gmm_clust_inorig(self.locs_clust[orig_idx], n_clust_exp)
+            if clust_means is not None:
                 kept_orig_loc_list.append(self.locs_clust[orig_idx])
                 kept_orig_noise_list.append(self.locs_noise[orig_idx])
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
             self.signals.tell_analysis_elem_done.emit(orig_idx + 1)
         self.tot_orig_kept = len(kept_orig_loc_list)
+        n_orig_discarded = tot_orig_bf_clust - self.tot_orig_kept
         self.locs_clust = kept_orig_loc_list
         self.locs_noise = kept_orig_noise_list
         self.clust_means = np.asarray(clust_means_list, dtype=float)
@@ -406,6 +420,7 @@ class AnalysisSignals(QObject):
     tell_filtering_done = pyqtSignal()
     tell_filt_done = pyqtSignal()
     tell_clust_done = pyqtSignal(bool)
+    tell_refit_done = pyqtSignal()
     
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
@@ -541,7 +556,7 @@ class AnalysisWorker(QObject):
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.KIN_FILT, self.data.tot_picks)
         self.filter_kin_orig()
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SIMPLER_FILT, self.data.tot_orig)
-        self.simpler.filter_data(self.data.df_orig, self.params.px_size_nm, self.params.r_th_sq)
+        self.simpler.filter_locs(self.data.df_orig, self.params.px_size_nm, self.params.r_th_sq)
         self.signals.tell_filt_done.emit()
         
     @pyqtSlot()
@@ -573,6 +588,35 @@ class AnalysisWorker(QObject):
         np.save(Path(self.params.res_dir) / Path(clust_means_res_filename), self.clust.clust_means[self.clust.selec_orig_list,:,:])
         np.save(Path(self.params.res_dir) / Path(clust_covs_res_filename), self.clust.clust_covs[self.clust.selec_orig_list,:,:,:])
         
+    @pyqtSlot(int)
+    def refit_orig(self, orig_num: int):
+        """
+        This function re-fits (both pre-clustering de-noising and GMM clustering) the currently displayed origami
+        """
+        locs_unlabel = np.concatenate((self.clust.locs_clust[orig_num], self.clust.locs_noise[orig_num]))
+        new_labels = self.clust.pre_clust_denoise_inorig(
+            locs_unlabel,
+            self.params.preclust_gamma,
+            self.params.preclust_eps,
+            self.params.min_good_loc,
+            self.params.lambda_ref_val_nm
+        )
+        if new_labels is None:
+            _lgr.warning("Re-fit failed at pre-clustering de-noising step, try changing parameters")
+            return
+        else:
+            new_means, new_covs = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1], self.params.n_clust_exp)
+            if new_means is None:
+                _lgr.warning("Re-fit failed at GMM clustering step, try changing parameters")
+            else:
+                # if new fit passed all steps, update old results with new
+                self.clust.locs_clust[orig_num] = locs_unlabel[new_labels!=-1]
+                self.clust.locs_noise[orig_num] = locs_unlabel[new_labels==-1]
+                self.clust.clust_means[orig_num, :, :] = new_means
+                self.clust.clust_covs[orig_num, :, :, :] = new_covs
+                self.signals.tell_refit_done.emit()
+        
+    @pyqtSlot()
     def do_calib(self):
         _lgr.warning("SIMPLER calibration is not implemented yet!")
 

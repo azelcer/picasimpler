@@ -40,6 +40,8 @@ class View(QMainWindow):
         next_orig_shcut.activated.connect(self.ui.next_orig_button.click)
         disc_selec_orig_shcut = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         disc_selec_orig_shcut.activated.connect(self.ui.disc_selec_orig_button.click)
+        refit_orig_shcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        refit_orig_shcut.activated.connect(self.ui.refit_origami.click)
         
     def _setup_validators(self):
         """

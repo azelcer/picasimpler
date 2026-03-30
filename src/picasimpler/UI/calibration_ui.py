@@ -30,16 +30,16 @@ class Ui_MainWindow(object):
         self.analysis_counter_label.setText("")
         self.analysis_counter_label.setObjectName("analysis_counter_label")
         self.prev_orig_button = QtWidgets.QPushButton(parent=self.centralwidget)
-        self.prev_orig_button.setGeometry(QtCore.QRect(740, 140, 81, 61))
+        self.prev_orig_button.setGeometry(QtCore.QRect(740, 520, 81, 61))
         self.prev_orig_button.setObjectName("prev_orig_button")
         self.next_orig_button = QtWidgets.QPushButton(parent=self.centralwidget)
-        self.next_orig_button.setGeometry(QtCore.QRect(830, 140, 81, 61))
+        self.next_orig_button.setGeometry(QtCore.QRect(830, 520, 81, 61))
         self.next_orig_button.setObjectName("next_orig_button")
         self.xn_widget = PlotWidget(parent=self.centralwidget)
         self.xn_widget.setGeometry(QtCore.QRect(40, 300, 331, 331))
         self.xn_widget.setObjectName("xn_widget")
         self.disc_selec_orig_button = QtWidgets.QPushButton(parent=self.centralwidget)
-        self.disc_selec_orig_button.setGeometry(QtCore.QRect(740, 210, 81, 61))
+        self.disc_selec_orig_button.setGeometry(QtCore.QRect(740, 590, 81, 61))
         self.disc_selec_orig_button.setObjectName("disc_selec_orig_button")
         self.current_orig_label = QtWidgets.QLabel(parent=self.centralwidget)
         self.current_orig_label.setGeometry(QtCore.QRect(500, 240, 111, 31))
@@ -87,7 +87,7 @@ class Ui_MainWindow(object):
         self.color_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.color_frame.setObjectName("color_frame")
         self.refit_origami = QtWidgets.QPushButton(parent=self.centralwidget)
-        self.refit_origami.setGeometry(QtCore.QRect(830, 210, 81, 61))
+        self.refit_origami.setGeometry(QtCore.QRect(830, 590, 81, 61))
         self.refit_origami.setObjectName("refit_origami")
         self.save_clust_button = QtWidgets.QPushButton(parent=self.centralwidget)
         self.save_clust_button.setGeometry(QtCore.QRect(380, 140, 111, 61))
@@ -96,7 +96,7 @@ class Ui_MainWindow(object):
         self.calib_button.setGeometry(QtCore.QRect(500, 140, 111, 61))
         self.calib_button.setObjectName("calib_button")
         self.guess_frame = QtWidgets.QFrame(parent=self.centralwidget)
-        self.guess_frame.setGeometry(QtCore.QRect(740, 280, 171, 301))
+        self.guess_frame.setGeometry(QtCore.QRect(740, 200, 171, 311))
         self.guess_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.guess_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.guess_frame.setObjectName("guess_frame")
@@ -123,7 +123,7 @@ class Ui_MainWindow(object):
         self.n4_guess_lineedit.setObjectName("n4_guess_lineedit")
         self.preclust_gamma_lineedit = CustomQLineEdit(parent=self.guess_frame)
         self.preclust_gamma_lineedit.setGeometry(QtCore.QRect(10, 80, 71, 31))
-        self.preclust_gamma_lineedit.setObjectName("preclust_preclust_gamma_lineedit")
+        self.preclust_gamma_lineedit.setObjectName("preclust_gamma_lineedit")
         self.preclust_gamma_title_label = QtWidgets.QLabel(parent=self.guess_frame)
         self.preclust_gamma_title_label.setGeometry(QtCore.QRect(10, 60, 47, 13))
         self.preclust_gamma_title_label.setObjectName("preclust_gamma_title_label")
@@ -133,6 +133,9 @@ class Ui_MainWindow(object):
         self.preclust_eps_lineedit = CustomQLineEdit(parent=self.guess_frame)
         self.preclust_eps_lineedit.setGeometry(QtCore.QRect(90, 80, 71, 31))
         self.preclust_eps_lineedit.setObjectName("preclust_eps_lineedit")
+        self.calib_fromfile_button = QtWidgets.QPushButton(parent=self.centralwidget)
+        self.calib_fromfile_button.setGeometry(QtCore.QRect(620, 140, 111, 61))
+        self.calib_fromfile_button.setObjectName("calib_fromfile_button")
         self.color_frame.raise_()
         self.filter_button.raise_()
         self.analysis_status_label.raise_()
@@ -158,6 +161,7 @@ class Ui_MainWindow(object):
         self.save_clust_button.raise_()
         self.calib_button.raise_()
         self.guess_frame.raise_()
+        self.calib_fromfile_button.raise_()
         MainWindow.setCentralWidget(self.centralwidget)
         self.statusbar = QtWidgets.QStatusBar(parent=MainWindow)
         self.statusbar.setObjectName("statusbar")
@@ -200,7 +204,7 @@ class Ui_MainWindow(object):
 "sites"))
         self.refit_origami.setText(_translate("MainWindow", "Re-fit\n"
 "origami\n"
-"(R)"))
+"(Ctrl+R)"))
         self.save_clust_button.setText(_translate("MainWindow", "Save cluster\n"
 "results (.npy)"))
         self.calib_button.setText(_translate("MainWindow", "Calibrate\n"
@@ -212,5 +216,8 @@ class Ui_MainWindow(object):
         self.guess_title_label.setText(_translate("MainWindow", "Photon number guesses:"))
         self.preclust_gamma_title_label.setText(_translate("MainWindow", "γ"))
         self.preclust_eps_title_label.setText(_translate("MainWindow", "ε"))
+        self.calib_fromfile_button.setText(_translate("MainWindow", "Calibrate\n"
+"SIMPLER\n"
+"from file (.npy)"))
 from picasimpler.UI.custom_widgets import CustomQLineEdit
 from pyqtgraph import PlotWidget

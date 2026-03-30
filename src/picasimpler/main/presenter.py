@@ -9,7 +9,7 @@ from functools import wraps
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor
-from picasimpler.helpers.utils import safe_float
+from picasimpler.helpers.utils import safe_float_to0
 from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA, PRECLUST_EPS_DEF
 
 _lgn.basicConfig()
@@ -20,6 +20,8 @@ _lgr.setLevel(_lgn.INFO)
 class PresenterSignals(QObject):
     request_start_filtering = pyqtSignal()
     request_start_clustering = pyqtSignal()
+    request_calibration = pyqtSignal()
+    request_refit_origami = pyqtSignal(int)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
 
@@ -106,15 +108,16 @@ class Presenter(QObject):
         self._view.ui.next_orig_button.clicked.connect(self._order_plot_next_orig)
         self._view.ui.prev_orig_button.clicked.connect(self._order_plot_prev_orig)
         self._view.ui.disc_selec_orig_button.clicked.connect(self._disc_selec_orig)
+        self._view.ui.refit_origami.clicked.connect(self._order_refit_orig)
         # parameters inputs from UI
         self._view.ui.preclust_gamma_lineedit.manual_editing_finished.connect(
             lambda: self._view.signals.send_preclust_gamma_fromui.emit(
-                safe_float(self._view.ui.preclust_gamma_lineedit.text())
+                safe_float_to0(self._view.ui.preclust_gamma_lineedit.text())
             )
         )
         self._view.ui.preclust_eps_lineedit.manual_editing_finished.connect(
             lambda: self._view.signals.send_preclust_eps_fromui.emit(
-                safe_float(self._view.ui.preclust_eps_lineedit.text())
+                safe_float_to0(self._view.ui.preclust_eps_lineedit.text())
             )
         )
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
@@ -127,15 +130,19 @@ class Presenter(QObject):
         # connect signals from presenter to analysis worker
         self.signals.request_start_filtering.connect(self._analysis_worker.do_filt)
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
+        self.signals.request_calibration.connect(self._analysis_worker.do_calib)
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
         self._analysis_worker.signals.tell_clust_done.connect(self._on_clust_done)
+        self._analysis_worker.signals.tell_refit_done.connect(self._on_refit_done)
         # connect signals from other analysis helper classes to presenter
         self._analysis_worker.simpler_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         self._analysis_worker.clust_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
+        # connect signals from presenter to other analysis helper classes
+        self.signals.request_refit_origami.connect(self._analysis_worker.refit_orig)
         
     @pyqtSlot()
     def _browse_file(self):
@@ -298,6 +305,15 @@ class Presenter(QObject):
             self._view.set_color_frame(UIColor.G)
             self._view.upd_selec_button_todiscard()
             self._view.upd_selec_orig_counter(self._analysis_worker.clust.selec_orig_list)
+           
+    @pyqtSlot()
+    @check_analysis_status(AnalysisStatus.CLUST_DONE)
+    def _order_refit_orig(self):
+        self.signals.request_refit_origami.emit(self.curr_displ_orig_num)
+        
+    @pyqtSlot()
+    def _on_refit_done(self):
+        self._do_plot_shift(0)
             
     @pyqtSlot()
     @check_analysis_status(AnalysisStatus.CLUST_DONE)
@@ -315,7 +331,7 @@ class Presenter(QObject):
         This function, if clusterization is done, orders the analysis worker to perform the final
         SIMPLER calibration
         """
-        self._analysis_worker.do_calib()
+        self.signals.request_calibration.emit()
         
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
@@ -324,3 +340,4 @@ class Presenter(QObject):
     @pyqtSlot(float)
     def upd_preclust_eps(self, value):
         self.preclust_eps = value
+        

@@ -141,7 +141,9 @@ class Presenter(QObject):
         self._analysis_worker.signals.tell_msg_toprint.connect(self._print_to_ui)
         # connect signals from other analysis helper classes to presenter
         self._analysis_worker.simpler_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
+        self._analysis_worker.simpler_signals.send_msg_toprint.connect(self._print_to_ui)
         self._analysis_worker.clust_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
+        self._analysis_worker.clust_signals.send_msg_toprint.connect(self._print_to_ui)
         # connect signals from presenter to other analysis helper classes
         self.signals.request_refit_origami.connect(self._analysis_worker.refit_orig)
         

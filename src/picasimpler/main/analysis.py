@@ -34,6 +34,7 @@ _lgr.setLevel(_lgn.INFO)
 
 class SIMPLERSignals(QObject):
     tell_analysis_elem_done = pyqtSignal(int)
+    send_msg_toprint = pyqtSignal(object, str)
 
 class SIMPLER:
     """
@@ -127,12 +128,17 @@ class SIMPLER:
         df_filtered = df_filtered.reset_index(level=None, drop=True, inplace=False,
                                               col_level=0)
         end = _time.time()
-        _lgr.info('Time of filtering step: %s s. %s of %s (%.2f%%) localizations discarded',
-                end - start, len(idx_to_discard), n_loc_initial, 100 * len(idx_to_discard) / n_loc_initial)
+        _lgr.info("Time of filtering step: {0:.2f} s. {1} of {2} ({3:.1f}) localizations discarded".format(
+            end - start, len(idx_to_discard), n_loc_initial, 100 * len(idx_to_discard) / n_loc_initial
+        ))
+        self.signals.send_msg_toprint.emit(MessageType.INFO, "Time of filtering step: {0:.2f} s. {1} of {2} ({3:.1f}%) localizations discarded".format(
+            end - start, len(idx_to_discard), n_loc_initial, 100 * len(idx_to_discard) / n_loc_initial
+        ))
         self.save_locs(df_filtered, px_size_nm)
     
 class ClusterizationSignals(QObject):
     tell_analysis_elem_done = pyqtSignal(int)
+    send_msg_toprint = pyqtSignal(object, str)
     
 class Clusterization:
     """
@@ -208,15 +214,25 @@ class Clusterization:
         It first rescales the N dimension (using a reference value for the penetration length) to make the clustering
         problem more isotropic.
         """
+        start = _time.time()
         self.locs_clust = []
         self.locs_noise = []
-        for orig_idx in range(len(locs)):
+        tot_orig_bf_denoise = len(locs)
+        for orig_idx in range(tot_orig_bf_denoise):
             labels = self.pre_clust_denoise_inorig(locs[orig_idx], preclust_gamma, preclust_eps, min_good_loc, lambda_ref_val_nm)
             if labels is not None:
                 self.locs_clust.append(locs[orig_idx][labels!=-1])
                 self.locs_noise.append(locs[orig_idx][labels==-1])
             self.signals.tell_analysis_elem_done.emit(orig_idx)
         self.tot_orig_kept = len(self.locs_clust)
+        n_orig_discarded = tot_orig_bf_denoise - self.tot_orig_kept
+        end = _time.time()
+        _lgr.info("Time of pre-clustering de-noising step: {0:.2f} s. {1} of {2} ({3:.1f}%) origamis discarded".format(
+            end - start, n_orig_discarded, tot_orig_bf_denoise, 100 * n_orig_discarded / tot_orig_bf_denoise 
+        ))
+        self.signals.send_msg_toprint.emit(MessageType.INFO, "Time of pre-clustering de-noising step: {0:.2f} s. {1} of {2} ({3:.1f}%) origamis discarded".format(
+            end - start, n_orig_discarded, tot_orig_bf_denoise, 100 * n_orig_discarded / tot_orig_bf_denoise
+        ))
 
     def gmm_clust_inorig(self, locs: np.ndarray, n_clust_exp: int):
         """
@@ -262,8 +278,12 @@ class Clusterization:
         self.clust_covs = np.asarray(clust_covs_list, dtype=float)
         self.selec_orig_list = [True]*self.clust_means.shape[0]
         end = _time.time()
-        _lgr.info('Time of clustering step: %s s. %s of %s (%.2f%%) origamis discarded',
-                end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust)
+        _lgr.info("Time of clustering step: {0:.2f} s. {1} of {2} ({3:.1f}%) origamis discarded".format(
+            end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust  
+        ))
+        self.signals.send_msg_toprint.emit(MessageType.INFO, "Time of clustering step: {0:.2f} s. {1} of {2} ({3:.1f}%) origamis discarded".format(
+            end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust  
+        ))
 
     def tilts_form_xy(self, origami_positions: np.ndarray, xy_positions: np.ndarray):
         """
@@ -423,10 +443,8 @@ class AnalysisSignals(QObject):
     tell_filtering_done = pyqtSignal()
     tell_filt_done = pyqtSignal()
     tell_clust_done = pyqtSignal(bool)
-
     tell_refit_done = pyqtSignal()
     tell_msg_toprint = pyqtSignal(object, str)
-
 
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
@@ -560,8 +578,8 @@ class AnalysisWorker(QObject):
                 self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
         df_orig = self.data.df_raw.loc[self.data.df_raw['group'].isin(picks_tokeep)]
         n_orig = len(picks_tokeep)
-        _lgr.info(f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
-        self.signals.tell_msg_toprint.emit(MessageType.INFO, f"Kept {n_orig} picks out of {self.data.tot_picks}, considered to be individual origamis")
+        _lgr.info(f"{n_orig} picks out of {self.data.tot_picks} passed the kinetics filter")
+        self.signals.tell_msg_toprint.emit(MessageType.INFO, f"{n_orig} picks out of {self.data.tot_picks} passed the kinetics filter")
         self.data.df_orig = df_orig
         self.data.tot_orig = n_orig
 

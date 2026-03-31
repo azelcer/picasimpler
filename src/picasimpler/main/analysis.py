@@ -347,14 +347,15 @@ class Clusterization:
         z_data = np.asarray(z_data)
         N_data = np.asarray(N_data)
 
-        flat_z = z_data.ravel()
-        # Normalize data
-        F_data = (N_data / N_data[:, 0, np.newaxis]).ravel()
+        flat_z = z_data[:, 1:].ravel()
+        # Normalize datal
+        F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
+        z_0 = np.hstack(np.repeat(z_data[:, 0], 3))
 
         # Model function
         def F(z, alpha_F, d_F):
             num = alpha_F * np.exp(-z / d_F) + (1 - alpha_F)
-            den = alpha_F * np.exp(-z[0] / d_F) + (1 - alpha_F)
+            den = alpha_F * np.exp(-z_0 / d_F) + (1 - alpha_F)
             return num / den
         # Fit
         popt, pcov = curve_fit(F, flat_z, F_data, p0=p0)
@@ -375,10 +376,10 @@ class Params:
     min_last_frame_perc: float
     frame_median_perc_range: list
     max_on_frames_perc: float
-    
+
     # SIMPLER filtering parameters
     spat_tol_nm: float # how far can two locs be to be considered the same event
-    
+
     # clustering parameters
     preclust_gamma: float
     preclust_eps: float
@@ -387,15 +388,16 @@ class Params:
     z_sites_nm: list
     lambda_ref_val_nm: float
     res_dir: Path
-    
+
     # movie parameters
-    n_frames: int = field(init=False) # number of frames in movie
-    exp_time_ms: float = field(init=False) # exposure time in ms
-    px_size_nm: float = field(init=False) # camera pixel size in nm
-    
+    n_frames: int = field(init=False)  # number of frames in movie
+    exp_time_ms: float = field(init=False)  # exposure time in ms
+    px_size_nm: float = field(init=False)  # camera pixel size in nm
+
     # convenience parameters
     r_th_sq: float = field(init=False)
-    
+
+
 @dataclass
 class Data:
     """
@@ -403,16 +405,17 @@ class Data:
     """
     picks_data_path: Path
     metadata_path: Path
-    
+
     is_data_file_open: bool = field(default=False)
     is_metadata_file_open: bool = field(default=False)
-    
+
     tot_picks: int = field(init=False)
     tot_orig: int = field(init=False)
-    
-    df_raw: pd.DataFrame = field(init=False) # dataframe with all data
-    df_orig: pd.DataFrame = field(init=False) # dataframe with picks filtered by PAINT kinetics
-    
+
+    df_raw: pd.DataFrame = field(init=False)  # dataframe with all data
+    df_orig: pd.DataFrame = field(init=False)  # dataframe with picks filtered by PAINT kinetics
+
+
 class AnalysisSignals(QObject):
     # type of analysis step starting now, and total number of element in it
     tell_analysis_step_start = pyqtSignal(AnalysisStatus, int)
@@ -420,9 +423,11 @@ class AnalysisSignals(QObject):
     tell_filtering_done = pyqtSignal()
     tell_filt_done = pyqtSignal()
     tell_clust_done = pyqtSignal(bool)
+
     tell_refit_done = pyqtSignal()
     tell_msg_toprint = pyqtSignal(object, str)
-    
+
+
 class AnalysisWorker(QObject):
     def __init__(self, picks_data_path, metadata_path):
         super().__init__()
@@ -527,8 +532,8 @@ class AnalysisWorker(QObject):
             self.params.n_frames = None
             self.params.exp_time_ms = None
             self.params.px_size_nm = None
-            self.data.is_metadata_file_open = False            
-    
+            self.data.is_metadata_file_open = False
+
     def filter_kin_orig(self):
         """
         this function removes picks not following expected PAINT statistics
@@ -538,18 +543,18 @@ class AnalysisWorker(QObject):
         groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
         for pick_idx in range(self.data.tot_picks):
             pick_df = self.data.df_raw.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]]
-            first_frame_perc = np.min(pick_df['frame'])/self.params.n_frames
-            last_frame_perc = np.max(pick_df['frame'])/self.params.n_frames
-            med_frame_perc = np.median(pick_df['frame'])/self.params.n_frames
+            first_frame_perc = np.min(pick_df['frame']) / self.params.n_frames
+            last_frame_perc = np.max(pick_df['frame']) / self.params.n_frames
+            med_frame_perc = np.median(pick_df['frame']) / self.params.n_frames
             unique_frames = set(pick_df['frame'])
-            num_on_frames_perc = len(unique_frames)/self.params.n_frames
+            num_on_frames_perc = len(unique_frames) / self.params.n_frames
             # to be considered an origami, the pick has to pass all following kinetics test
             if not (
-                (first_frame_perc>self.params.max_first_frame_perc) or
-                (last_frame_perc<self.params.min_last_frame_perc) or
-                (med_frame_perc<self.params.frame_median_perc_range[0]) or
-                (med_frame_perc>self.params.frame_median_perc_range[1]) or
-                (num_on_frames_perc>self.params.max_on_frames_perc)
+                (first_frame_perc > self.params.max_first_frame_perc) or
+                (last_frame_perc < self.params.min_last_frame_perc) or
+                (med_frame_perc < self.params.frame_median_perc_range[0]) or
+                (med_frame_perc > self.params.frame_median_perc_range[1]) or
+                (num_on_frames_perc > self.params.max_on_frames_perc)
             ):
                 picks_tokeep.append(pick_idx)
                 self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
@@ -570,7 +575,7 @@ class AnalysisWorker(QObject):
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SIMPLER_FILT, self.data.tot_orig)
         self.simpler.filter_locs(self.data.df_orig, self.params.px_size_nm, self.params.r_th_sq)
         self.signals.tell_filt_done.emit()
-        
+
     @pyqtSlot()
     def do_clust(self):
         """
@@ -593,7 +598,7 @@ class AnalysisWorker(QObject):
 
     def save_clust(self):
         """
-        This function saves the array of clusterization results of the selected origamis only as a .npy 
+        This function saves the array of clusterization results of the selected origamis only as a .npy
         """
         clust_means_res_filename = self.data.picks_data_path.stem + "_clusters.npy"
         clust_covs_res_filename = self.data.picks_data_path.stem + "_covs.npy"
@@ -635,6 +640,19 @@ class AnalysisWorker(QObject):
         _lgr.warning("SIMPLER calibration is not implemented yet!")
 
 
+def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
+    import matplotlib.pyplot as plt
+    y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))
+    F_values = N_values / N_values[:, 0, np.newaxis]
+    plt.plot(z_values.ravel(), F_values.ravel(), ".", ms=8, label="Data")
+    plt.plot(z_values.ravel(), y_values.ravel(), "x", label="Fit")
+    plt.ylabel(r"$F(z) = \frac{N(z)}{N(z_1)}$")
+    plt.xlabel("z")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
 if __name__ == "__main__":
     clus = Clusterization(None)
     # clust_means [#origami, # site, (x, y, N)]
@@ -643,11 +661,12 @@ if __name__ == "__main__":
     positions = np.array(Z_SITES_NM)
     angles = np.array([clus.tilts_form_xy(positions, o_pos[:, 0:2])[0] for o_pos in clus.clust_means])
     z = clus.z_from_tilt(angles, positions)
-    alpha_f, d_f, errors = clus.fit_N(z, clus.clust_means[:, :, 2])
-    print(alpha_f, d_f, errors)
+    alpha_F, d_F, errors = clus.fit_N(z, clus.clust_means[:, :, 2])
+    print(alpha_F, d_F, errors)
+    plot_origami_fit(z, clus.clust_means[:, :, 2], alpha_F, d_F)
 
 
-if __name__=="__main__X":
+if __name__ == "__main__X":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"
     data_path = Path(filepath_str)
     metadata_path = data_path.parent / Path(data_path.stem + ".yaml")

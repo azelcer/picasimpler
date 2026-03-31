@@ -404,7 +404,7 @@ class Presenter(QObject):
             self._analysis_worker.fit.d_F,
             self._analysis_worker.fit.d_F_err,
         )
-        self.save_calib_plot(self.data_path.stem + "_calib_res.json")
+        self.save_calib_plot(self.data_path.stem + "_calib_res.png")
         
     @pyqtSlot()
     def _on_calib_fromfile_done(self):

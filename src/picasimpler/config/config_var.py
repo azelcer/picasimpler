@@ -21,3 +21,4 @@ RES_DIR = Path("results")
 # initial guesses for calibration fit
 ALPHA_GUESS = 0.9
 D_GUESS = 100
+SPACER_GUESS = 10

@@ -312,7 +312,7 @@ class SpatialFit(QObject):
         """
         This function computes tilt angles for all the selected origamis based on xy cluster positions and expected z positions of the sites
         """
-        self.tilt_angles = np.array([self._tilts_form_xy(self.z_sites_nm, hor_pos[:, 0:2])[0] for hor_pos in self.clust_means_forfit])
+        self.tilt_angles = np.array([self._tilts_form_xy(self.z_sites_nm[:-1], o_pos[:-1, 0:2])[0] for o_pos in self.clust_means_forfit])
         
     def _calc_z_real(self):
         """
@@ -401,7 +401,7 @@ class SpatialFit(QObject):
             den = alpha_F * np.exp(-z_0 / d_F) + (1 - alpha_F)
             return num / den
         # Fit
-        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0)
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0,0],[1, np.inf]))
         alpha_F, d_F = popt
 
         perr = np.sqrt(np.diag(pcov))
@@ -413,7 +413,6 @@ class SpatialFit(QObject):
         # variables for later plot
         self.y_values = (self.alpha_F * np.exp(-self.z_real / self.d_F) + (1 - self.alpha_F)) / (self.alpha_F * np.exp(-self.z_real[:, 0, np.newaxis] / self.d_F) + (1 - self.alpha_F))
         self.F_values = N_data / N_data[:, 0, np.newaxis]
-
 
 @dataclass
 class Params:

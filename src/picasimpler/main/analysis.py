@@ -3,6 +3,8 @@ import pandas as pd
 import logging as _lgn
 import yaml
 import time as _time
+import json
+import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
 from pathlib import Path
 from scipy.spatial import distance
@@ -10,7 +12,7 @@ from scipy.optimize import curve_fit
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-
+    
 from picasimpler.helpers.status import AnalysisStatus, MessageType
 from picasimpler.helpers.utils import px_to_nm
 from picasimpler.config.config_var import (
@@ -285,6 +287,206 @@ class Clusterization:
             end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust  
         ))
 
+@dataclass
+class Params:
+    """
+    dataclass containing the parameters for the calibration
+    """
+
+    # kinetics filtering parameters
+    max_first_frame_perc: float
+    min_last_frame_perc: float
+    frame_median_perc_range: list
+    max_on_frames_perc: float
+
+    # SIMPLER filtering parameters
+    spat_tol_nm: float # how far can two locs be to be considered the same event
+
+    # clustering parameters
+    preclust_gamma: float
+    preclust_eps: float
+    min_good_loc: int
+    n_clust_exp: int
+    z_sites_nm_list: list
+    lambda_ref_val_nm: float
+    res_dir: Path
+
+    # movie parameters
+    n_frames: int = field(init=False)  # number of frames in movie
+    exp_time_ms: float = field(init=False)  # exposure time in ms
+    px_size_nm: float = field(init=False)  # camera pixel size in nm
+
+    # convenience parameters
+    r_th_sq: float = field(init=False)
+    
+    def __post_init__(self):
+        self.z_sites_nm = np.array(self.z_sites_nm_list, dtype=float)
+
+@dataclass
+class Data:
+    """
+    dataclass containing the localization data
+    """
+    picks_data_path: Path
+    metadata_path: Path
+
+    is_data_file_open: bool = field(default=False)
+    is_metadata_file_open: bool = field(default=False)
+
+    tot_picks: int = field(init=False)
+    tot_orig: int = field(init=False)
+
+    df_raw: pd.DataFrame = field(init=False)  # dataframe with all data
+    df_orig: pd.DataFrame = field(init=False)  # dataframe with picks filtered by PAINT kinetics
+
+
+class AnalysisSignals(QObject):
+    # type of analysis step starting now, and total number of element in it
+    tell_analysis_step_start = pyqtSignal(AnalysisStatus, int)
+    tell_analysis_elem_done = pyqtSignal(int)
+    tell_filtering_done = pyqtSignal()
+    tell_filt_done = pyqtSignal()
+    tell_clust_done = pyqtSignal(bool)
+    tell_refit_done = pyqtSignal()
+    send_msg_toprint = pyqtSignal(object, str)
+
+class AnalysisWorker(QObject):
+    def __init__(self, picks_data_path, metadata_path):
+        super().__init__()
+        # all signals must be instatiated in main thread, so inside __init__
+        self.signals = AnalysisSignals()
+        self.simpler_signals = SIMPLERSignals()
+        self.clust_signals = ClusterizationSignals()
+        self.params = Params(
+            MAX_FIRST_FRAME_PERC,
+            MIN_LAST_FRAME_PERC,
+            FRAME_MEDIAN_PERC_RANGE,
+            MAX_ON_FRAMES_PERC,
+            SPAT_TOL_NM,
+            PRECLUST_GAMMA_DEF,
+            PRECLUST_EPS_DEF,
+            MIN_GOOD_LOC,
+            N_CLUST_EXP,
+            Z_SITES_NM,
+            LAMBDA_REF_VAL_NM,
+            RES_DIR
+        )
+        self.data = Data(picks_data_path, metadata_path)
+        self.simpler: SIMPLER = SIMPLER(self.simpler_signals)
+        self.clust: Clusterization = Clusterization(self.clust_signals)
+
+    @pyqtSlot(float)
+    def upd_preclust_gamma(self, value):
+        self.params.preclust_gamma = value
+        
+    @pyqtSlot(float)
+    def upd_preclust_eps(self, value):
+        self.params.preclust_eps = value
+
+    def load_data(self):
+        """
+        This function calls other functions to load data and metadata from file
+        """
+        self.load_hdf5_todf()
+        if self.data.is_data_file_open:
+            self.load_metadata()
+            self.params.r_th_sq = (self.params.spat_tol_nm / self.params.px_size_nm)**2
+
+    def load_hdf5_todf(self):
+        """
+        This function opens the hdf5 containing all the picked structures
+        """
+        try:
+            with pd.HDFStore(self.data.picks_data_path, 'r') as store:
+                hdf5_node_list = [node._v_pathname for node in store._handle.walk_nodes()]
+                if '/locs' not in hdf5_node_list:
+                    _lgr.error('hdf5 file does not have expected structure')
+                    self.signals.send_msg_toprint.emit(MessageType.ERROR, "hdf5 file does not have expected structure")
+                    # FIXME: this cleans previous file is lodaded
+                    self.data.df_raw = None
+                    self.data.tot_picks = 0
+                    self.data.is_data_file_open = False
+                _lgr.info('hdf5 file has expected structure')
+                self.signals.send_msg_toprint.emit(MessageType.INFO, "hdf5 file has expected structure")
+                df_data = store['/locs']
+                # count total number of picks
+                tot_picks = df_data['group'].iloc[-1] + 1
+                _lgr.info(f"Total number of picks: {tot_picks}")
+                self.signals.send_msg_toprint.emit(MessageType.INFO, f"Total number of picks: {tot_picks}")
+                self.data.df_raw = df_data
+                self.data.tot_picks = tot_picks
+                self.data.is_data_file_open = True
+        except Exception as e:
+            if isinstance(e, KeyError) and str(e) == "'group'":
+                _lgr.error("Error opening hdf5 file: picks were not found in file")
+                self.signals.send_msg_toprint.emit(MessageType.ERROR, "Error opening hdf5 file: picks were not found in file")
+            else:
+                _lgr.error(f"Error {type(e)} opening hdf5 file: {e}")
+                self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Error {type(e)} opening hdf5 file: {e}")
+            self.data.df_raw = None
+            self.data.tot_picks = 0
+            self.data.is_data_file_open = False
+
+    def load_metadata(self):
+        """
+        this function loads the metadata from the yaml file
+        """
+        try:
+            with open(self.data.metadata_path, "r") as metadata_file:
+                metadata = list(yaml.load_all(metadata_file, Loader=yaml.FullLoader))
+                frames = metadata[0]['Frames']
+                exp_time_ms = metadata[0]['Micro-Manager Metadata']['Exposure-ms']
+                px_size_nm = metadata[1]['Pixelsize']
+                _lgr.info(f"Number of frames in movie: {frames}")
+                _lgr.info(f"Exposure time in ms: {exp_time_ms}")
+                _lgr.info(f"Pixel size in nm: {px_size_nm}")
+                self.signals.send_msg_toprint.emit(MessageType.INFO, "Movie metadata readed correctly.")
+                self.signals.send_msg_toprint.emit(MessageType.SIMPLE, f"Number of frames in movie: {frames}")
+                self.signals.send_msg_toprint.emit(MessageType.SIMPLE, f"Exposure time in ms: {exp_time_ms}")
+                self.signals.send_msg_toprint.emit(MessageType.SIMPLE, f"Pixel size in nm: {px_size_nm}")
+                self.params.n_frames = frames
+                self.params.exp_time_ms = exp_time_ms
+                self.params.px_size_nm = px_size_nm
+                self.data.is_metadata_file_open = True
+        except Exception as e:
+            _lgr.error(f"Error opening yaml file because of: {e}")
+            self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Error opening yaml file because of: {e}")
+            self.params.n_frames = None
+            self.params.exp_time_ms = None
+            self.params.px_size_nm = None
+            self.data.is_metadata_file_open = False
+
+    def filter_kin_orig(self):
+        """
+        this function removes picks not following expected PAINT statistics
+        """
+        picks_tokeep = []
+        groups = np.array(self.data.df_raw['group'])
+        groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
+        for pick_idx in range(self.data.tot_picks):
+            pick_df = self.data.df_raw.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]]
+            first_frame_perc = np.min(pick_df['frame']) / self.params.n_frames
+            last_frame_perc = np.max(pick_df['frame']) / self.params.n_frames
+            med_frame_perc = np.median(pick_df['frame']) / self.params.n_frames
+            unique_frames = set(pick_df['frame'])
+            num_on_frames_perc = len(unique_frames) / self.params.n_frames
+            # to be considered an origami, the pick has to pass all following kinetics test
+            if not (
+                (first_frame_perc > self.params.max_first_frame_perc) or
+                (last_frame_perc < self.params.min_last_frame_perc) or
+                (med_frame_perc < self.params.frame_median_perc_range[0]) or
+                (med_frame_perc > self.params.frame_median_perc_range[1]) or
+                (num_on_frames_perc > self.params.max_on_frames_perc)
+            ):
+                picks_tokeep.append(pick_idx)
+                self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
+        df_orig = self.data.df_raw.loc[self.data.df_raw['group'].isin(picks_tokeep)]
+        n_orig = len(picks_tokeep)
+        _lgr.info(f"{n_orig} picks out of {self.data.tot_picks} passed the kinetics filter")
+        self.signals.send_msg_toprint.emit(MessageType.INFO, f"{n_orig} picks out of {self.data.tot_picks} passed the kinetics filter")
+        self.data.df_orig = df_orig
+        self.data.tot_orig = n_orig
+
     def tilts_form_xy(self, origami_positions: np.ndarray, xy_positions: np.ndarray):
         """
         Compute tilt angles of the origami with respect to the surface, based on the
@@ -384,205 +586,6 @@ class Clusterization:
         perr = np.sqrt(np.diag(pcov))
         return alpha_F_fit, d_F_fit, perr
 
-
-@dataclass
-class Params:
-    """
-    dataclass containing the parameters for the calibration
-    """
-
-    # kinetics filtering parameters
-    max_first_frame_perc: float
-    min_last_frame_perc: float
-    frame_median_perc_range: list
-    max_on_frames_perc: float
-
-    # SIMPLER filtering parameters
-    spat_tol_nm: float # how far can two locs be to be considered the same event
-
-    # clustering parameters
-    preclust_gamma: float
-    preclust_eps: float
-    min_good_loc: int
-    n_clust_exp: int
-    z_sites_nm: list
-    lambda_ref_val_nm: float
-    res_dir: Path
-
-    # movie parameters
-    n_frames: int = field(init=False)  # number of frames in movie
-    exp_time_ms: float = field(init=False)  # exposure time in ms
-    px_size_nm: float = field(init=False)  # camera pixel size in nm
-
-    # convenience parameters
-    r_th_sq: float = field(init=False)
-
-
-@dataclass
-class Data:
-    """
-    dataclass containing the localization data
-    """
-    picks_data_path: Path
-    metadata_path: Path
-
-    is_data_file_open: bool = field(default=False)
-    is_metadata_file_open: bool = field(default=False)
-
-    tot_picks: int = field(init=False)
-    tot_orig: int = field(init=False)
-
-    df_raw: pd.DataFrame = field(init=False)  # dataframe with all data
-    df_orig: pd.DataFrame = field(init=False)  # dataframe with picks filtered by PAINT kinetics
-
-
-class AnalysisSignals(QObject):
-    # type of analysis step starting now, and total number of element in it
-    tell_analysis_step_start = pyqtSignal(AnalysisStatus, int)
-    tell_analysis_elem_done = pyqtSignal(int)
-    tell_filtering_done = pyqtSignal()
-    tell_filt_done = pyqtSignal()
-    tell_clust_done = pyqtSignal(bool)
-    tell_refit_done = pyqtSignal()
-    tell_msg_toprint = pyqtSignal(object, str)
-
-class AnalysisWorker(QObject):
-    def __init__(self, picks_data_path, metadata_path):
-        super().__init__()
-        # all signals must be instatiated in main thread, so inside __init__
-        self.signals = AnalysisSignals()
-        self.simpler_signals = SIMPLERSignals()
-        self.clust_signals = ClusterizationSignals()
-        self.params = Params(
-            MAX_FIRST_FRAME_PERC,
-            MIN_LAST_FRAME_PERC,
-            FRAME_MEDIAN_PERC_RANGE,
-            MAX_ON_FRAMES_PERC,
-            SPAT_TOL_NM,
-            PRECLUST_GAMMA_DEF,
-            PRECLUST_EPS_DEF,
-            MIN_GOOD_LOC,
-            N_CLUST_EXP,
-            Z_SITES_NM,
-            LAMBDA_REF_VAL_NM,
-            RES_DIR
-        )
-        self.data = Data(picks_data_path, metadata_path)
-        self.simpler: SIMPLER = SIMPLER(self.simpler_signals)
-        self.clust: Clusterization = Clusterization(self.clust_signals)
-
-    @pyqtSlot(float)
-    def upd_preclust_gamma(self, value):
-        self.params.preclust_gamma = value
-        
-    @pyqtSlot(float)
-    def upd_preclust_eps(self, value):
-        self.params.preclust_eps = value
-
-    def load_data(self):
-        """
-        This function calls other functions to load data and metadata from file
-        """
-        self.load_hdf5_todf()
-        if self.data.is_data_file_open:
-            self.load_metadata()
-            self.params.r_th_sq = (self.params.spat_tol_nm / self.params.px_size_nm)**2
-
-    def load_hdf5_todf(self):
-        """
-        This function opens the hdf5 containing all the picked structures
-        """
-        try:
-            with pd.HDFStore(self.data.picks_data_path, 'r') as store:
-                hdf5_node_list = [node._v_pathname for node in store._handle.walk_nodes()]
-                if '/locs' not in hdf5_node_list:
-                    _lgr.error('hdf5 file does not have expected structure')
-                    self.signals.tell_msg_toprint.emit(MessageType.ERROR, "hdf5 file does not have expected structure")
-                    # FIXME: this cleans previous file is lodaded
-                    self.data.df_raw = None
-                    self.data.tot_picks = 0
-                    self.data.is_data_file_open = False
-                _lgr.info('hdf5 file has expected structure')
-                self.signals.tell_msg_toprint.emit(MessageType.INFO, "hdf5 file has expected structure")
-                df_data = store['/locs']
-                # count total number of picks
-                tot_picks = df_data['group'].iloc[-1] + 1
-                _lgr.info(f"Total number of picks: {tot_picks}")
-                self.signals.tell_msg_toprint.emit(MessageType.INFO, f"Total number of picks: {tot_picks}")
-                self.data.df_raw = df_data
-                self.data.tot_picks = tot_picks
-                self.data.is_data_file_open = True
-        except Exception as e:
-            if isinstance(e, KeyError) and str(e) == "'group'":
-                _lgr.error("Error opening hdf5 file: picks were not found in file")
-                self.signals.tell_msg_toprint.emit(MessageType.ERROR, "Error opening hdf5 file: picks were not found in file")
-            else:
-                _lgr.error(f"Error {type(e)} opening hdf5 file: {e}")
-                self.signals.tell_msg_toprint.emit(MessageType.ERROR, f"Error {type(e)} opening hdf5 file: {e}")
-            self.data.df_raw = None
-            self.data.tot_picks = 0
-            self.data.is_data_file_open = False
-
-    def load_metadata(self):
-        """
-        this function loads the metadata from the yaml file
-        """
-        try:
-            with open(self.data.metadata_path, "r") as metadata_file:
-                metadata = list(yaml.load_all(metadata_file, Loader=yaml.FullLoader))
-                frames = metadata[0]['Frames']
-                exp_time_ms = metadata[0]['Micro-Manager Metadata']['Exposure-ms']
-                px_size_nm = metadata[1]['Pixelsize']
-                _lgr.info(f"Number of frames in movie: {frames}")
-                _lgr.info(f"Exposure time in ms: {exp_time_ms}")
-                _lgr.info(f"Pixel size in nm: {px_size_nm}")
-                self.signals.tell_msg_toprint.emit(MessageType.INFO, "Movie metadata readed correctly.")
-                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Number of frames in movie: {frames}")
-                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Exposure time in ms: {exp_time_ms}")
-                self.signals.tell_msg_toprint.emit(MessageType.SIMPLE, f"Pixel size in nm: {px_size_nm}")
-                self.params.n_frames = frames
-                self.params.exp_time_ms = exp_time_ms
-                self.params.px_size_nm = px_size_nm
-                self.data.is_metadata_file_open = True
-        except Exception as e:
-            _lgr.error(f"Error opening yaml file because of: {e}")
-            self.signals.tell_msg_toprint.emit(MessageType.ERROR, f"Error opening yaml file because of: {e}")
-            self.params.n_frames = None
-            self.params.exp_time_ms = None
-            self.params.px_size_nm = None
-            self.data.is_metadata_file_open = False
-
-    def filter_kin_orig(self):
-        """
-        this function removes picks not following expected PAINT statistics
-        """
-        picks_tokeep = []
-        groups = np.array(self.data.df_raw['group'])
-        groupjump = np.nonzero(np.diff(groups, prepend=-np.inf, append=np.inf) != 0)[0]
-        for pick_idx in range(self.data.tot_picks):
-            pick_df = self.data.df_raw.iloc[groupjump[pick_idx]:groupjump[pick_idx + 1]]
-            first_frame_perc = np.min(pick_df['frame']) / self.params.n_frames
-            last_frame_perc = np.max(pick_df['frame']) / self.params.n_frames
-            med_frame_perc = np.median(pick_df['frame']) / self.params.n_frames
-            unique_frames = set(pick_df['frame'])
-            num_on_frames_perc = len(unique_frames) / self.params.n_frames
-            # to be considered an origami, the pick has to pass all following kinetics test
-            if not (
-                (first_frame_perc > self.params.max_first_frame_perc) or
-                (last_frame_perc < self.params.min_last_frame_perc) or
-                (med_frame_perc < self.params.frame_median_perc_range[0]) or
-                (med_frame_perc > self.params.frame_median_perc_range[1]) or
-                (num_on_frames_perc > self.params.max_on_frames_perc)
-            ):
-                picks_tokeep.append(pick_idx)
-                self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
-        df_orig = self.data.df_raw.loc[self.data.df_raw['group'].isin(picks_tokeep)]
-        n_orig = len(picks_tokeep)
-        _lgr.info(f"{n_orig} picks out of {self.data.tot_picks} passed the kinetics filter")
-        self.signals.tell_msg_toprint.emit(MessageType.INFO, f"{n_orig} picks out of {self.data.tot_picks} passed the kinetics filter")
-        self.data.df_orig = df_orig
-        self.data.tot_orig = n_orig
-
     @pyqtSlot()
     def do_filt(self):
         """
@@ -638,13 +641,13 @@ class AnalysisWorker(QObject):
         )
         if new_labels is None:
             _lgr.warning("Re-fit failed at pre-clustering de-noising step, try changing parameters")
-            self.signals.tell_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")
+            self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")
             return
         else:
             new_means, new_covs = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1], self.params.n_clust_exp)
             if new_means is None:
                 _lgr.warning("Re-fit failed at GMM clustering step, try changing parameters")
-                self.signals.tell_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at GMM clustering step, try changing parameters")
+                self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at GMM clustering step, try changing parameters")
             else:
                 # if new fit passed all steps, update old results with new
                 self.clust.locs_clust[orig_num] = locs_unlabel[new_labels!=-1]
@@ -653,13 +656,48 @@ class AnalysisWorker(QObject):
                 self.clust.clust_covs[orig_num, :, :, :] = new_covs
                 self.signals.tell_refit_done.emit()
         
+    def save_calib_res(self, alpha_F, d_F):
+        """
+        This function saves the results of the SIMPLER calibration in a .json in the result folder
+        """
+        calib_res_filename = self.data.picks_data_path.stem + "_calib_res.json"
+        calib_res_dict = {"alpha_f": alpha_F, "d_f": d_F}
+        with open(self.params.res_dir / Path(calib_res_filename), "w") as f:
+            json.dump(calib_res_dict, f, indent=4)
+        
+    def save_calib_plot(self, z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
+        """
+        This function saves the plot of the SIMPLER calibration as a .png in the result folder
+        """
+        plt.close()
+        calib_plot_filename = self.data.picks_data_path.stem + "_calib_plot.png"
+        y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))
+        F_values = N_values / N_values[:, 0, np.newaxis]
+        plt.plot(z_values.ravel(), F_values.ravel(), ".", ms=8, label="Data")
+        plt.plot(z_values.ravel(), y_values.ravel(), "x", label="Fit")
+        plt.ylabel(r"$F(z) = \frac{N(z)}{N(z_1)}$")
+        plt.xlabel("z")
+        plt.legend()
+        plt.grid()
+        plt.savefig(self.params.res_dir / Path(calib_plot_filename))
+        
     @pyqtSlot()
-    def do_calib(self):
-        _lgr.warning("SIMPLER calibration is not implemented yet!")
+    def do_calib(self, ):
+        """
+        This function performs the SIMPLER calibration using the results from clusterization and the expected
+        z positions, corrected according to the origamin tilt. 
+        """
+        angles = np.array([self.tilts_form_xy(self.params.z_sites_nm, o_pos[:, 0:2])[0] for o_pos in self.clust.clust_means[self.clust.selec_orig_list, :, :]])
+        z_real = self.z_from_tilt(angles, self.params.z_sites_nm)
+        alpha_F, d_F, errors = self.fit_N(z_real, self.clust.clust_means[self.clust.selec_orig_list, :, 2])
+        self.signals.send_msg_toprint.emit(MessageType.INFO, "SIMPLER calibration performed. Results:")
+        self.signals.send_msg_toprint.emit(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {alpha_F:.3} &plusmn; {errors[0]:.3}")
+        self.signals.send_msg_toprint.emit(MessageType.SIMPLE, f"d<sub>F</sub> = {d_F:.4} &plusmn; {errors[1]:.3}")
+        self.save_calib_res(alpha_F, d_F)
+        self.save_calib_plot(z_real, self.clust.clust_means[self.clust.selec_orig_list, :, 2], alpha_F, d_F)
 
 
 def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
-    import matplotlib.pyplot as plt
     y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))
     F_values = N_values / N_values[:, 0, np.newaxis]
     plt.plot(z_values.ravel(), F_values.ravel(), ".", ms=8, label="Data")

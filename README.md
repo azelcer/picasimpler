@@ -20,3 +20,7 @@ Conventions:
 2) Signals should be stored in a separate class inheriting QObject which has to be instantiated in the main thread.
 3) All connections should happen in the Presenter
 4) use the decorator @check_analysis_status before functions that depend on the current status of the analysis.
+
+Input parameters from UI:
+1) γ: minimum (as proportion of the total number of localizations for an origami) size of a cluster to be considered as such by the pre-clustering de-noising HDBSCAN step. Clusters smaller than this threshold will be considered noise and not used in the next steps. Hence, a higher value correspond to a more stringent de-noising.
+2) ε: minimum (absolute) distance between two points to be considered as elements of two different clusters by the pre-clustering de-noising HDBSCAN step. Clusters closer than this threshold value will be merged. Higher values will tend to incorporate more noise localizations into the main clusters found by the algorithm; hence, smaller values correspond to a more stringent de-noising.

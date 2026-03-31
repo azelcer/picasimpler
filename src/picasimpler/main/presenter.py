@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import numpy as np
+import matplotlib.pyplot as plt
 import logging as _lgn
 from pathlib import Path
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
@@ -10,7 +13,7 @@ from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor, MessageType
 from picasimpler.helpers.utils import safe_float_to0
-from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA, PRECLUST_EPS_DEF
+from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA, PRECLUST_EPS_DEF, RES_DIR
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
@@ -18,9 +21,11 @@ _lgr.setLevel(_lgn.INFO)
 
 
 class PresenterSignals(QObject):
+    request_load_data = pyqtSignal(object, object)
     request_start_filtering = pyqtSignal()
     request_start_clustering = pyqtSignal()
     request_calibration = pyqtSignal()
+    request_calibration_fromfile = pyqtSignal(object)
     request_refit_origami = pyqtSignal(int)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
@@ -33,16 +38,18 @@ class Presenter(QObject):
         super().__init__()
         self._view = view
         self.signals = PresenterSignals()
+        # signal-slot connections with UI
         self._make_ui_connect()
+        # analysis worker, thread and connection preparation
+        self.start_analysis_thread()
 
         # initialize some variables
-        self._analysis_worker = None
-        self._analysis_thread = None
-        self.tot_elem_curr_analysis_step = 0
-        self.curr_displ_orig_num = None
-        self.analysis_status = AnalysisStatus.PRE_ANALYSIS
-        self.preclust_gamma = PRECLUST_GAMMA_DEF
-        self.preclust_eps = PRECLUST_EPS_DEF
+        self.tot_elem_curr_analysis_step: int | None = None
+        self.curr_displ_orig_num: int | None = None
+        self.analysis_status: AnalysisStatus = AnalysisStatus.PRE_ANALYSIS
+        self.preclust_gamma: float = PRECLUST_GAMMA_DEF
+        self.preclust_eps: float = PRECLUST_EPS_DEF
+        self.res_dir: Path = RES_DIR
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -104,6 +111,7 @@ class Presenter(QObject):
         self._view.ui.cluster_button.clicked.connect(self._start_clustering)
         self._view.ui.save_clust_button.clicked.connect(self._order_save_clust)
         self._view.ui.calib_button.clicked.connect(self._order_calibration)
+        self._view.ui.calib_fromfile_button.clicked.connect(self._order_calibration_fromfile)
         # origami navigation buttons
         self._view.ui.next_orig_button.clicked.connect(self._order_plot_next_orig)
         self._view.ui.prev_orig_button.clicked.connect(self._order_plot_prev_orig)
@@ -128,17 +136,21 @@ class Presenter(QObject):
         this functions makes all the connection with the signals coming from the analysis thread
         """
         # connect signals from presenter to analysis worker
+        self.signals.request_load_data.connect(self._analysis_worker.load_data)
         self.signals.request_start_filtering.connect(self._analysis_worker.do_filt)
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
         self.signals.request_calibration.connect(self._analysis_worker.do_calib)
+        self.signals.request_calibration_fromfile.connect(self._analysis_worker.do_calib_fromfile)
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
         # connect signals from analysis worker to presenter
+        self._analysis_worker.signals.tell_data_loaded.connect(self._on_data_loaded)
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
         self._analysis_worker.signals.tell_filt_done.connect(self._on_filt_done)
         self._analysis_worker.signals.tell_clust_done.connect(self._on_clust_done)
         self._analysis_worker.signals.tell_refit_done.connect(self._on_refit_done)
         self._analysis_worker.signals.send_msg_toprint.connect(self._print_to_ui)
+        self._analysis_worker.signals.tell_calib_done.connect(self._on_calib_done)
         # connect signals from other analysis helper classes to presenter
         self._analysis_worker.simpler_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         self._analysis_worker.simpler_signals.send_msg_toprint.connect(self._print_to_ui)
@@ -146,6 +158,23 @@ class Presenter(QObject):
         self._analysis_worker.clust_signals.send_msg_toprint.connect(self._print_to_ui)
         # connect signals from presenter to other analysis helper classes
         self.signals.request_refit_origami.connect(self._analysis_worker.refit_orig)
+        
+    def start_analysis_thread(self):
+        """
+        This function creates an empty analysis worker, makes all signal-slot connections and moves it to another thread
+        """
+        self._analysis_worker = AnalysisWorker()
+        self._analysis_thread = QThread()
+        self._make_analysis_connect()
+        self._analysis_worker.moveToThread(self._analysis_thread)
+        self._analysis_thread.start()
+        
+    def close_analysis_thread(self):
+        """
+        This function closes the analysis thread
+        """
+        self._analysis_thread.quit()
+        self._analysis_thread.wait()
         
     @pyqtSlot(MessageType, str)
     def _print_to_ui(self, msg_type: MessageType, msg_toprint: str):
@@ -168,41 +197,32 @@ class Presenter(QObject):
         if filepath_str:
             self.data_path = Path(filepath_str)
             self.metadata_path = self.data_path.parent / Path(self.data_path.stem + ".yaml")
-            self._reset_analysis()
-            self._prep_analysis()
-            if self.analysis_status==AnalysisStatus.DATA_LOADED:
-                self._view.reset_ui()
-                self._view.upd_data_file_onui(self.data_path)
+            self._order_load_data()
             
     def _reset_analysis(self):
         """
         This function kills previous analysis thread if still ongoing
         """
-        if self._analysis_thread is not None:
-            self._analysis_thread.quit()
-            self._analysis_thread.wait()
-        self._analysis_worker = None
+        self._analysis_worker.reset()
         self.analysis_status = AnalysisStatus.PRE_ANALYSIS
             
-    def _prep_analysis(self):
+    def _order_load_data(self):
         """
         This function starts a new analysis thread, creates a new analysis worker and connects its signals
         to the Presenter
         """
-        # analysis thread preparation, to allow dynamic updating of the GUI
-        self._analysis_worker = AnalysisWorker(self.data_path, self.metadata_path)
-        self._analysis_thread = QThread()
-        self._make_analysis_connect()
-        # start loading data for analysis
-        self._analysis_worker.load_data()
-        if self._analysis_worker.data.is_data_file_open and self._analysis_worker.data.is_metadata_file_open:
-            self.analysis_status = AnalysisStatus.DATA_LOADED
-        else:
-            self._reset_analysis()
-            return
-        # make signal connections
-        self._analysis_worker.moveToThread(self._analysis_thread)
-        self._analysis_thread.start()
+        self._reset_analysis()
+        self._view.reset_ui()
+        self.signals.request_load_data.emit(self.data_path, self.metadata_path)
+            
+    @pyqtSlot()
+    def _on_data_loaded(self):
+        """
+        This function is called upon successfull data loading.
+        It prints on UI the file name and folder, and updates the analysis status.
+        """
+        self._view.upd_data_file_onui(self.data_path)
+        self.analysis_status = AnalysisStatus.DATA_LOADED
             
     @pyqtSlot()
     @check_analysis_status(AnalysisStatus.DATA_LOADED)
@@ -248,7 +268,7 @@ class Presenter(QObject):
         self.analysis_status = AnalysisStatus.FILT_DONE
         self.curr_displ_orig_num = 0
         self._view.plot_orig(self._analysis_worker.simpler, self.curr_displ_orig_num)
-        self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
+        self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.tot_orig)
         self._view.set_color_frame(UIColor.GRAY)
 
     @pyqtSlot(bool)
@@ -286,8 +306,8 @@ class Presenter(QObject):
             )
         elif self.analysis_status.passed_analysis_step(AnalysisStatus.FILT_DONE):
             self.curr_displ_orig_num += shift
-            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.data.tot_orig
-            self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.data.tot_orig)
+            self.curr_displ_orig_num = self.curr_displ_orig_num % self._analysis_worker.tot_orig
+            self._view.upd_curr_orig_count(self.curr_displ_orig_num + 1, self._analysis_worker.tot_orig)
             self._view.plot_orig(self._analysis_worker.simpler, self.curr_displ_orig_num)
 
     @pyqtSlot()
@@ -343,6 +363,22 @@ class Presenter(QObject):
         """
         self.signals.request_calibration.emit()
         
+    @pyqtSlot()
+    def _order_calibration_fromfile(self):
+        """
+        This function opens a window to choose a .npy file containing the results of a clusterization and, if the file is opened successfully and has
+        the expected structure, it orders the analysis worker to perform the final SIMPLER calibration using the uploaded data
+        """
+        filepath_str, _ = QFileDialog.getOpenFileName(
+            self._view,
+            directory=str(Path.home()), # home directory, OS independent
+            caption="Select calibration file",
+            filter="(*.npy)"
+        )
+        if filepath_str:
+            filepath = Path(filepath_str)
+            self.signals.request_calibration_fromfile.emit(filepath)
+        
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
         self.preclust_gamma = value
@@ -350,4 +386,49 @@ class Presenter(QObject):
     @pyqtSlot(float)
     def upd_preclust_eps(self, value):
         self.preclust_eps = value
+        
+    @pyqtSlot()
+    def _on_calib_done(self):
+        """
+        This function is called upon successfull SIMPLER calibration.
+        It saves results on file, both parameters with errors and plot
+        """
+        self._print_to_ui(MessageType.INFO, "SIMPLER calibration performed. Results:")
+        self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3}")
+        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4} &plusmn; {self._analysis_worker.fit.d_F_err:.4}")
+        self.save_calib_res(
+            self._analysis_worker.fit.alpha_F,
+            self._analysis_worker.fit.alpha_F_err,
+            self._analysis_worker.fit.d_F,
+            self._analysis_worker.fit.d_F_err,
+        )
+        self.save_calib_plot()
+
+    def save_calib_res(self, alpha_F, alpha_F_err, d_F, d_F_err):
+        """
+        This function saves the results of the SIMPLER calibration in a .json in the result folder
+        """
+        calib_res_filename = self.data_path.stem + "_calib_res.json"
+        calib_res_dict = {
+            "alpha_F": alpha_F,
+            "alpha_F_err": alpha_F_err,
+            "d_F": d_F,
+            "d_F_err": d_F_err,
+        }
+        with open(self.res_dir / Path(calib_res_filename), "w") as f:
+            json.dump(calib_res_dict, f, indent=4)
+        
+    def save_calib_plot(self,):
+        """
+        This function saves the plot of the SIMPLER calibration as a .png in the result folder
+        """
+        plt.close()
+        calib_plot_filename = self.data_path.stem + "_calib_plot.png"
+        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.F_values.ravel(), ".", ms=8, label="Data")
+        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.y_values.ravel(), "x", label="Fit")
+        plt.ylabel(r"$F(z) = \frac{N(z)}{N(z_1)}$")
+        plt.xlabel("z")
+        plt.legend()
+        plt.grid()
+        plt.savefig(self.res_dir / Path(calib_plot_filename))
         

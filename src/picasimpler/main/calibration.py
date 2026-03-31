@@ -19,5 +19,8 @@ if __name__ == "__main__":
     with open(style_file, "r") as st_f:
         st_f_content = st_f.read()
     app.setStyleSheet(st_f_content)
-    app.presenter.show_ui()
-    sys.exit(app.exec())
+    try:
+        app.presenter.show_ui()
+        sys.exit(app.exec())
+    finally:
+        app.presenter.close_analysis_thread()

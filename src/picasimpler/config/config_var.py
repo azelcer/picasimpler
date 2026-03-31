@@ -18,3 +18,6 @@ N_CLUST_EXP = 4
 LAMBDA_REF_VAL_NM = 100
 # result directory
 RES_DIR = Path("results")
+# initial guesses for calibration fit
+ALPHA_GUESS = 0.9
+D_GUESS = 100

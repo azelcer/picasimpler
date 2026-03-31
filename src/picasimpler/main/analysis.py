@@ -412,6 +412,8 @@ class SpatialFit(QObject):
         
         # variables for later plot
         self.y_values = (self.alpha_F * np.exp(-self.z_real / self.d_F) + (1 - self.alpha_F)) / (self.alpha_F * np.exp(-self.z_real[:, 0, np.newaxis] / self.d_F) + (1 - self.alpha_F))
+        self.F_values = N_data / N_data[:, 0, np.newaxis]
+
 
 @dataclass
 class Params:
@@ -459,6 +461,7 @@ class AnalysisSignals(QObject):
     tell_refit_done = pyqtSignal()
     send_msg_toprint = pyqtSignal(object, str)
     tell_calib_done = pyqtSignal()
+    tell_calib_fromfile_done = pyqtSignal()
 
 class AnalysisWorker(QObject):
     def __init__(self):
@@ -703,7 +706,7 @@ class AnalysisWorker(QObject):
         if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:3]==(4, 3)) and (len(clust_fromfile.shape)==3):
             self.fit.upd_data_forfit(self.params.z_sites_nm, clust_fromfile)
             self.fit.fit_renorm()
-            self.signals.tell_calib_done.emit()
+            self.signals.tell_calib_fromfile_done.emit()
         else:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
         

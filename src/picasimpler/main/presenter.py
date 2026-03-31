@@ -151,6 +151,7 @@ class Presenter(QObject):
         self._analysis_worker.signals.tell_refit_done.connect(self._on_refit_done)
         self._analysis_worker.signals.send_msg_toprint.connect(self._print_to_ui)
         self._analysis_worker.signals.tell_calib_done.connect(self._on_calib_done)
+        self._analysis_worker.signals.tell_calib_fromfile_done.connect(self._on_calib_fromfile_done)
         # connect signals from other analysis helper classes to presenter
         self._analysis_worker.simpler_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         self._analysis_worker.simpler_signals.send_msg_toprint.connect(self._print_to_ui)
@@ -376,8 +377,8 @@ class Presenter(QObject):
             filter="(*.npy)"
         )
         if filepath_str:
-            filepath = Path(filepath_str)
-            self.signals.request_calibration_fromfile.emit(filepath)
+            self.clust_res_filepath = Path(filepath_str)
+            self.signals.request_calibration_fromfile.emit(self.clust_res_filepath)
         
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
@@ -395,20 +396,38 @@ class Presenter(QObject):
         """
         self._print_to_ui(MessageType.INFO, "SIMPLER calibration performed. Results:")
         self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3}")
-        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4} &plusmn; {self._analysis_worker.fit.d_F_err:.4}")
+        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4} &plusmn; {self._analysis_worker.fit.d_F_err:.4} nm")
         self.save_calib_res(
+            self.data_path.stem + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,
             self._analysis_worker.fit.alpha_F_err,
             self._analysis_worker.fit.d_F,
             self._analysis_worker.fit.d_F_err,
         )
-        self.save_calib_plot()
+        self.save_calib_plot(self.data_path.stem + "_calib_res.json")
+        
+    @pyqtSlot()
+    def _on_calib_fromfile_done(self):
+        """
+        This function is called upon successfull SIMPLER calibration from file.
+        It saves results on file, both parameters with errors and plot
+        """
+        self._print_to_ui(MessageType.INFO, "SIMPLER calibration performed. Results:")
+        self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3}")
+        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4} &plusmn; {self._analysis_worker.fit.d_F_err:.4} nm")
+        self.save_calib_res(
+            self.clust_res_filepath.stem + "_calib_res.json",
+            self._analysis_worker.fit.alpha_F,
+            self._analysis_worker.fit.alpha_F_err,
+            self._analysis_worker.fit.d_F,
+            self._analysis_worker.fit.d_F_err,
+        )
+        self.save_calib_plot(self.clust_res_filepath.stem + "_calib_res.png")
 
-    def save_calib_res(self, alpha_F, alpha_F_err, d_F, d_F_err):
+    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err):
         """
         This function saves the results of the SIMPLER calibration in a .json in the result folder
         """
-        calib_res_filename = self.data_path.stem + "_calib_res.json"
         calib_res_dict = {
             "alpha_F": alpha_F,
             "alpha_F_err": alpha_F_err,
@@ -418,12 +437,11 @@ class Presenter(QObject):
         with open(self.res_dir / Path(calib_res_filename), "w") as f:
             json.dump(calib_res_dict, f, indent=4)
         
-    def save_calib_plot(self,):
+    def save_calib_plot(self, calib_plot_filename):
         """
         This function saves the plot of the SIMPLER calibration as a .png in the result folder
         """
         plt.close()
-        calib_plot_filename = self.data_path.stem + "_calib_plot.png"
         plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.F_values.ravel(), ".", ms=8, label="Data")
         plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.y_values.ravel(), "x", label="Fit")
         plt.ylabel(r"$F(z) = \frac{N(z)}{N(z_1)}$")

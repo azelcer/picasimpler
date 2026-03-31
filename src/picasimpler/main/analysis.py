@@ -535,7 +535,7 @@ class AnalysisWorker(QObject):
                 self.signals.send_msg_toprint.emit(MessageType.INFO, "hdf5 file has expected structure")
                 df_data = store['/locs']
                 # count total number of picks
-                tot_picks = df_data['group'].iloc[-1] + 1
+                tot_picks = len(set(df_data['group']))
                 _lgr.info(f"Total number of picks: {tot_picks}")
                 self.signals.send_msg_toprint.emit(MessageType.INFO, f"Total number of picks: {tot_picks}")
                 self.df_raw = df_data

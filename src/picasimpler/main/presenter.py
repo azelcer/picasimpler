@@ -395,14 +395,17 @@ class Presenter(QObject):
         It saves results on file, both parameters with errors and plot
         """
         self._print_to_ui(MessageType.INFO, "SIMPLER calibration performed. Results:")
-        self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3}")
-        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4} &plusmn; {self._analysis_worker.fit.d_F_err:.4} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3g} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3g}")
+        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4g} &plusmn; {self._analysis_worker.fit.d_F_err:.4g} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub&gt; = {self._analysis_worker.fit.N_0_avg:.7g} &plusmn; {self._analysis_worker.fit.N_0_std:.7g}")
         self.save_calib_res(
             self.data_path.stem + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,
             self._analysis_worker.fit.alpha_F_err,
             self._analysis_worker.fit.d_F,
             self._analysis_worker.fit.d_F_err,
+            self._analysis_worker.fit.N_0_avg,
+            self._analysis_worker.fit.N_0_std
         )
         self.save_calib_plot(self.data_path.stem + "_calib_res.png")
         
@@ -413,18 +416,21 @@ class Presenter(QObject):
         It saves results on file, both parameters with errors and plot
         """
         self._print_to_ui(MessageType.INFO, "SIMPLER calibration performed. Results:")
-        self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3}")
-        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4} &plusmn; {self._analysis_worker.fit.d_F_err:.4} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3g} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3g}")
+        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4g} &plusmn; {self._analysis_worker.fit.d_F_err:.4g} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.7g} &plusmn; {self._analysis_worker.fit.N_0_std:.7g}")
         self.save_calib_res(
             self.clust_res_filepath.stem + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,
             self._analysis_worker.fit.alpha_F_err,
             self._analysis_worker.fit.d_F,
             self._analysis_worker.fit.d_F_err,
+            self._analysis_worker.fit.N_0_avg,
+            self._analysis_worker.fit.N_0_std
         )
         self.save_calib_plot(self.clust_res_filepath.stem + "_calib_res.png")
 
-    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err):
+    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err, N_0_avg, N_0_std):
         """
         This function saves the results of the SIMPLER calibration in a .json in the result folder
         """
@@ -433,6 +439,8 @@ class Presenter(QObject):
             "alpha_F_err": alpha_F_err,
             "d_F": d_F,
             "d_F_err": d_F_err,
+            "N_0_avg": N_0_avg,
+            "N_0_std": N_0_std
         }
         with open(self.res_dir / Path(calib_res_filename), "w") as f:
             json.dump(calib_res_dict, f, indent=4)
@@ -442,9 +450,9 @@ class Presenter(QObject):
         This function saves the plot of the SIMPLER calibration as a .png in the result folder
         """
         plt.close()
-        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.F_values.ravel(), ".", ms=8, label="Data")
-        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.y_values.ravel(), "x", label="Fit")
-        plt.ylabel(r"$F(z) = \frac{N(z)}{N(z_1)}$")
+        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.N_renorm_arr.ravel(), ".", ms=8, label="Data")
+        plt.plot(self._analysis_worker.fit.z_ax_forplot, self._analysis_worker.fit.fit_func_forplot.ravel(), label="Fit")
+        plt.ylabel("Relative Intensity")
         plt.xlabel("z")
         plt.legend()
         plt.grid()

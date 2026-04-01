@@ -19,6 +19,8 @@ LAMBDA_REF_VAL_NM = 100
 # result directory
 RES_DIR = Path("results")
 # initial guesses for calibration fit
-ALPHA_GUESS = 0.9
+ALPHA_GUESS = 0.7
 D_GUESS = 100
-SPACER_GUESS = 10
+# parameters for calibration plot
+PLOT_RANGE_NM = 150
+PLOT_PTS = 2000

@@ -28,7 +28,9 @@ from picasimpler.config.config_var import (
     LAMBDA_REF_VAL_NM,
     RES_DIR,
     ALPHA_GUESS,
-    D_GUESS
+    D_GUESS,
+    PLOT_RANGE_NM,
+    PLOT_PTS
 )
 
 _lgn.basicConfig()
@@ -409,10 +411,30 @@ class SpatialFit(QObject):
         self.d_F = d_F
         self.alpha_F_err = perr[0]
         self.d_F_err = perr[1]
-        
-        # variables for later plot
+        # variables for plot
         self.y_values = (self.alpha_F * np.exp(-self.z_real / self.d_F) + (1 - self.alpha_F)) / (self.alpha_F * np.exp(-self.z_real[:, 0, np.newaxis] / self.d_F) + (1 - self.alpha_F))
         self.F_values = N_data / N_data[:, 0, np.newaxis]
+        
+    def fit_N0(self):
+        """
+        This function should be called once alpha_F and d_F have already been fitted.
+        It iterates over all selected origamis and fits N_0 (keeping alpha_F and d_F fixed!)
+        for each one.
+        """
+        self.N_0_arr = np.zeros(len(self.clust_means_forfit), dtype=float)
+        def F(z, N_0):
+            return N_0*(self.alpha_F * np.exp(-z / self.d_F) + (1 - self.alpha_F))
+        for orig_idx in range(len(self.clust_means_forfit)):
+            z_data = self.z_real[orig_idx, :]
+            N_data = self.clust_means_forfit[orig_idx, :, 2]
+            N_0_val, N_0_err = curve_fit(F, z_data, N_data, p0=self.clust_means_forfit[orig_idx, 0, 2], bounds=([0],[np.inf]))
+            self.N_0_arr[orig_idx] = N_0_val
+        self.N_renorm_arr = self.clust_means_forfit[:, :, 2]/self.N_0_arr[:, np.newaxis]
+        self.N_0_avg = np.mean(self.N_0_arr)
+        self.N_0_std = np.std(self.N_0_arr)
+        # variables for plot
+        self.z_ax_forplot = np.linspace(0, PLOT_RANGE_NM, PLOT_PTS)
+        self.fit_func_forplot = F(self.z_ax_forplot, 1)
 
 @dataclass
 class Params:
@@ -690,6 +712,7 @@ class AnalysisWorker(QObject):
         """
         self.fit.upd_data_forfit(self.params.z_sites_nm, self.clust.clust_means[self.clust.selec_orig_list, :, :])
         self.fit.fit_renorm()
+        self.fit.fit_N0()
         self.signals.tell_calib_done.emit()
         
     @pyqtSlot(Path)
@@ -705,6 +728,7 @@ class AnalysisWorker(QObject):
         if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:3]==(4, 3)) and (len(clust_fromfile.shape)==3):
             self.fit.upd_data_forfit(self.params.z_sites_nm, clust_fromfile)
             self.fit.fit_renorm()
+            self.fit.fit_N0()
             self.signals.tell_calib_fromfile_done.emit()
         else:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")

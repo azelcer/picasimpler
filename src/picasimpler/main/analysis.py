@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from scipy.spatial import distance
 from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -15,7 +16,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from picasimpler.helpers.status import AnalysisStatus, MessageType
 from picasimpler.helpers.utils import px_to_nm
 from picasimpler.config.config_var import (
-    SPAT_TOL_NM,
+    SPAT_TOL_NM_DEF,
     MAX_FIRST_FRAME_PERC,
     MIN_LAST_FRAME_PERC,
     FRAME_MEDIAN_PERC_RANGE,
@@ -25,12 +26,20 @@ from picasimpler.config.config_var import (
     MIN_GOOD_LOC,
     N_CLUST_EXP,
     Z_SITES_NM,
-    LAMBDA_REF_VAL_NM,
+    DF_REF_VAL_NM,
     RES_DIR,
     ALPHA_GUESS,
     D_GUESS,
     PLOT_RANGE_NM,
-    PLOT_PTS
+    PLOT_PTS,
+    LAMDBA_EXC_DEF,
+    LAMBDA_EM_DEF,
+    Z_SIM_DISCR,
+    Z_SIM_RANGE,
+    Z_SIM_STEP,
+    LAMBDA_EM_DISCR,
+    NI_DEF,
+    NS_DEF
 )
 
 _lgn.basicConfig()
@@ -298,6 +307,7 @@ class SpatialFit(QObject):
     def __init__(self, signals):
         super().__init__()
         self.signals = signals
+        self.coll_fl_interp: np.ndarray | None = None
         
     def upd_data_forfit(self, z_sites_nm, clust_means_forfit):
         """
@@ -309,6 +319,15 @@ class SpatialFit(QObject):
         # call functions to update all data needed for fit
         self._calc_tilt_angles()
         self._calc_z_real()
+        
+    def upd_tirf_angle_param(self, z_sim_fit_arr, lambda_exc, lambda_em, coll_fl_interp):
+        """
+        This function updates the parameters neded to backcalculate the TIRF angle starting from d_F
+        """
+        self.z_sim_fit_arr = z_sim_fit_arr
+        self.lambda_exc = lambda_exc
+        self.lambda_em = lambda_em
+        self.coll_fl_interp = coll_fl_interp
         
     def _calc_tilt_angles(self):
         """
@@ -411,9 +430,6 @@ class SpatialFit(QObject):
         self.d_F = d_F
         self.alpha_F_err = perr[0]
         self.d_F_err = perr[1]
-        # variables for plot
-        self.y_values = (self.alpha_F * np.exp(-self.z_real / self.d_F) + (1 - self.alpha_F)) / (self.alpha_F * np.exp(-self.z_real[:, 0, np.newaxis] / self.d_F) + (1 - self.alpha_F))
-        self.F_values = N_data / N_data[:, 0, np.newaxis]
         
     def fit_N0(self):
         """
@@ -435,6 +451,20 @@ class SpatialFit(QObject):
         # variables for plot
         self.z_ax_forplot = np.linspace(0, PLOT_RANGE_NM, PLOT_PTS)
         self.fit_func_forplot = F(self.z_ax_forplot, 1)
+        
+    def backcalc_tirf_angle(self):
+        """
+        This function infers, from the global decay curve, the TIRF angle, using information about emission wavelength and objective NA
+        """
+        self.SIMPLER_prof = self.alpha_F*np.exp(-self.z_sim_fit_arr/self.d_F) + (1 - self.alpha_F)
+        self.exc_prof = self.SIMPLER_prof / self.coll_fl_interp
+        def F_exc(x, d_exc, b, c):
+            return b * np.exp(-x/d_exc) + c                           
+        popt, pcov = curve_fit(F_exc, self.z_sim_fit_arr, self.exc_prof, p0 = [100, 0.9, 0.1])
+        self.d_exc = popt[0]
+        self.d_exc_err = pcov[0, 0]
+        self.exc_fit = F_exc(self.z_sim_fit_arr, popt[0], popt[1], popt[2])
+        self.tirf_angle = np.arcsin(np.sqrt(((self.lambda_exc/(4*np.pi*popt[0]))**2 + NS_DEF**2)/NI_DEF**2))*180/np.pi
 
 @dataclass
 class Params:
@@ -451,13 +481,22 @@ class Params:
     # SIMPLER filtering parameters
     spat_tol_nm: float # how far can two locs be to be considered the same event
 
-    # clustering parameters
+    # pre-clustering parameters
     preclust_gamma: float
     preclust_eps: float
     min_good_loc: int
+    df_ref_val_nm: float
+    # clustering parameters
     n_clust_exp: int
     z_sites_nm_list: list
-    lambda_ref_val_nm: float
+    # setup parameters
+    lambda_exc: float
+    lambda_em: float
+    # objetive collection efficiency simulation parameters
+    z_sim_fit_arr: np.ndarray
+    z_sim_discr: list
+    lambda_em_disc: list
+    # result directory
     res_dir: Path
 
     # movie parameters
@@ -467,6 +506,9 @@ class Params:
 
     # convenience parameters
     r_th_sq: float = field(init=False)
+    
+    # table of collection efficiencies
+    coll_fl_tab: np.ndarray | None = field(init=False, default=None)
     
     def __post_init__(self):
         self.z_sites_nm = np.array(self.z_sites_nm_list, dtype=float)
@@ -481,8 +523,7 @@ class AnalysisSignals(QObject):
     tell_clust_done = pyqtSignal(bool)
     tell_refit_done = pyqtSignal()
     send_msg_toprint = pyqtSignal(object, str)
-    tell_calib_done = pyqtSignal()
-    tell_calib_fromfile_done = pyqtSignal()
+    tell_calib_done = pyqtSignal(str)
 
 class AnalysisWorker(QObject):
     def __init__(self):
@@ -492,30 +533,35 @@ class AnalysisWorker(QObject):
         self.simpler_signals = SIMPLERSignals()
         self.clust_signals = ClusterizationSignals()
         self.fit_signals = SpatialFitSignals()
-        self.reset()
+        self.init_analysis()
 
-    def reset(self):
-        """
-        This function re-initialize all helper classes of the analysis worker to make sure that whenever the dataset is changed,
-        all variables and parameters are reset
-        """
+    def init_analysis(self):
         self.params = Params(
             MAX_FIRST_FRAME_PERC,
             MIN_LAST_FRAME_PERC,
             FRAME_MEDIAN_PERC_RANGE,
             MAX_ON_FRAMES_PERC,
-            SPAT_TOL_NM,
+            SPAT_TOL_NM_DEF,
             PRECLUST_GAMMA_DEF,
             PRECLUST_EPS_DEF,
             MIN_GOOD_LOC,
+            DF_REF_VAL_NM,
             N_CLUST_EXP,
             Z_SITES_NM,
-            LAMBDA_REF_VAL_NM,
+            LAMDBA_EXC_DEF,
+            LAMBDA_EM_DEF,
+            np.arange(Z_SIM_RANGE[0], Z_SIM_RANGE[1], Z_SIM_STEP),
+            Z_SIM_DISCR,
+            LAMBDA_EM_DISCR,
             RES_DIR
         )
         self.simpler: SIMPLER = SIMPLER(self.simpler_signals)
         self.clust: Clusterization = Clusterization(self.clust_signals)
         self.fit: SpatialFit = SpatialFit(self.fit_signals)
+
+    @pyqtSlot(float)
+    def upd_spat_tol(self, value):
+        self.params.spat_tol_nm = value
 
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
@@ -525,6 +571,42 @@ class AnalysisWorker(QObject):
     def upd_preclust_eps(self, value):
         self.params.preclust_eps = value
 
+    @pyqtSlot(float)
+    def upd_lambda_exc(self, value):
+        self.params.lambda_exc = value
+        
+    @pyqtSlot(float)
+    def upd_lambda_em(self, value):
+        self.params.lambda_em = value
+        if self.params.coll_fl_tab is not None:
+            self._upd_coll_fl_arr()
+        
+    @pyqtSlot(object)
+    def upd_coll_fl_tab(self, coll_fl_tab):
+        """
+        This function receives a table of collection efficiencies, corresponding to the value of NA chosen on UI.
+        """
+        self.params.coll_fl_tab = coll_fl_tab
+        if self.params.lambda_em is not None:
+            self._upd_coll_fl_arr()
+
+    def _upd_coll_fl_arr(self):
+        """
+        This function computes the collection efficiency of the objective depending on the emission wavelength and z.
+        It extract the values corresponding to the value of simulated emission lambda which is the closest to the value
+        chosen on UI; then, it interpolates such values to the full z axis and passes the result to the fit class.
+        """
+        idx_closest_lambda_em = np.argmin(abs(LAMBDA_EM_DISCR - np.ones(np.size(LAMBDA_EM_DISCR))*self.params.lambda_em))
+        df_em_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
+        if len(df_em_discr)!=len(self.params.z_sim_discr):
+            raise ValueError("Arrays of simulated z and d_F have different length!")
+        self.fit.upd_tirf_angle_param(
+            self.params.z_sim_fit_arr,
+            self.params.lambda_exc,
+            self.params.lambda_em,
+            interp1d(self.params.z_sim_discr, df_em_discr)(self.params.z_sim_fit_arr)
+        )
+                
     @pyqtSlot(Path, Path)
     def load_data(self, picks_data_path, metadata_path):
         """
@@ -656,14 +738,14 @@ class AnalysisWorker(QObject):
             self.params.preclust_gamma,
             self.params.preclust_eps,
             self.params.min_good_loc,
-            self.params.lambda_ref_val_nm
+            self.params.df_ref_val_nm
         )
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
         self.clust.do_clust_xyn(self.params.n_clust_exp)
         if self.simpler.locs:
             self.signals.tell_clust_done.emit(True)
         else:
-            self.signals.tell_clust_done.emit(True)
+            self.signals.tell_clust_done.emit(False)
 
     def save_clust(self):
         """
@@ -685,7 +767,7 @@ class AnalysisWorker(QObject):
             self.params.preclust_gamma,
             self.params.preclust_eps,
             self.params.min_good_loc,
-            self.params.lambda_ref_val_nm
+            self.params.df_ref_val_nm
         )
         if new_labels is None:
             _lgr.warning("Re-fit failed at pre-clustering de-noising step, try changing parameters")
@@ -710,10 +792,8 @@ class AnalysisWorker(QObject):
         This function performs the SIMPLER calibration using the results from clusterization and the expected
         z positions, corrected according to the origamin tilt. 
         """
-        self.fit.upd_data_forfit(self.params.z_sites_nm, self.clust.clust_means[self.clust.selec_orig_list, :, :])
-        self.fit.fit_renorm()
-        self.fit.fit_N0()
-        self.signals.tell_calib_done.emit()
+        self.perform_calib_steps(self.clust.clust_means[self.clust.selec_orig_list, :, :])
+        self.signals.tell_calib_done.emit('')
         
     @pyqtSlot(Path)
     def do_calib_fromfile(self, res_path):
@@ -726,13 +806,16 @@ class AnalysisWorker(QObject):
         except Exception as e:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Cannot open result file because of Exception: {e}")
         if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:3]==(4, 3)) and (len(clust_fromfile.shape)==3):
-            self.fit.upd_data_forfit(self.params.z_sites_nm, clust_fromfile)
-            self.fit.fit_renorm()
-            self.fit.fit_N0()
-            self.signals.tell_calib_fromfile_done.emit()
+            self.perform_calib_steps(clust_fromfile)
+            self.signals.tell_calib_done.emit('from file')
         else:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
-        
+
+    def perform_calib_steps(self, clust_forcalib):
+        self.fit.upd_data_forfit(self.params.z_sites_nm, clust_forcalib)
+        self.fit.fit_renorm()
+        self.fit.fit_N0()
+        self.fit.backcalc_tirf_angle()
 
 def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
     y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))

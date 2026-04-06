@@ -13,7 +13,18 @@ from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor, MessageType
 from picasimpler.helpers.utils import safe_float_to0
-from picasimpler.config.config_var import PRECLUST_GAMMA_DEF, MAX_PRECLUST_GAMMA, PRECLUST_EPS_DEF, RES_DIR
+from picasimpler.config.config_var import (
+    SPAT_TOL_NM_DEF,
+    SPAT_TOL_NM_MIN,
+    PRECLUST_GAMMA_DEF,
+    MAX_PRECLUST_GAMMA,
+    PRECLUST_EPS_DEF,
+    LAMDBA_EXC_DEF,
+    LAMBDA_EM_DEF,
+    LAMBDA_MIN,
+    NA_IDX_DEF,
+    RES_DIR
+)
 
 _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
@@ -27,8 +38,12 @@ class PresenterSignals(QObject):
     request_calibration = pyqtSignal()
     request_calibration_fromfile = pyqtSignal(object)
     request_refit_origami = pyqtSignal(int)
+    send_spat_tol_toanalysis = pyqtSignal(float)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
+    send_lambda_exc_toanalysis = pyqtSignal(float)
+    send_lambda_em_toanalysis = pyqtSignal(float)
+    send_coll_fl_tab_toanalysis = pyqtSignal(object)
 
 class Presenter(QObject):
     """
@@ -47,9 +62,14 @@ class Presenter(QObject):
         self.tot_elem_curr_analysis_step: int | None = None
         self.curr_displ_orig_num: int | None = None
         self.analysis_status: AnalysisStatus = AnalysisStatus.PRE_ANALYSIS
+        self.simpler_tol:float = SPAT_TOL_NM_DEF
         self.preclust_gamma: float = PRECLUST_GAMMA_DEF
         self.preclust_eps: float = PRECLUST_EPS_DEF
+        self.lambda_exc: float = LAMDBA_EXC_DEF
+        self.lambda_em: float = LAMBDA_EM_DEF
         self.res_dir: Path = RES_DIR
+        self._view.ui.NA_combobox.setCurrentIndex(NA_IDX_DEF)
+        self._view.ui.NA_combobox.activated.emit(self._view.ui.NA_combobox.currentIndex())
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -69,13 +89,23 @@ class Presenter(QObject):
         return check_analysis_status_innderdecor
         
     @property
-    def analysis_status(self: Presenter):
+    def analysis_status(self):
         return self._analysis_status
     
     @analysis_status.setter
     def analysis_status(self, status: AnalysisStatus):
         self._analysis_status = status
         self._view.upd_analysis_status_onui(status)
+        
+    @property
+    def simpler_tol(self):
+        return self._simpler_tol
+    
+    @simpler_tol.setter
+    def simpler_tol(self, value: float):
+        self._simpler_tol = max((value, SPAT_TOL_NM_MIN))
+        self.signals.send_spat_tol_toanalysis.emit(self._simpler_tol)
+        self._view.upd_spat_tol_onui(self._simpler_tol)
         
     @property
     def preclust_gamma(self: Presenter):
@@ -96,6 +126,26 @@ class Presenter(QObject):
         self._preclust_eps = value
         self.signals.send_preclust_eps_toanalysis.emit(self._preclust_eps)
         self._view.upd_preclust_eps_onui(self._preclust_eps)
+        
+    @property
+    def lambda_em(self):
+        return self._lambda_em
+    
+    @lambda_em.setter
+    def lambda_em(self, value: float):
+        self._lambda_em = max((value, LAMBDA_MIN))
+        self.signals.send_lambda_em_toanalysis.emit(self._lambda_em)
+        self._view.upd_lambda_em_onui(self._lambda_em)
+        
+    @property
+    def lambda_exc(self):
+        return self._lambda_exc
+    
+    @lambda_exc.setter
+    def lambda_exc(self, value: float):
+        self._lambda_exc = max((value, LAMBDA_MIN))
+        self.signals.send_lambda_exc_toanalysis.emit(self._lambda_exc)
+        self._view.upd_lambda_exc_onui(self._lambda_exc)
         
     def show_ui(self):
         self._view.show()
@@ -118,6 +168,11 @@ class Presenter(QObject):
         self._view.ui.disc_selec_orig_button.clicked.connect(self._disc_selec_orig)
         self._view.ui.refit_origami.clicked.connect(self._order_refit_orig)
         # parameters inputs from UI
+        self._view.ui.simpler_spat_tol_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_spat_tol_fromui.emit(
+                safe_float_to0(self._view.ui.simpler_spat_tol_lineedit.text())
+            )
+        )
         self._view.ui.preclust_gamma_lineedit.manual_editing_finished.connect(
             lambda: self._view.signals.send_preclust_gamma_fromui.emit(
                 safe_float_to0(self._view.ui.preclust_gamma_lineedit.text())
@@ -128,8 +183,22 @@ class Presenter(QObject):
                 safe_float_to0(self._view.ui.preclust_eps_lineedit.text())
             )
         )
+        self._view.ui.lambda_exc_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_lambda_exc_fromui.emit(
+                safe_float_to0(self._view.ui.lambda_exc_lineedit.text())
+            )
+        )
+        self._view.ui.lambda_em_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_lambda_em_fromui.emit(
+                safe_float_to0(self._view.ui.lambda_em_lineedit.text())
+            )
+        )
+        self._view.signals.send_spat_tol_fromui.connect(self.upd_spat_tol)
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
         self._view.signals.send_preclust_eps_fromui.connect(self.upd_preclust_eps)
+        self._view.signals.send_lambda_exc_fromui.connect(self.upd_lambda_exc)
+        self._view.signals.send_lambda_em_fromui.connect(self.upd_lambda_em)
+        self._view.ui.NA_combobox.activated.connect(self.upd_NA)
         
     def _make_analysis_connect(self):
         """
@@ -141,8 +210,13 @@ class Presenter(QObject):
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
         self.signals.request_calibration.connect(self._analysis_worker.do_calib)
         self.signals.request_calibration_fromfile.connect(self._analysis_worker.do_calib_fromfile)
+        self.signals.send_spat_tol_toanalysis.connect(self._analysis_worker.upd_spat_tol)
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
+        self.signals.send_lambda_exc_toanalysis.connect(self._analysis_worker.upd_lambda_exc)
+        self.signals.send_lambda_em_toanalysis.connect(self._analysis_worker.upd_lambda_em)
+        self.signals.send_coll_fl_tab_toanalysis.connect(self._analysis_worker.upd_coll_fl_tab)
+        
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_data_loaded.connect(self._on_data_loaded)
         self._analysis_worker.signals.tell_analysis_step_start.connect(self._on_new_analysis_step)
@@ -151,7 +225,6 @@ class Presenter(QObject):
         self._analysis_worker.signals.tell_refit_done.connect(self._on_refit_done)
         self._analysis_worker.signals.send_msg_toprint.connect(self._print_to_ui)
         self._analysis_worker.signals.tell_calib_done.connect(self._on_calib_done)
-        self._analysis_worker.signals.tell_calib_fromfile_done.connect(self._on_calib_fromfile_done)
         # connect signals from other analysis helper classes to presenter
         self._analysis_worker.simpler_signals.tell_analysis_elem_done.connect(self._on_new_analysis_elem)
         self._analysis_worker.simpler_signals.send_msg_toprint.connect(self._print_to_ui)
@@ -200,19 +273,12 @@ class Presenter(QObject):
             self.metadata_path = self.data_path.parent / Path(self.data_path.stem + ".yaml")
             self._order_load_data()
             
-    def _reset_analysis(self):
-        """
-        This function kills previous analysis thread if still ongoing
-        """
-        self._analysis_worker.reset()
-        self.analysis_status = AnalysisStatus.PRE_ANALYSIS
-            
     def _order_load_data(self):
         """
         This function starts a new analysis thread, creates a new analysis worker and connects its signals
         to the Presenter
         """
-        self._reset_analysis()
+        self.analysis_status = AnalysisStatus.PRE_ANALYSIS
         self._view.reset_ui()
         self.signals.request_load_data.emit(self.data_path, self.metadata_path)
             
@@ -281,6 +347,7 @@ class Presenter(QObject):
         if not are_there_clust:
             self.analysis_status = AnalysisStatus.FILT_DONE
             _lgr.warning("No valid clusters found")
+            self._print_to_ui(MessageType.WARNING, "No valid clusters found")
             return
         else:
             self.analysis_status = AnalysisStatus.CLUST_DONE
@@ -381,6 +448,10 @@ class Presenter(QObject):
             self.signals.request_calibration_fromfile.emit(self.clust_res_filepath)
         
     @pyqtSlot(float)
+    def upd_spat_tol(self, value):
+        self.simpler_tol = value
+        
+    @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
         self.preclust_gamma = value
         
@@ -388,49 +459,63 @@ class Presenter(QObject):
     def upd_preclust_eps(self, value):
         self.preclust_eps = value
         
+    @pyqtSlot(float)
+    def upd_lambda_exc(self, value):
+        self.lambda_exc = value
+        
+    @pyqtSlot(float)
+    def upd_lambda_em(self, value):
+        self.lambda_em = value
+        
     @pyqtSlot()
-    def _on_calib_done(self):
+    def upd_NA(self):
+        """
+        This function reads the correct file, depending on the NA and emission wavelength chosen on UI,
+        containing the values of the collection efficiency with respect to z
+        """
+        match self._view.ui.NA_combobox.currentText():
+            case '1.40':
+                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA140.txt")
+            case '1.42':
+                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA142.txt")
+            case '1.45':
+                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA145.txt")
+            case '1.49':
+                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA149.txt")
+        self.signals.send_coll_fl_tab_toanalysis.emit(coll_fl_tab)
+        
+    @pyqtSlot(str)
+    def _on_calib_done(self, mode=''):
         """
         This function is called upon successfull SIMPLER calibration.
         It saves results on file, both parameters with errors and plot
         """
+        if mode=='from file':
+            filename_base = self.clust_res_filepath.stem
+        else:
+            filename_base = self.data_path.stem
         self._print_to_ui(MessageType.INFO, "SIMPLER calibration performed. Results:")
         self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3g} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3g}")
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4g} &plusmn; {self._analysis_worker.fit.d_F_err:.4g} nm")
-        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub&gt; = {self._analysis_worker.fit.N_0_avg:.7g} &plusmn; {self._analysis_worker.fit.N_0_std:.7g}")
+        self._print_to_ui(MessageType.SIMPLE, f"d<sub>EXC</sub> = {self._analysis_worker.fit.d_exc:.4g} &plusmn; {self._analysis_worker.fit.d_exc_err:.4g} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"&theta;<sub>TIRF</sub> = {self._analysis_worker.fit.tirf_angle:.4g}°")
+        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.3g} &plusmn; {self._analysis_worker.fit.N_0_std:.3g}")
         self.save_calib_res(
-            self.data_path.stem + "_calib_res.json",
+            filename_base + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,
             self._analysis_worker.fit.alpha_F_err,
             self._analysis_worker.fit.d_F,
             self._analysis_worker.fit.d_F_err,
+            self._analysis_worker.fit.d_exc,
+            self._analysis_worker.fit.d_exc_err,
+            self._analysis_worker.fit.tirf_angle,
             self._analysis_worker.fit.N_0_avg,
             self._analysis_worker.fit.N_0_std
         )
-        self.save_calib_plot(self.data_path.stem + "_calib_res.png")
-        
-    @pyqtSlot()
-    def _on_calib_fromfile_done(self):
-        """
-        This function is called upon successfull SIMPLER calibration from file.
-        It saves results on file, both parameters with errors and plot
-        """
-        self._print_to_ui(MessageType.INFO, "SIMPLER calibration performed. Results:")
-        self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3g} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3g}")
-        self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4g} &plusmn; {self._analysis_worker.fit.d_F_err:.4g} nm")
-        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.7g} &plusmn; {self._analysis_worker.fit.N_0_std:.7g}")
-        self.save_calib_res(
-            self.clust_res_filepath.stem + "_calib_res.json",
-            self._analysis_worker.fit.alpha_F,
-            self._analysis_worker.fit.alpha_F_err,
-            self._analysis_worker.fit.d_F,
-            self._analysis_worker.fit.d_F_err,
-            self._analysis_worker.fit.N_0_avg,
-            self._analysis_worker.fit.N_0_std
-        )
-        self.save_calib_plot(self.clust_res_filepath.stem + "_calib_res.png")
+        self.save_calib_plot(filename_base + "_calib_res.png")
+        self.save_tirf_angle_plot(filename_base + "_TIRF_angle_plot.png")
 
-    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err, N_0_avg, N_0_std):
+    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err, d_exc, d_exc_err, tirf_angle, N_0_avg, N_0_std):
         """
         This function saves the results of the SIMPLER calibration in a .json in the result folder
         """
@@ -439,6 +524,9 @@ class Presenter(QObject):
             "alpha_F_err": alpha_F_err,
             "d_F": d_F,
             "d_F_err": d_F_err,
+            "d_exc": d_exc,
+            "d_exc_err": d_exc_err,
+            "TIRF angle": tirf_angle,
             "N_0_avg": N_0_avg,
             "N_0_std": N_0_std
         }
@@ -457,4 +545,16 @@ class Presenter(QObject):
         plt.legend()
         plt.grid()
         plt.savefig(self.res_dir / Path(calib_plot_filename))
+        
+    def save_tirf_angle_plot(self, tirf_angle_plotname):
+        """
+        This function saves the plot of the various functions needed to backcalculate the TIRF angle
+        """
+        plt.close()
+        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.coll_fl_interp, label='CF interpolation')
+        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.SIMPLER_prof, label='SIMPLER profile')
+        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.exc_prof, label='excitation profile')
+        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.exc_fit, label='excitation fit')
+        plt.legend()
+        plt.savefig(self.res_dir / Path(tirf_angle_plotname))
         

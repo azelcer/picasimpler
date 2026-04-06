@@ -164,7 +164,7 @@ file (.hdf5)</string>
      <rect>
       <x>20</x>
       <y>100</y>
-      <width>891</width>
+      <width>711</width>
       <height>31</height>
      </rect>
     </property>
@@ -203,7 +203,7 @@ file (.hdf5)</string>
      <rect>
       <x>20</x>
       <y>40</y>
-      <width>891</width>
+      <width>711</width>
       <height>31</height>
      </rect>
     </property>
@@ -336,13 +336,13 @@ results (.npy)</string>
 SIMPLER</string>
     </property>
    </widget>
-   <widget class="QFrame" name="guess_frame">
+   <widget class="QFrame" name="inout_param_frame">
     <property name="geometry">
      <rect>
       <x>740</x>
-      <y>200</y>
+      <y>10</y>
       <width>171</width>
-      <height>311</height>
+      <height>501</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -355,7 +355,7 @@ SIMPLER</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>150</y>
+       <y>230</y>
        <width>151</width>
        <height>41</height>
       </rect>
@@ -369,7 +369,7 @@ for photon numbers</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>10</y>
+       <y>110</y>
        <width>151</width>
        <height>41</height>
       </rect>
@@ -383,8 +383,8 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>190</y>
-       <width>131</width>
+       <y>270</y>
+       <width>151</width>
        <height>21</height>
       </rect>
      </property>
@@ -396,7 +396,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>220</y>
+       <y>300</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -406,7 +406,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>220</y>
+       <y>300</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -416,7 +416,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>260</y>
+       <y>340</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -426,7 +426,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>260</y>
+       <y>340</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -436,7 +436,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>80</y>
+       <y>180</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -446,7 +446,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>60</y>
+       <y>160</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -459,7 +459,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>60</y>
+       <y>160</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -472,10 +472,123 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>80</y>
+       <y>180</y>
        <width>71</width>
        <height>31</height>
       </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="simpler_spat_tol_title_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>151</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>SIMPLER spatial
+tolerance [nm]:</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="simpler_spat_tol_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lambda_em_title_label">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>390</y>
+       <width>71</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;λ&lt;span style=&quot; vertical-align:sub;&quot;&gt;EM&lt;/span&gt; [nm]:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lambda_exc_title_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>390</y>
+       <width>71</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;λ&lt;span style=&quot; vertical-align:sub;&quot;&gt;EXC&lt;/span&gt; [nm]:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="lambda_em_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>410</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="lambda_exc_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>410</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="NA_combobox">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>450</y>
+       <width>73</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <item>
+      <property name="text">
+       <string>1.40</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>1.42</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>1.45</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>1.49</string>
+      </property>
+     </item>
+    </widget>
+    <widget class="QLabel" name="NA_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>450</y>
+       <width>55</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>NA:</string>
      </property>
     </widget>
    </widget>
@@ -557,7 +670,7 @@ from file (.npy)</string>
    <zorder>refit_origami</zorder>
    <zorder>save_clust_button</zorder>
    <zorder>calib_button</zorder>
-   <zorder>guess_frame</zorder>
+   <zorder>inout_param_frame</zorder>
    <zorder>calib_fromfile_button</zorder>
    <zorder>frame</zorder>
   </widget>
@@ -582,10 +695,22 @@ from file (.npy)</string>
   <tabstop>cluster_button</tabstop>
   <tabstop>save_clust_button</tabstop>
   <tabstop>calib_button</tabstop>
+  <tabstop>calib_fromfile_button</tabstop>
   <tabstop>prev_orig_button</tabstop>
   <tabstop>next_orig_button</tabstop>
   <tabstop>disc_selec_orig_button</tabstop>
   <tabstop>refit_origami</tabstop>
+  <tabstop>simpler_spat_tol_lineedit</tabstop>
+  <tabstop>preclust_gamma_lineedit</tabstop>
+  <tabstop>preclust_eps_lineedit</tabstop>
+  <tabstop>manual_guess_checkbox</tabstop>
+  <tabstop>n1_guess_lineedit</tabstop>
+  <tabstop>n2_guess_lineedit</tabstop>
+  <tabstop>n3_guess_lineedit</tabstop>
+  <tabstop>n4_guess_lineedit</tabstop>
+  <tabstop>lambda_em_lineedit</tabstop>
+  <tabstop>lambda_exc_lineedit</tabstop>
+  <tabstop>messages_textedit</tabstop>
  </tabstops>
  <resources/>
  <connections/>

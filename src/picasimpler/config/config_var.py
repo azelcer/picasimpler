@@ -1,7 +1,8 @@
 from pathlib import Path
 
 # SIMPLER filtering
-SPAT_TOL_NM = 30.0
+SPAT_TOL_NM_DEF = 30.0
+SPAT_TOL_NM_MIN = 5
 # kinetics filtering
 MAX_FIRST_FRAME_PERC = 0.33
 MIN_LAST_FRAME_PERC = 0.66
@@ -15,11 +16,23 @@ PRECLUST_EPS_DEF = 20
 MAX_PRECLUST_GAMMA = 1/len(Z_SITES_NM)
 MIN_GOOD_LOC = 100
 N_CLUST_EXP = 4
-LAMBDA_REF_VAL_NM = 100
+DF_REF_VAL_NM = 120
+# setup parameters
+LAMDBA_EXC_DEF = 560
+LAMBDA_EM_DEF = 580
+LAMBDA_MIN = 200
+NA_IDX_DEF = 2
+# objetive collection efficiency simulation parameters
+Z_SIM_DISCR = [5, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+Z_SIM_RANGE = [5, 500]
+Z_SIM_STEP = 0.5
+LAMBDA_EM_DISCR = [500, 530, 560, 590, 620, 670, 700, 720]
+NI_DEF = 1.517
+NS_DEF = 1.33
 # result directory
 RES_DIR = Path("results")
 # initial guesses for calibration fit
-ALPHA_GUESS = 0.7
+ALPHA_GUESS = 0.8
 D_GUESS = 100
 # parameters for calibration plot
 PLOT_RANGE_NM = 150

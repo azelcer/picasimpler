@@ -12,8 +12,12 @@ from picasimpler.helpers.validators import NumberValidators
 _translate = QCoreApplication.translate
 
 class ViewSignals(QObject):
+    send_spat_tol_fromui = pyqtSignal(float)
     send_preclust_gamma_fromui = pyqtSignal(float)
     send_preclust_eps_fromui = pyqtSignal(float)
+    send_lambda_exc_fromui = pyqtSignal(float)
+    send_lambda_em_fromui = pyqtSignal(float)
+    send_NA_fromui = pyqtSignal(str)
 
 class View(QMainWindow):
     """
@@ -48,6 +52,8 @@ class View(QMainWindow):
         """
         This function set validators for QLineEdits, establishing which numbers can be written
         """
+        # SIMPLER spatial tolerance must be positive, finite and no scientfic notation allowed
+        self.ui.simpler_spat_tol_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         # pre-clustering de-noising parameter must be positive, finite and no scientfic notation allowed
         self.ui.preclust_gamma_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         self.ui.preclust_eps_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
@@ -56,6 +62,9 @@ class View(QMainWindow):
         self.ui.n2_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         self.ui.n3_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         self.ui.n4_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        # wavelengths must be positive, finite and no scientfic notation allowed
+        self.ui.lambda_exc_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.lambda_em_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
         
     def reset_ui(self):
         """
@@ -238,8 +247,17 @@ class View(QMainWindow):
             str(sum(selec_orig_list)) + " / " + str(len(selec_orig_list))
         )
 
-    def upd_preclust_gamma_onui(self, tol):
-        self.ui.preclust_gamma_lineedit.setText(str(tol))
+    def upd_spat_tol_onui(self, tol):
+        self.ui.simpler_spat_tol_lineedit.setText(str(tol))
+
+    def upd_preclust_gamma_onui(self, value):
+        self.ui.preclust_gamma_lineedit.setText(str(value))
         
-    def upd_preclust_eps_onui(self, tol):
-        self.ui.preclust_eps_lineedit.setText(str(tol))
+    def upd_preclust_eps_onui(self, value):
+        self.ui.preclust_eps_lineedit.setText(str(value))
+        
+    def upd_lambda_exc_onui(self, value):
+        self.ui.lambda_exc_lineedit.setText(str(value))
+        
+    def upd_lambda_em_onui(self, value):
+        self.ui.lambda_em_lineedit.setText(str(value))

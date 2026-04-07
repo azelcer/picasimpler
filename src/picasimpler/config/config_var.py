@@ -28,7 +28,7 @@ Z_SIM_DISCR = [5, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
 Z_SIM_FIT_ARR = np.arange(5, 500, 0.5)
 LAMBDA_EM_DISCR = [500, 530, 560, 590, 620, 670, 700, 720]
 NI_DEF = 1.517
-NS_DEF = 1.33
+NS_DEF = 1.333
 # result directory
 RES_DIR = Path("results")
 # initial guesses for calibration fit

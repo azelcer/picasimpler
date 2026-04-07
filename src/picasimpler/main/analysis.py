@@ -463,6 +463,11 @@ class Params:
     # pre-clustering parameters
     preclust_gamma: float | None = None
     preclust_eps: float | None = None
+    # photon number guesses
+    n1_guess: int | None = None
+    n2_guess: int | None = None
+    n3_guess: int | None = None
+    n4_guess: int | None = None
     # setup parameters
     lambda_exc: float | None = None
     lambda_em: float | None = None
@@ -525,7 +530,27 @@ class AnalysisWorker(QObject):
     def upd_preclust_eps(self, value):
         self.params.preclust_eps = value
         self.upd_params()
-
+        
+    @pyqtSlot(object)
+    def upd_n1_guess(self, value):
+        self.params.n1_guess = value
+        self.upd_params()
+        
+    @pyqtSlot(object)
+    def upd_n2_guess(self, value):
+        self.params.n2_guess = value
+        self.upd_params()
+        
+    @pyqtSlot(object)
+    def upd_n3_guess(self, value):
+        self.params.n3_guess = value
+        self.upd_params()
+        
+    @pyqtSlot(object)
+    def upd_n4_guess(self, value):
+        self.params.n4_guess = value
+        self.upd_params()
+        
     @pyqtSlot(float)
     def upd_lambda_exc(self, value):
         self.params.lambda_exc = value

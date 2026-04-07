@@ -12,7 +12,7 @@ from functools import wraps
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor, MessageType
-from picasimpler.helpers.utils import safe_float_to0
+from picasimpler.helpers.utils import safe_float_to0, safe_float_tonone
 from picasimpler.config.config_var import (
     SPAT_TOL_NM_DEF,
     SPAT_TOL_NM_MIN,
@@ -44,6 +44,10 @@ class PresenterSignals(QObject):
     send_spat_tol_toanalysis = pyqtSignal(float)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
+    send_n1_guess_toanalysis = pyqtSignal(int)
+    send_n2_guess_toanalysis = pyqtSignal(int)
+    send_n3_guess_toanalysis = pyqtSignal(int)
+    send_n4_guess_toanalysis = pyqtSignal(int)
     send_lambda_exc_toanalysis = pyqtSignal(float)
     send_lambda_em_toanalysis = pyqtSignal(float)
     send_n_s_toanalysis = pyqtSignal(float)
@@ -135,6 +139,42 @@ class Presenter(QObject):
         self._view.upd_preclust_eps_onui(self._preclust_eps)
         
     @property
+    def n1_guess(self: Presenter):
+        return self._n1_guess
+    
+    @n1_guess.setter
+    def n1_guess(self, value: float):
+        self._n1_guess = value
+        self.signals.send_n1_guess_toanalysis.emit(self._n1_guess)
+        
+    @property
+    def n2_guess(self: Presenter):
+        return self._n2_guess
+    
+    @n2_guess.setter
+    def n2_guess(self, value: float):
+        self._n2_guess = value
+        self.signals.send_n2_guess_toanalysis.emit(self._n2_guess)
+        
+    @property
+    def n3_guess(self: Presenter):
+        return self._n3_guess
+    
+    @n3_guess.setter
+    def n3_guess(self, value: float):
+        self._n3_guess = value
+        self.signals.send_n3_guess_toanalysis.emit(self._n3_guess)
+        
+    @property
+    def n4_guess(self: Presenter):
+        return self._n4_guess
+    
+    @n4_guess.setter
+    def n4_guess(self, value: float):
+        self._n4_guess = value
+        self.signals.send_n4_guess_toanalysis.emit(self._n4_guess)
+        
+    @property
     def lambda_em(self):
         return self._lambda_em
     
@@ -210,6 +250,26 @@ class Presenter(QObject):
                 safe_float_to0(self._view.ui.preclust_eps_lineedit.text())
             )
         )
+        self._view.ui.n1_guess_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n1_guess_fromui.emit(
+                safe_float_tonone(self._view.ui.n1_guess_lineedit.text())
+            )
+        )
+        self._view.ui.n2_guess_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n2_guess_fromui.emit(
+                safe_float_tonone(self._view.ui.n2_guess_lineedit.text())
+            )
+        )
+        self._view.ui.n3_guess_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n3_guess_fromui.emit(
+                safe_float_tonone(self._view.ui.n3_guess_lineedit.text())
+            )
+        )
+        self._view.ui.n4_guess_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n4_guess_fromui.emit(
+                safe_float_tonone(self._view.ui.n4_guess_lineedit.text())
+            )
+        )
         self._view.ui.lambda_exc_lineedit.manual_editing_finished.connect(
             lambda: self._view.signals.send_lambda_exc_fromui.emit(
                 safe_float_to0(self._view.ui.lambda_exc_lineedit.text())
@@ -233,6 +293,10 @@ class Presenter(QObject):
         self._view.signals.send_spat_tol_fromui.connect(self.upd_spat_tol)
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
         self._view.signals.send_preclust_eps_fromui.connect(self.upd_preclust_eps)
+        self._view.signals.send_n1_guess_fromui.connect(self.upd_n1_guess)
+        self._view.signals.send_n2_guess_fromui.connect(self.upd_n2_guess)
+        self._view.signals.send_n3_guess_fromui.connect(self.upd_n3_guess)
+        self._view.signals.send_n4_guess_fromui.connect(self.upd_n4_guess)
         self._view.signals.send_lambda_exc_fromui.connect(self.upd_lambda_exc)
         self._view.signals.send_lambda_em_fromui.connect(self.upd_lambda_em)
         self._view.signals.send_n_s_fromui.connect(self.upd_n_s)
@@ -252,6 +316,10 @@ class Presenter(QObject):
         self.signals.send_spat_tol_toanalysis.connect(self._analysis_worker.upd_spat_tol)
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
+        self.signals.send_n1_guess_toanalysis.connect(self._analysis_worker.upd_n1_guess)
+        self.signals.send_n2_guess_toanalysis.connect(self._analysis_worker.upd_n2_guess)
+        self.signals.send_n3_guess_toanalysis.connect(self._analysis_worker.upd_n3_guess)
+        self.signals.send_n4_guess_toanalysis.connect(self._analysis_worker.upd_n4_guess)
         self.signals.send_lambda_exc_toanalysis.connect(self._analysis_worker.upd_lambda_exc)
         self.signals.send_lambda_em_toanalysis.connect(self._analysis_worker.upd_lambda_em)
         self.signals.send_n_i_toanalysis.connect(self._analysis_worker.upd_n_i)
@@ -499,6 +567,22 @@ class Presenter(QObject):
     @pyqtSlot(float)
     def upd_preclust_eps(self, value):
         self.preclust_eps = value
+        
+    @pyqtSlot(object)
+    def upd_n1_guess(self, value):
+        self.n1_guess = value
+        
+    @pyqtSlot(object)
+    def upd_n2_guess(self, value):
+        self.n2_guess = value
+        
+    @pyqtSlot(object)
+    def upd_n3_guess(self, value):
+        self.n3_guess = value
+        
+    @pyqtSlot(object)
+    def upd_n4_guess(self, value):
+        self.n4_guess = value
         
     @pyqtSlot(float)
     def upd_lambda_exc(self, value):

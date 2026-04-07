@@ -23,7 +23,10 @@ from picasimpler.config.config_var import (
     LAMBDA_EM_DEF,
     LAMBDA_MIN,
     NA_IDX_DEF,
-    RES_DIR
+    NI_DEF,
+    NS_DEF,
+    RES_DIR,
+    Z_SIM_FIT_ARR
 )
 
 _lgn.basicConfig()
@@ -43,6 +46,8 @@ class PresenterSignals(QObject):
     send_preclust_eps_toanalysis = pyqtSignal(float)
     send_lambda_exc_toanalysis = pyqtSignal(float)
     send_lambda_em_toanalysis = pyqtSignal(float)
+    send_n_s_toanalysis = pyqtSignal(float)
+    send_n_i_toanalysis = pyqtSignal(float)
     send_coll_fl_tab_toanalysis = pyqtSignal(object)
 
 class Presenter(QObject):
@@ -67,6 +72,8 @@ class Presenter(QObject):
         self.preclust_eps: float = PRECLUST_EPS_DEF
         self.lambda_exc: float = LAMDBA_EXC_DEF
         self.lambda_em: float = LAMBDA_EM_DEF
+        self.n_s: float = NS_DEF
+        self.n_i: float = NI_DEF
         self.res_dir: Path = RES_DIR
         self._view.ui.NA_combobox.setCurrentIndex(NA_IDX_DEF)
         self._view.ui.NA_combobox.activated.emit(self._view.ui.NA_combobox.currentIndex())
@@ -147,6 +154,26 @@ class Presenter(QObject):
         self.signals.send_lambda_exc_toanalysis.emit(self._lambda_exc)
         self._view.upd_lambda_exc_onui(self._lambda_exc)
         
+    @property
+    def n_s(self):
+        return self._n_s
+    
+    @n_s.setter
+    def n_s(self, value: float):
+        self._n_s = max((value, 1))
+        self.signals.send_n_s_toanalysis.emit(self._n_s)
+        self._view.upd_n_s_onui(self._n_s)
+        
+    @property
+    def n_i(self):
+        return self._n_i
+    
+    @n_i.setter
+    def n_i(self, value: float):
+        self._n_i = max((value, self.n_s + 0.01))
+        self.signals.send_n_i_toanalysis.emit(self._n_i)
+        self._view.upd_n_i_onui(self._n_i)
+        
     def show_ui(self):
         self._view.show()
         
@@ -193,11 +220,23 @@ class Presenter(QObject):
                 safe_float_to0(self._view.ui.lambda_em_lineedit.text())
             )
         )
+        self._view.ui.n_s_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n_s_fromui.emit(
+                safe_float_to0(self._view.ui.n_s_lineedit.text())
+            )
+        )
+        self._view.ui.n_i_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n_i_fromui.emit(
+                safe_float_to0(self._view.ui.n_i_lineedit.text())
+            )
+        )
         self._view.signals.send_spat_tol_fromui.connect(self.upd_spat_tol)
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
         self._view.signals.send_preclust_eps_fromui.connect(self.upd_preclust_eps)
         self._view.signals.send_lambda_exc_fromui.connect(self.upd_lambda_exc)
         self._view.signals.send_lambda_em_fromui.connect(self.upd_lambda_em)
+        self._view.signals.send_n_s_fromui.connect(self.upd_n_s)
+        self._view.signals.send_n_i_fromui.connect(self.upd_n_i)
         self._view.ui.NA_combobox.activated.connect(self.upd_NA)
         
     def _make_analysis_connect(self):
@@ -215,6 +254,8 @@ class Presenter(QObject):
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
         self.signals.send_lambda_exc_toanalysis.connect(self._analysis_worker.upd_lambda_exc)
         self.signals.send_lambda_em_toanalysis.connect(self._analysis_worker.upd_lambda_em)
+        self.signals.send_n_i_toanalysis.connect(self._analysis_worker.upd_n_i)
+        self.signals.send_n_s_toanalysis.connect(self._analysis_worker.upd_n_s)
         self.signals.send_coll_fl_tab_toanalysis.connect(self._analysis_worker.upd_coll_fl_tab)
         
         # connect signals from analysis worker to presenter
@@ -467,6 +508,14 @@ class Presenter(QObject):
     def upd_lambda_em(self, value):
         self.lambda_em = value
         
+    @pyqtSlot(float)
+    def upd_n_s(self, value):
+        self.n_s = value
+        
+    @pyqtSlot(float)
+    def upd_n_i(self, value):
+        self.n_i = value
+        
     @pyqtSlot()
     def upd_NA(self):
         """
@@ -499,7 +548,7 @@ class Presenter(QObject):
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4g} &plusmn; {self._analysis_worker.fit.d_F_err:.4g} nm")
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>EXC</sub> = {self._analysis_worker.fit.d_exc:.4g} &plusmn; {self._analysis_worker.fit.d_exc_err:.4g} nm")
         self._print_to_ui(MessageType.SIMPLE, f"&theta;<sub>TIRF</sub> = {self._analysis_worker.fit.tirf_angle:.4g}°")
-        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.3g} &plusmn; {self._analysis_worker.fit.N_0_std:.3g}")
+        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.6g} &plusmn; {self._analysis_worker.fit.N_0_std:.6g}")
         self.save_calib_res(
             filename_base + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,
@@ -551,10 +600,10 @@ class Presenter(QObject):
         This function saves the plot of the various functions needed to backcalculate the TIRF angle
         """
         plt.close()
-        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.coll_fl_interp, label='CF interpolation')
-        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.SIMPLER_prof, label='SIMPLER profile')
-        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.exc_prof, label='excitation profile')
-        plt.plot(self._analysis_worker.fit.z_sim_fit_arr, self._analysis_worker.fit.exc_fit, label='excitation fit')
+        plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.params.coll_fl_interp, label='CF interpolation')
+        plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.simpler_prof, label='SIMPLER profile')
+        plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.exc_prof, label='excitation profile')
+        plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.exc_fit, label='excitation fit')
         plt.legend()
         plt.savefig(self.res_dir / Path(tirf_angle_plotname))
         

@@ -355,9 +355,9 @@ SIMPLER</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>230</y>
+       <y>180</y>
        <width>151</width>
-       <height>41</height>
+       <height>31</height>
       </rect>
      </property>
      <property name="text">
@@ -369,9 +369,9 @@ for photon numbers</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>110</y>
+       <y>90</y>
        <width>151</width>
-       <height>41</height>
+       <height>31</height>
       </rect>
      </property>
      <property name="text">
@@ -383,7 +383,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>270</y>
+       <y>210</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -396,7 +396,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>300</y>
+       <y>240</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -406,7 +406,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>300</y>
+       <y>240</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -416,7 +416,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>340</y>
+       <y>280</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -426,7 +426,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>340</y>
+       <y>280</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -436,7 +436,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>180</y>
+       <y>140</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -446,7 +446,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>160</y>
+       <y>120</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -459,7 +459,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>160</y>
+       <y>120</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -472,7 +472,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>180</y>
+       <y>140</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -484,7 +484,7 @@ parameters</string>
        <x>10</x>
        <y>10</y>
        <width>151</width>
-       <height>41</height>
+       <height>31</height>
       </rect>
      </property>
      <property name="text">
@@ -496,7 +496,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>60</y>
+       <y>50</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -506,7 +506,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>390</y>
+       <y>330</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -519,7 +519,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>390</y>
+       <y>330</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -532,7 +532,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>410</y>
+       <y>350</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -542,7 +542,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>410</y>
+       <y>350</y>
        <width>71</width>
        <height>31</height>
       </rect>
@@ -552,7 +552,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>450</y>
+       <y>460</y>
        <width>73</width>
        <height>31</height>
       </rect>
@@ -582,13 +582,59 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>450</y>
+       <y>460</y>
        <width>55</width>
        <height>31</height>
       </rect>
      </property>
      <property name="text">
       <string>NA:</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="n_i_title_label">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>390</y>
+       <width>55</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>n&lt;sub&gt;i&lt;sub&gt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="n_s_title_label_2">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>390</y>
+       <width>55</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>n&lt;sub&gt;s&lt;sub&gt;</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="n_i_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>410</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="n_s_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>410</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
      </property>
     </widget>
    </widget>
@@ -696,10 +742,6 @@ from file (.npy)</string>
   <tabstop>save_clust_button</tabstop>
   <tabstop>calib_button</tabstop>
   <tabstop>calib_fromfile_button</tabstop>
-  <tabstop>prev_orig_button</tabstop>
-  <tabstop>next_orig_button</tabstop>
-  <tabstop>disc_selec_orig_button</tabstop>
-  <tabstop>refit_origami</tabstop>
   <tabstop>simpler_spat_tol_lineedit</tabstop>
   <tabstop>preclust_gamma_lineedit</tabstop>
   <tabstop>preclust_eps_lineedit</tabstop>
@@ -708,8 +750,15 @@ from file (.npy)</string>
   <tabstop>n2_guess_lineedit</tabstop>
   <tabstop>n3_guess_lineedit</tabstop>
   <tabstop>n4_guess_lineedit</tabstop>
-  <tabstop>lambda_em_lineedit</tabstop>
   <tabstop>lambda_exc_lineedit</tabstop>
+  <tabstop>lambda_em_lineedit</tabstop>
+  <tabstop>n_s_lineedit</tabstop>
+  <tabstop>n_i_lineedit</tabstop>
+  <tabstop>NA_combobox</tabstop>
+  <tabstop>prev_orig_button</tabstop>
+  <tabstop>next_orig_button</tabstop>
+  <tabstop>disc_selec_orig_button</tabstop>
+  <tabstop>refit_origami</tabstop>
   <tabstop>messages_textedit</tabstop>
  </tabstops>
  <resources/>

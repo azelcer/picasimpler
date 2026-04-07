@@ -16,13 +16,10 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from picasimpler.helpers.status import AnalysisStatus, MessageType
 from picasimpler.helpers.utils import px_to_nm
 from picasimpler.config.config_var import (
-    SPAT_TOL_NM_DEF,
     MAX_FIRST_FRAME_PERC,
     MIN_LAST_FRAME_PERC,
     FRAME_MEDIAN_PERC_RANGE,
     MAX_ON_FRAMES_PERC,
-    PRECLUST_GAMMA_DEF,
-    PRECLUST_EPS_DEF,
     MIN_GOOD_LOC,
     N_CLUST_EXP,
     Z_SITES_NM,
@@ -30,16 +27,11 @@ from picasimpler.config.config_var import (
     RES_DIR,
     ALPHA_GUESS,
     D_GUESS,
-    PLOT_RANGE_NM,
-    PLOT_PTS,
-    LAMDBA_EXC_DEF,
-    LAMBDA_EM_DEF,
+    CALIB_PLOT_RANGE_NM,
+    CALIB_PLOT_PTS,
     Z_SIM_DISCR,
-    Z_SIM_RANGE,
-    Z_SIM_STEP,
-    LAMBDA_EM_DISCR,
-    NI_DEF,
-    NS_DEF
+    Z_SIM_FIT_ARR,
+    LAMBDA_EM_DISCR
 )
 
 _lgn.basicConfig()
@@ -57,6 +49,7 @@ class SIMPLER:
     def __init__(self, signals: SIMPLERSignals):
         self.signals: SIMPLERSignals = signals
         self.locs: list | None = None
+        self.params = Params()
     
     def get_loc_x(self, orig_num):
         return self.locs[orig_num][:, 0]
@@ -168,6 +161,7 @@ class Clusterization:
         self.clust_means: np.ndarray | None = None
         self.clust_covs: np.ndarray | None = None
         self.selec_orig_list: list[bool] | None = None
+        self.params = Params()
 
     def get_clust_x(self, orig_num):
         return self.locs_clust[orig_num][:, 0]
@@ -201,7 +195,7 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
-    def pre_clust_denoise_inorig(self, locs: list, preclust_gamma: float, preclust_eps: float, min_good_loc: int, lambda_ref_val_nm: float):
+    def pre_clust_denoise_inorig(self, locs: list, preclust_gamma: float, preclust_eps: float):
         """
         This function executes pre-clustering de-noising for a single origami
         """
@@ -209,19 +203,19 @@ class Clusterization:
         loc_rescal = np.stack(
             (locs[:, 0],
             locs[:, 1],
-            lambda_ref_val_nm*np.log(locs[:, 2])), axis=1
+            DF_REF_VAL_NM*np.log(locs[:, 2])), axis=1
         )
         hdbsc = HDBSCAN(
             min_cluster_size=np.max((min_clust_size, 2)),
             cluster_selection_epsilon=preclust_eps,
             allow_single_cluster=True
         ).fit(loc_rescal)
-        if len(locs[hdbsc.labels_!=-1]) > min_good_loc:
+        if len(locs[hdbsc.labels_!=-1]) > MIN_GOOD_LOC:
             return hdbsc.labels_
         else:
             return
 
-    def pre_clust_denoise(self, locs: list, preclust_gamma: float, preclust_eps: float, min_good_loc: int, lambda_ref_val_nm: float):
+    def pre_clust_denoise(self, locs: list, preclust_gamma: float, preclust_eps: float):
         """
         This function applies HDBSCAN to separate major clusters (without mecessarily resolving them!) from scattered
         noise and unwanted smaller clusters (such as double events).
@@ -233,7 +227,7 @@ class Clusterization:
         self.locs_noise = []
         tot_orig_bf_denoise = len(locs)
         for orig_idx in range(tot_orig_bf_denoise):
-            labels = self.pre_clust_denoise_inorig(locs[orig_idx], preclust_gamma, preclust_eps, min_good_loc, lambda_ref_val_nm)
+            labels = self.pre_clust_denoise_inorig(locs[orig_idx], preclust_gamma, preclust_eps)
             if labels is not None:
                 self.locs_clust.append(locs[orig_idx][labels!=-1])
                 self.locs_noise.append(locs[orig_idx][labels==-1])
@@ -248,15 +242,15 @@ class Clusterization:
             end - start, n_orig_discarded, tot_orig_bf_denoise, 100 * n_orig_discarded / tot_orig_bf_denoise
         ))
 
-    def gmm_clust_inorig(self, locs: np.ndarray, n_clust_exp: int):
+    def gmm_clust_inorig(self, locs: np.ndarray):
         """
         This function use GMM to cluster data in a single origami
         """
-        for n_clust in range(n_clust_exp, 0, -1):
+        for n_clust in range(N_CLUST_EXP, 0, -1):
             gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
             gmm.fit(locs)
             last_bic = gmm.bic(locs)
-            if n_clust == n_clust_exp: # compute BIC for the expected number of clusters
+            if n_clust == N_CLUST_EXP: # compute BIC for the expected number of clusters
                 ref_bic = last_bic
                 clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
             # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
@@ -265,7 +259,7 @@ class Clusterization:
         return clust_means, clust_covs
 
 
-    def do_clust_xyn(self, n_clust_exp: int):
+    def do_clust_xyn(self):
         """
         This function loops over all origamis and cluster their data in 3D (x, y, N).
         """
@@ -277,7 +271,7 @@ class Clusterization:
         clust_means_list = []
         clust_covs_list = []
         for orig_idx in range(tot_orig_bf_clust):
-            clust_means, clust_covs = self.gmm_clust_inorig(self.locs_clust[orig_idx], n_clust_exp)
+            clust_means, clust_covs = self.gmm_clust_inorig(self.locs_clust[orig_idx])
             if clust_means is not None:
                 kept_orig_loc_list.append(self.locs_clust[orig_idx])
                 kept_orig_noise_list.append(self.locs_noise[orig_idx])
@@ -307,27 +301,18 @@ class SpatialFit(QObject):
     def __init__(self, signals):
         super().__init__()
         self.signals = signals
-        self.coll_fl_interp: np.ndarray | None = None
+        self.z_sites_nm = np.array(Z_SITES_NM)
+        self.params = Params()
         
-    def upd_data_forfit(self, z_sites_nm, clust_means_forfit):
+    def upd_data_forfit(self, clust_means_forfit):
         """
         This function takes external inputs for the variables needed for the fit (positions in nm of the sites along the origami, and 3D positions of the
         fitted clusters of localizations) and saves them as attributes for later use
         """
-        self.z_sites_nm = z_sites_nm
         self.clust_means_forfit = clust_means_forfit
         # call functions to update all data needed for fit
         self._calc_tilt_angles()
         self._calc_z_real()
-        
-    def upd_tirf_angle_param(self, z_sim_fit_arr, lambda_exc, lambda_em, coll_fl_interp):
-        """
-        This function updates the parameters neded to backcalculate the TIRF angle starting from d_F
-        """
-        self.z_sim_fit_arr = z_sim_fit_arr
-        self.lambda_exc = lambda_exc
-        self.lambda_em = lambda_em
-        self.coll_fl_interp = coll_fl_interp
         
     def _calc_tilt_angles(self):
         """
@@ -449,22 +434,23 @@ class SpatialFit(QObject):
         self.N_0_avg = np.mean(self.N_0_arr)
         self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
-        self.z_ax_forplot = np.linspace(0, PLOT_RANGE_NM, PLOT_PTS)
+        self.z_ax_forplot = np.linspace(0, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
         self.fit_func_forplot = F(self.z_ax_forplot, 1)
         
     def backcalc_tirf_angle(self):
         """
         This function infers, from the global decay curve, the TIRF angle, using information about emission wavelength and objective NA
         """
-        self.SIMPLER_prof = self.alpha_F*np.exp(-self.z_sim_fit_arr/self.d_F) + (1 - self.alpha_F)
-        self.exc_prof = self.SIMPLER_prof / self.coll_fl_interp
+        self.simpler_prof = self.alpha_F*np.exp(-Z_SIM_FIT_ARR/self.d_F) + (1 - self.alpha_F)
+        self.exc_prof = self.simpler_prof / self.params.coll_fl_interp
         def F_exc(x, d_exc, b, c):
             return b * np.exp(-x/d_exc) + c                           
-        popt, pcov = curve_fit(F_exc, self.z_sim_fit_arr, self.exc_prof, p0 = [100, 0.9, 0.1])
+        popt, pcov = curve_fit(F_exc, Z_SIM_FIT_ARR, self.exc_prof, p0 = [200, 0.9, 0.1])
         self.d_exc = popt[0]
         self.d_exc_err = pcov[0, 0]
-        self.exc_fit = F_exc(self.z_sim_fit_arr, popt[0], popt[1], popt[2])
-        self.tirf_angle = np.arcsin(np.sqrt(((self.lambda_exc/(4*np.pi*popt[0]))**2 + NS_DEF**2)/NI_DEF**2))*180/np.pi
+        self.exc_fit = F_exc(Z_SIM_FIT_ARR, popt[0], popt[1], popt[2])
+        self.tirf_angle = np.arcsin(np.sqrt(((self.params.lambda_exc/(4*np.pi*popt[0]))**2 + self.params.n_s**2)/self.params.n_i**2))*180/np.pi
+
 
 @dataclass
 class Params:
@@ -472,46 +458,25 @@ class Params:
     dataclass containing the parameters for the calibration
     """
 
-    # kinetics filtering parameters
-    max_first_frame_perc: float
-    min_last_frame_perc: float
-    frame_median_perc_range: list
-    max_on_frames_perc: float
-
     # SIMPLER filtering parameters
-    spat_tol_nm: float # how far can two locs be to be considered the same event
-
+    spat_tol_nm: float | None = None # how far can two locs be to be considered the same event
     # pre-clustering parameters
-    preclust_gamma: float
-    preclust_eps: float
-    min_good_loc: int
-    df_ref_val_nm: float
-    # clustering parameters
-    n_clust_exp: int
-    z_sites_nm_list: list
+    preclust_gamma: float | None = None
+    preclust_eps: float | None = None
     # setup parameters
-    lambda_exc: float
-    lambda_em: float
-    # objetive collection efficiency simulation parameters
-    z_sim_fit_arr: np.ndarray
-    z_sim_discr: list
-    lambda_em_disc: list
-    # result directory
-    res_dir: Path
-
+    lambda_exc: float | None = None
+    lambda_em: float | None = None
+    n_s: float | None = None
+    n_i: float | None = None
+    # Collection efficiencies
+    coll_fl_tab: np.ndarray | None = None
+    coll_fl_interp: np.ndarray | None = None
     # movie parameters
-    n_frames: int = field(init=False)  # number of frames in movie
-    exp_time_ms: float = field(init=False)  # exposure time in ms
-    px_size_nm: float = field(init=False)  # camera pixel size in nm
-
+    n_frames: int | None = None  # number of frames in movie
+    exp_time_ms: float | None = None  # exposure time in ms
+    px_size_nm: float | None = None # camera pixel size in nm
     # convenience parameters
-    r_th_sq: float = field(init=False)
-    
-    # table of collection efficiencies
-    coll_fl_tab: np.ndarray | None = field(init=False, default=None)
-    
-    def __post_init__(self):
-        self.z_sites_nm = np.array(self.z_sites_nm_list, dtype=float)
+    r_th_sq: float | None = None
 
 class AnalysisSignals(QObject):
     # type of analysis step starting now, and total number of element in it
@@ -533,53 +498,55 @@ class AnalysisWorker(QObject):
         self.simpler_signals = SIMPLERSignals()
         self.clust_signals = ClusterizationSignals()
         self.fit_signals = SpatialFitSignals()
-        self.init_analysis()
-
-    def init_analysis(self):
-        self.params = Params(
-            MAX_FIRST_FRAME_PERC,
-            MIN_LAST_FRAME_PERC,
-            FRAME_MEDIAN_PERC_RANGE,
-            MAX_ON_FRAMES_PERC,
-            SPAT_TOL_NM_DEF,
-            PRECLUST_GAMMA_DEF,
-            PRECLUST_EPS_DEF,
-            MIN_GOOD_LOC,
-            DF_REF_VAL_NM,
-            N_CLUST_EXP,
-            Z_SITES_NM,
-            LAMDBA_EXC_DEF,
-            LAMBDA_EM_DEF,
-            np.arange(Z_SIM_RANGE[0], Z_SIM_RANGE[1], Z_SIM_STEP),
-            Z_SIM_DISCR,
-            LAMBDA_EM_DISCR,
-            RES_DIR
-        )
         self.simpler: SIMPLER = SIMPLER(self.simpler_signals)
         self.clust: Clusterization = Clusterization(self.clust_signals)
         self.fit: SpatialFit = SpatialFit(self.fit_signals)
+        self.params = Params()
+
+    def upd_params(self):
+        """
+        This function updates the parameters for all the other analysis classes
+        """
+        self.simpler.params = self.params
+        self.clust.params = self.params
+        self.fit.params = self.params
 
     @pyqtSlot(float)
     def upd_spat_tol(self, value):
         self.params.spat_tol_nm = value
+        self.upd_params()
 
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
         self.params.preclust_gamma = value
+        self.upd_params()
         
     @pyqtSlot(float)
     def upd_preclust_eps(self, value):
         self.params.preclust_eps = value
+        self.upd_params()
 
     @pyqtSlot(float)
     def upd_lambda_exc(self, value):
         self.params.lambda_exc = value
+        self.upd_params()
         
     @pyqtSlot(float)
     def upd_lambda_em(self, value):
         self.params.lambda_em = value
         if self.params.coll_fl_tab is not None:
-            self._upd_coll_fl_arr()
+            self._calc_coll_fl_arr()
+        self.upd_params()
+            
+    @pyqtSlot(float)
+    def upd_n_i(self, value):
+        self.params.n_i = value
+        self.upd_params()
+        
+    @pyqtSlot(float)
+    def upd_n_s(self, value):
+        self.params.n_s = value
+        self.upd_params()
         
     @pyqtSlot(object)
     def upd_coll_fl_tab(self, coll_fl_tab):
@@ -588,24 +555,20 @@ class AnalysisWorker(QObject):
         """
         self.params.coll_fl_tab = coll_fl_tab
         if self.params.lambda_em is not None:
-            self._upd_coll_fl_arr()
+            self._calc_coll_fl_arr()
+        self.upd_params()
 
-    def _upd_coll_fl_arr(self):
+    def _calc_coll_fl_arr(self):
         """
         This function computes the collection efficiency of the objective depending on the emission wavelength and z.
         It extract the values corresponding to the value of simulated emission lambda which is the closest to the value
         chosen on UI; then, it interpolates such values to the full z axis and passes the result to the fit class.
         """
         idx_closest_lambda_em = np.argmin(abs(LAMBDA_EM_DISCR - np.ones(np.size(LAMBDA_EM_DISCR))*self.params.lambda_em))
-        df_em_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
-        if len(df_em_discr)!=len(self.params.z_sim_discr):
+        coll_fl_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
+        if len(coll_fl_discr)!=len(Z_SIM_DISCR):
             raise ValueError("Arrays of simulated z and d_F have different length!")
-        self.fit.upd_tirf_angle_param(
-            self.params.z_sim_fit_arr,
-            self.params.lambda_exc,
-            self.params.lambda_em,
-            interp1d(self.params.z_sim_discr, df_em_discr)(self.params.z_sim_fit_arr)
-        )
+        self.params.coll_fl_interp = interp1d(Z_SIM_DISCR, coll_fl_discr)(Z_SIM_FIT_ARR)
                 
     @pyqtSlot(Path, Path)
     def load_data(self, picks_data_path, metadata_path):
@@ -701,11 +664,11 @@ class AnalysisWorker(QObject):
             num_on_frames_perc = len(unique_frames) / self.params.n_frames
             # to be considered an origami, the pick has to pass all following kinetics test
             if not (
-                (first_frame_perc > self.params.max_first_frame_perc) or
-                (last_frame_perc < self.params.min_last_frame_perc) or
-                (med_frame_perc < self.params.frame_median_perc_range[0]) or
-                (med_frame_perc > self.params.frame_median_perc_range[1]) or
-                (num_on_frames_perc > self.params.max_on_frames_perc)
+                (first_frame_perc > MAX_FIRST_FRAME_PERC) or
+                (last_frame_perc < MIN_LAST_FRAME_PERC) or
+                (med_frame_perc < FRAME_MEDIAN_PERC_RANGE[0]) or
+                (med_frame_perc > FRAME_MEDIAN_PERC_RANGE[1]) or
+                (num_on_frames_perc > MAX_ON_FRAMES_PERC)
             ):
                 picks_tokeep.append(pick_idx)
                 self.signals.tell_analysis_elem_done.emit(pick_idx + 1)
@@ -737,11 +700,9 @@ class AnalysisWorker(QObject):
             self.simpler.locs,
             self.params.preclust_gamma,
             self.params.preclust_eps,
-            self.params.min_good_loc,
-            self.params.df_ref_val_nm
         )
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
-        self.clust.do_clust_xyn(self.params.n_clust_exp)
+        self.clust.do_clust_xyn()
         if self.simpler.locs:
             self.signals.tell_clust_done.emit(True)
         else:
@@ -753,8 +714,8 @@ class AnalysisWorker(QObject):
         """
         clust_means_res_filename = self.picks_data_path.stem + "_clusters.npy"
         clust_covs_res_filename = self.picks_data_path.stem + "_covs.npy"
-        np.save(Path(self.params.res_dir) / Path(clust_means_res_filename), self.clust.clust_means[self.clust.selec_orig_list,:,:])
-        np.save(Path(self.params.res_dir) / Path(clust_covs_res_filename), self.clust.clust_covs[self.clust.selec_orig_list,:,:,:])
+        np.save(RES_DIR / Path(clust_means_res_filename), self.clust.clust_means[self.clust.selec_orig_list,:,:])
+        np.save(RES_DIR / Path(clust_covs_res_filename), self.clust.clust_covs[self.clust.selec_orig_list,:,:,:])
         
     @pyqtSlot(int)
     def refit_orig(self, orig_num: int):
@@ -765,16 +726,14 @@ class AnalysisWorker(QObject):
         new_labels = self.clust.pre_clust_denoise_inorig(
             locs_unlabel,
             self.params.preclust_gamma,
-            self.params.preclust_eps,
-            self.params.min_good_loc,
-            self.params.df_ref_val_nm
+            self.params.preclust_eps
         )
         if new_labels is None:
             _lgr.warning("Re-fit failed at pre-clustering de-noising step, try changing parameters")
             self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")
             return
         else:
-            new_means, new_covs = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1], self.params.n_clust_exp)
+            new_means, new_covs = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1])
             if new_means is None:
                 _lgr.warning("Re-fit failed at GMM clustering step, try changing parameters")
                 self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at GMM clustering step, try changing parameters")
@@ -812,7 +771,7 @@ class AnalysisWorker(QObject):
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
 
     def perform_calib_steps(self, clust_forcalib):
-        self.fit.upd_data_forfit(self.params.z_sites_nm, clust_forcalib)
+        self.fit.upd_data_forfit(clust_forcalib)
         self.fit.fit_renorm()
         self.fit.fit_N0()
         self.fit.backcalc_tirf_angle()

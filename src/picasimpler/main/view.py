@@ -17,6 +17,8 @@ class ViewSignals(QObject):
     send_preclust_eps_fromui = pyqtSignal(float)
     send_lambda_exc_fromui = pyqtSignal(float)
     send_lambda_em_fromui = pyqtSignal(float)
+    send_n_s_fromui = pyqtSignal(float)
+    send_n_i_fromui = pyqtSignal(float)
     send_NA_fromui = pyqtSignal(str)
 
 class View(QMainWindow):
@@ -53,18 +55,21 @@ class View(QMainWindow):
         This function set validators for QLineEdits, establishing which numbers can be written
         """
         # SIMPLER spatial tolerance must be positive, finite and no scientfic notation allowed
-        self.ui.simpler_spat_tol_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.simpler_spat_tol_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         # pre-clustering de-noising parameter must be positive, finite and no scientfic notation allowed
-        self.ui.preclust_gamma_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
-        self.ui.preclust_eps_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.preclust_gamma_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.preclust_eps_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         # photon numbers must be integer, positive, finite and no scientfic notation allowed
-        self.ui.n1_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
-        self.ui.n2_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
-        self.ui.n3_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
-        self.ui.n4_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.n1_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.n2_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.n3_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.n4_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         # wavelengths must be positive, finite and no scientfic notation allowed
-        self.ui.lambda_exc_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
-        self.ui.lambda_em_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.reg_exp_val)
+        self.ui.lambda_exc_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.lambda_em_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        # refractive indices must be positive, finite and no scientfic notation allowed, and n_i must be bigger than n_s
+        self.ui.n_s_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.n_i_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         
     def reset_ui(self):
         """
@@ -105,7 +110,7 @@ class View(QMainWindow):
             self.ui.messages_textedit.append(msg_toprint)
         else:
             self.ui.messages_textedit.setTextColor(msg_type.col)
-            self.ui.messages_textedit.append(msg_type.title + ':')
+            self.ui.messages_textedit.append(msg_type.title)
             self.ui.messages_textedit.setTextColor(UIColor.W.col)
             self.ui.messages_textedit.append(msg_toprint)
         
@@ -261,3 +266,9 @@ class View(QMainWindow):
         
     def upd_lambda_em_onui(self, value):
         self.ui.lambda_em_lineedit.setText(str(value))
+        
+    def upd_n_s_onui(self, value):
+        self.ui.n_s_lineedit.setText(str(value))
+        
+    def upd_n_i_onui(self, value):
+        self.ui.n_i_lineedit.setText(str(value))

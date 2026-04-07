@@ -47,13 +47,13 @@ class NumberValidators(Enum):
     """
 
     reg_exp_str: str
-    reg_exp_val: QRegularExpressionValidator
+    valid: QRegularExpressionValidator
     
     def __new__(cls, prog_order, reg_exp_str):
         obj = object.__new__(cls)
         obj._value_ = cust_auto(cls, prog_order)
         obj.reg_exp_str = reg_exp_str
-        obj.reg_exp_val = QRegularExpressionValidator(QRegularExpression(obj.reg_exp_str))
+        obj.valid = QRegularExpressionValidator(QRegularExpression(obj.reg_exp_str))
         return obj
 
     SCI_NOTAT_WO_INF = (auto(), RE_PATT_SCIENCE_NO_WO_INF)

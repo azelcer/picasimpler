@@ -12,7 +12,7 @@ class App(QApplication):
         self.view = View()
         self.presenter = Presenter(self.view)
 
-if __name__ == "__main__":
+def run():
     app = App(sys.argv)
     # setting app style
     style_file: Path = Path("./src/picasimpler/resources/main.css")
@@ -24,3 +24,6 @@ if __name__ == "__main__":
         sys.exit(app.exec())
     finally:
         app.presenter.close_analysis_thread()
+
+if __name__ == "__main__":
+    run()

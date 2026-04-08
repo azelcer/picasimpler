@@ -10,8 +10,8 @@ RE_PATT_SCIENCE_NO_W_INF = rf"({RE_PATT_SCIENCE_NO_WO_INF})|\+?inf"
 RE_PATT_SCIENCE_ONLY_POS_WO_INF = r"^(\+?\d+)(\.((\d+)?))?((e|E)((\+|-)?)\d+)?"
 RE_PATT_SCIENCE_ONLY_POS_W_INF = rf"({RE_PATT_SCIENCE_ONLY_POS_WO_INF})|\+?inf"
 RE_PATT_NO_SCIENCE_WO_INF = r"^((\+|-)?\d+)(\.((\d+)?))?"
-RE_PATT_NO_SCIENCE_ONLY_POS_WO_INF = r"^(\+?\d+)(\.((\d+)?))?"
-RE_PATT_INT_NO_SCIENCE_ONLY_POS_WO_INF = r"^(\+?\d+)"
+RE_PATT_NO_SCIENCE_ONLY_POS_WO_INF = r"^((\+?\d+)(\.((\d+)?))?)?$"
+RE_PATT_INT_NO_SCIENCE_ONLY_POS_WO_INF = r"^(\+?\d+)?$"
 
 class NumberValidators(Enum):
     """

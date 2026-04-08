@@ -149,8 +149,9 @@ class ClusterizationSignals(QObject):
     
 class Clusterization:
     """
-    Class containing all the results (means and covariances, and SIMPLER localizations) of the clusters after site clusterization.
-    First index is the origami, second index is the cluster (should be alread ordered), last or last two are coordinates.
+    Class containing all the results (cluster means and covariances, and SIMPLER localizations) of the clusters after site clusterization.
+    As for localizations, the list index is the origami, then the first array index is the localization and the second one is the coordinate.
+    As for clusters, first index is the origami, second index is the cluster (should be alread ordered), last or last two are coordinates.
     Coordinates go from 0 to 2 and are always in this order: x, y and N (number of photons).
     """
     def __init__(self, signals: ClusterizationSignals):
@@ -195,11 +196,11 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
-    def pre_clust_denoise_inorig(self, locs: list, preclust_gamma: float, preclust_eps: float):
+    def pre_clust_denoise_inorig(self, locs: list):
         """
         This function executes pre-clustering de-noising for a single origami
         """
-        min_clust_size = int(preclust_gamma*len(locs))
+        min_clust_size = int(self.params.preclust_gamma*len(locs))
         loc_rescal = np.stack(
             (locs[:, 0],
             locs[:, 1],
@@ -207,7 +208,7 @@ class Clusterization:
         )
         hdbsc = HDBSCAN(
             min_cluster_size=np.max((min_clust_size, 2)),
-            cluster_selection_epsilon=preclust_eps,
+            cluster_selection_epsilon=self.params.preclust_eps,
             allow_single_cluster=True
         ).fit(loc_rescal)
         if len(locs[hdbsc.labels_!=-1]) > MIN_GOOD_LOC:
@@ -215,7 +216,7 @@ class Clusterization:
         else:
             return
 
-    def pre_clust_denoise(self, locs: list, preclust_gamma: float, preclust_eps: float):
+    def pre_clust_denoise(self, locs: list):
         """
         This function applies HDBSCAN to separate major clusters (without mecessarily resolving them!) from scattered
         noise and unwanted smaller clusters (such as double events).
@@ -227,7 +228,7 @@ class Clusterization:
         self.locs_noise = []
         tot_orig_bf_denoise = len(locs)
         for orig_idx in range(tot_orig_bf_denoise):
-            labels = self.pre_clust_denoise_inorig(locs[orig_idx], preclust_gamma, preclust_eps)
+            labels = self.pre_clust_denoise_inorig(locs[orig_idx])
             if labels is not None:
                 self.locs_clust.append(locs[orig_idx][labels!=-1])
                 self.locs_noise.append(locs[orig_idx][labels==-1])
@@ -246,16 +247,33 @@ class Clusterization:
         """
         This function use GMM to cluster data in a single origami
         """
+        print(self.params.n_guess)
         for n_clust in range(N_CLUST_EXP, 0, -1):
-            gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
-            gmm.fit(locs)
-            last_bic = gmm.bic(locs)
-            if n_clust == N_CLUST_EXP: # compute BIC for the expected number of clusters
-                ref_bic = last_bic
+            if n_clust == N_CLUST_EXP:
+                if self.params.should_use_n_guess and all(guess is not None for guess in self.params.n_guess):
+                    gmm_guess_arr = np.zeros((N_CLUST_EXP, 3), dtype=float)
+                    for clust_idx in range(N_CLUST_EXP):
+                        locs_close_ton = locs[np.logical_and(
+                            locs[:, 2] > self.params.n_guess[clust_idx] - 2*np.sqrt(self.params.n_guess[clust_idx]),
+                            locs[:, 2] < self.params.n_guess[clust_idx] + 2*np.sqrt(self.params.n_guess[clust_idx])
+                        )]
+                        if len(locs_close_ton) == 0:
+                            return None, None
+                        gmm_guess_arr[clust_idx, 0:2] = np.mean(locs_close_ton[:, 0:2], axis=0)
+                        gmm_guess_arr[clust_idx, 2] = self.params.n_guess[clust_idx]
+                        gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, means_init=gmm_guess_arr)
+                else:
+                    gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
+                gmm.fit(locs)
+                ref_bic = gmm.bic(locs)
                 clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
             # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
-            elif last_bic < ref_bic:
-                return None, None
+            else:
+                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
+                gmm.fit(locs)
+                last_bic = gmm.bic(locs)
+                if last_bic < ref_bic:
+                    return None, None
         return clust_means, clust_covs
 
 
@@ -464,10 +482,8 @@ class Params:
     preclust_gamma: float | None = None
     preclust_eps: float | None = None
     # photon number guesses
-    n1_guess: int | None = None
-    n2_guess: int | None = None
-    n3_guess: int | None = None
-    n4_guess: int | None = None
+    n_guess: tuple | None = None
+    should_use_n_guess: bool = False
     # setup parameters
     lambda_exc: float | None = None
     lambda_em: float | None = None
@@ -508,7 +524,7 @@ class AnalysisWorker(QObject):
         self.fit: SpatialFit = SpatialFit(self.fit_signals)
         self.params = Params()
 
-    def upd_params(self):
+    def share_params(self):
         """
         This function updates the parameters for all the other analysis classes
         """
@@ -519,59 +535,49 @@ class AnalysisWorker(QObject):
     @pyqtSlot(float)
     def upd_spat_tol(self, value):
         self.params.spat_tol_nm = value
-        self.upd_params()
+        self.share_params()
 
     @pyqtSlot(float)
     def upd_preclust_gamma(self, value):
         self.params.preclust_gamma = value
-        self.upd_params()
+        self.share_params()
         
     @pyqtSlot(float)
     def upd_preclust_eps(self, value):
         self.params.preclust_eps = value
-        self.upd_params()
+        self.share_params()
         
     @pyqtSlot(object)
-    def upd_n1_guess(self, value):
-        self.params.n1_guess = value
-        self.upd_params()
+    def upd_n_guess(self, value):
+        self.params.n_guess = value
+        self.share_params()
         
-    @pyqtSlot(object)
-    def upd_n2_guess(self, value):
-        self.params.n2_guess = value
-        self.upd_params()
-        
-    @pyqtSlot(object)
-    def upd_n3_guess(self, value):
-        self.params.n3_guess = value
-        self.upd_params()
-        
-    @pyqtSlot(object)
-    def upd_n4_guess(self, value):
-        self.params.n4_guess = value
-        self.upd_params()
+    @pyqtSlot(bool)
+    def upd_n_guess_choice(self, value):
+        self.params.should_use_n_guess = value
+        self.share_params()
         
     @pyqtSlot(float)
     def upd_lambda_exc(self, value):
         self.params.lambda_exc = value
-        self.upd_params()
+        self.share_params()
         
     @pyqtSlot(float)
     def upd_lambda_em(self, value):
         self.params.lambda_em = value
         if self.params.coll_fl_tab is not None:
             self._calc_coll_fl_arr()
-        self.upd_params()
+        self.share_params()
             
     @pyqtSlot(float)
     def upd_n_i(self, value):
         self.params.n_i = value
-        self.upd_params()
+        self.share_params()
         
     @pyqtSlot(float)
     def upd_n_s(self, value):
         self.params.n_s = value
-        self.upd_params()
+        self.share_params()
         
     @pyqtSlot(object)
     def upd_coll_fl_tab(self, coll_fl_tab):
@@ -581,7 +587,7 @@ class AnalysisWorker(QObject):
         self.params.coll_fl_tab = coll_fl_tab
         if self.params.lambda_em is not None:
             self._calc_coll_fl_arr()
-        self.upd_params()
+        self.share_params()
 
     def _calc_coll_fl_arr(self):
         """
@@ -721,11 +727,7 @@ class AnalysisWorker(QObject):
         This function call the clusterization function
         """
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.PRE_CLUST, self.tot_orig)
-        self.clust.pre_clust_denoise(
-            self.simpler.locs,
-            self.params.preclust_gamma,
-            self.params.preclust_eps,
-        )
+        self.clust.pre_clust_denoise(self.simpler.locs)
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
         self.clust.do_clust_xyn()
         if self.simpler.locs:
@@ -748,11 +750,7 @@ class AnalysisWorker(QObject):
         This function re-fits (both pre-clustering de-noising and GMM clustering) the currently displayed origami
         """
         locs_unlabel = np.concatenate((self.clust.locs_clust[orig_num], self.clust.locs_noise[orig_num]))
-        new_labels = self.clust.pre_clust_denoise_inorig(
-            locs_unlabel,
-            self.params.preclust_gamma,
-            self.params.preclust_eps
-        )
+        new_labels = self.clust.pre_clust_denoise_inorig(locs_unlabel)
         if new_labels is None:
             _lgr.warning("Re-fit failed at pre-clustering de-noising step, try changing parameters")
             self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")

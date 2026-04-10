@@ -37,3 +37,6 @@ D_GUESS = 100
 # parameters for calibration plot
 CALIB_PLOT_RANGE_NM = 150
 CALIB_PLOT_PTS = 2000
+# calibration method
+CALIB_MODE = 'no_appr'
+#CALIB_MODE = 'exp_appr'

@@ -26,7 +26,8 @@ from picasimpler.config.config_var import (
     NI_DEF,
     NS_DEF,
     RES_DIR,
-    Z_SIM_FIT_ARR
+    Z_SIM_FIT_ARR,
+    CALIB_MODE
 )
 
 _lgn.basicConfig()
@@ -635,7 +636,8 @@ class Presenter(QObject):
             self._analysis_worker.fit.N_0_std
         )
         self.save_calib_plot(filename_base + "_calib_res.png")
-        self.save_tirf_angle_plot(filename_base + "_TIRF_angle_plot.png")
+        if CALIB_MODE=='exp_appr':
+            self.save_tirf_angle_plot(filename_base + "_TIRF_angle_plot.png")
 
     def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err, d_exc, d_exc_err, tirf_angle, N_0_avg, N_0_std):
         """

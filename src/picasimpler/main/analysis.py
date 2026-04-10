@@ -31,7 +31,8 @@ from picasimpler.config.config_var import (
     CALIB_PLOT_PTS,
     Z_SIM_DISCR,
     Z_SIM_FIT_ARR,
-    LAMBDA_EM_DISCR
+    LAMBDA_EM_DISCR,
+    CALIB_MODE
 )
 
 _lgn.basicConfig()
@@ -395,7 +396,19 @@ class SpatialFit(QObject):
         """
         return sites_distances * np.sin(theta)[:, np.newaxis]
 
-    def fit_renorm(
+    def _calc_coll_fl_arr(self):
+        """
+        This function computes the collection efficiency of the objective depending on the emission wavelength and z.
+        It extract the values corresponding to the value of simulated emission lambda which is the closest to the value
+        chosen on UI; then, it interpolates such values to the full z axis and passes the result to the fit class.
+        """
+        idx_closest_lambda_em = np.argmin(abs(LAMBDA_EM_DISCR - np.ones(np.size(LAMBDA_EM_DISCR))*self.params.lambda_em))
+        self.coll_fl_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
+        if len(self.coll_fl_discr)!=len(Z_SIM_DISCR):
+            raise ValueError("Arrays of simulated z and d_F have different length!")
+        self.params.coll_fl_interp = interp1d(Z_SIM_DISCR, self.coll_fl_discr)(Z_SIM_FIT_ARR)
+
+    def fit_renorm_exp_appr(
         self,
         p0: tuple[float, float] = (ALPHA_GUESS, D_GUESS),
     ):
@@ -434,7 +447,48 @@ class SpatialFit(QObject):
         self.alpha_F_err = perr[0]
         self.d_F_err = perr[1]
         
-    def fit_N0(self):
+    def fit_renorm_no_appr(
+        self,
+        p0: tuple[float, float] = (ALPHA_GUESS, D_GUESS),
+    ):
+        """Calculate SIMPLER effective params from known z and N.
+
+        This function fits N instead of z and should be used when N0 of each
+        origami is unknown.
+
+        Parameters
+        ----------
+            p0: tuple[float, float], OPTIONAL
+                Initial guesses for alpha_F and d_F
+
+        TODO: add z_0 to account for constant linker added distance.
+        """
+        self._calc_coll_fl_arr()
+        N_data = self.clust_means_forfit[:, :, 2]
+        flat_z = self.z_real[:, 1:].ravel()
+        # Normalize datal
+        F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], 3))
+        # Model function
+        def F(z, alpha_exc, d_exc):
+            num = (alpha_exc * np.exp(-z / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
+            den = (alpha_exc * np.exp(-z_0 / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z_0)
+            return num / den
+        # Fit
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0,0],[0.85, np.inf]))
+        alpha_exc, d_exc = popt
+
+        #print(alpha_exc, d_exc)
+
+        perr = np.sqrt(np.diag(pcov))
+        self.alpha_exc = alpha_exc
+        self.d_exc = d_exc
+        self.alpha_exc_err = perr[0]
+        self.d_exc_err = perr[1]
+        
+        self.tirf_angle = np.arcsin(np.sqrt(((self.params.lambda_exc/(4*np.pi*self.d_exc))**2 + self.params.n_s**2)/self.params.n_i**2))*180/np.pi
+        
+    def fit_N0_exp_appr(self):
         """
         This function should be called once alpha_F and d_F have already been fitted.
         It iterates over all selected origamis and fits N_0 (keeping alpha_F and d_F fixed!)
@@ -455,11 +509,33 @@ class SpatialFit(QObject):
         self.z_ax_forplot = np.linspace(0, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
         self.fit_func_forplot = F(self.z_ax_forplot, 1)
         
+    def fit_N0_no_appr(self):
+        """
+        This function should be called once alpha_F and d_F have already been fitted.
+        It iterates over all selected origamis and fits N_0 (keeping alpha_F and d_F fixed!)
+        for each one.
+        """
+        self.N_0_arr = np.zeros(len(self.clust_means_forfit), dtype=float)
+        def F(z, N_0):
+            return N_0*(self.alpha_exc * np.exp(-z / self.d_exc) + (1 - self.alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)/interp1d(Z_SIM_DISCR, self.coll_fl_discr)(5)
+        for orig_idx in range(len(self.clust_means_forfit)):
+            z_data = self.z_real[orig_idx, :]
+            N_data = self.clust_means_forfit[orig_idx, :, 2]
+            N_0_val, N_0_err = curve_fit(F, z_data, N_data, p0=self.clust_means_forfit[orig_idx, 0, 2], bounds=([0],[np.inf]))
+            self.N_0_arr[orig_idx] = N_0_val
+        self.N_renorm_arr = self.clust_means_forfit[:, :, 2]/self.N_0_arr[:, np.newaxis]
+        self.N_0_avg = np.mean(self.N_0_arr)
+        self.N_0_std = np.std(self.N_0_arr)
+        # variables for plot
+        self.z_ax_forplot = np.linspace(5, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
+        self.fit_func_forplot = F(self.z_ax_forplot, 1)
+        
     def backcalc_tirf_angle(self):
         """
         This function infers, from the global decay curve, the TIRF angle, using information about emission wavelength and objective NA
         """
         self.simpler_prof = self.alpha_F*np.exp(-Z_SIM_FIT_ARR/self.d_F) + (1 - self.alpha_F)
+        self._calc_coll_fl_arr()
         self.exc_prof = self.simpler_prof / self.params.coll_fl_interp
         def F_exc(x, d_exc, b, c):
             return b * np.exp(-x/d_exc) + c                           
@@ -469,6 +545,15 @@ class SpatialFit(QObject):
         self.exc_fit = F_exc(Z_SIM_FIT_ARR, popt[0], popt[1], popt[2])
         self.tirf_angle = np.arcsin(np.sqrt(((self.params.lambda_exc/(4*np.pi*popt[0]))**2 + self.params.n_s**2)/self.params.n_i**2))*180/np.pi
 
+    def backcalc_glob_param(self):
+        self.glob_prof = (self.alpha_exc*np.exp(-Z_SIM_FIT_ARR/self.d_exc) + (1 - self.alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(Z_SIM_FIT_ARR)
+        def F_F(z, d_F, alpha_F, norm):
+            return norm*(alpha_F*np.exp(-z/d_F) + (1 - alpha_F))
+        popt, pcov = curve_fit(F_F, Z_SIM_FIT_ARR, self.glob_prof, p0 = [200, 0.9, 0.1])
+        self.d_F = popt[0]
+        self.d_F_err = pcov[0, 0]
+        self.alpha_F = popt[1]
+        self.alpha_F_err = pcov[1, 1]
 
 @dataclass
 class Params:
@@ -565,8 +650,6 @@ class AnalysisWorker(QObject):
     @pyqtSlot(float)
     def upd_lambda_em(self, value):
         self.params.lambda_em = value
-        if self.params.coll_fl_tab is not None:
-            self._calc_coll_fl_arr()
         self.share_params()
             
     @pyqtSlot(float)
@@ -585,21 +668,7 @@ class AnalysisWorker(QObject):
         This function receives a table of collection efficiencies, corresponding to the value of NA chosen on UI.
         """
         self.params.coll_fl_tab = coll_fl_tab
-        if self.params.lambda_em is not None:
-            self._calc_coll_fl_arr()
         self.share_params()
-
-    def _calc_coll_fl_arr(self):
-        """
-        This function computes the collection efficiency of the objective depending on the emission wavelength and z.
-        It extract the values corresponding to the value of simulated emission lambda which is the closest to the value
-        chosen on UI; then, it interpolates such values to the full z axis and passes the result to the fit class.
-        """
-        idx_closest_lambda_em = np.argmin(abs(LAMBDA_EM_DISCR - np.ones(np.size(LAMBDA_EM_DISCR))*self.params.lambda_em))
-        coll_fl_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
-        if len(coll_fl_discr)!=len(Z_SIM_DISCR):
-            raise ValueError("Arrays of simulated z and d_F have different length!")
-        self.params.coll_fl_interp = interp1d(Z_SIM_DISCR, coll_fl_discr)(Z_SIM_FIT_ARR)
                 
     @pyqtSlot(Path, Path)
     def load_data(self, picks_data_path, metadata_path):
@@ -795,9 +864,16 @@ class AnalysisWorker(QObject):
 
     def perform_calib_steps(self, clust_forcalib):
         self.fit.upd_data_forfit(clust_forcalib)
-        self.fit.fit_renorm()
-        self.fit.fit_N0()
-        self.fit.backcalc_tirf_angle()
+        match CALIB_MODE:
+            case 'no_appr':
+                self.fit.fit_renorm_no_appr()
+                self.fit.fit_N0_no_appr()
+                self.fit.backcalc_glob_param()
+            case 'exp_appr':
+                self.fit.fit_renorm_exp_appr()
+                self.fit.fit_N0_exp_appr()
+                self.fit.backcalc_tirf_angle()
+
 
 def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
     y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))

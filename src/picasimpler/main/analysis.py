@@ -23,6 +23,7 @@ from picasimpler.config.config_var import (
     MAX_ON_FRAMES_PERC,
     MIN_GOOD_LOC,
     N_CLUST_EXP,
+    Z_BASELINE_NM,
     Z_SITES_NM,
     DF_REF_VAL_NM,
     RES_DIR,
@@ -434,7 +435,7 @@ class SpatialFit(QObject):
         -------
         np.ndarray holding the z positions of each site
         """
-        return sites_distances * np.sin(theta)[:, np.newaxis]
+        return sites_distances * np.sin(theta)[:, np.newaxis] + Z_BASELINE_NM
 
     def _calc_coll_fl_arr(self):
         """
@@ -491,6 +492,54 @@ class SpatialFit(QObject):
         
     def fit_renorm_no_appr(
         self,
+        p0: tuple[float, float] = (ALPHA_GUESS, D_GUESS),
+    ):
+        """Calculate SIMPLER effective params from known z and N.
+
+        This function fits N instead of z and should be used when N0 of each
+        origami is unknown.
+
+        In this case, the fitting function is an exponential + constant multiplied by the CF
+
+        Parameters
+        ----------
+            p0: tuple[float, float], OPTIONAL
+                Initial guesses for alpha_F and d_F
+
+        TODO: add z_0 to account for constant linker added distance.
+        """
+        self._calc_coll_fl_arr()
+        N_data = self.clust_means[:, :, 2]
+        flat_z = self.z_real[:, 1:].ravel()
+        # Normalize datal
+        F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], 3))
+        # Model function
+        def F(z, alpha_exc, d_exc):
+            num = (alpha_exc * np.exp(-(z) / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
+            den = (alpha_exc * np.exp(-(z_0) / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z_0)
+            return num / den
+        # Fit
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0,0],[self.alpha_max, np.inf]))
+        alpha_exc, d_exc = popt
+
+        perr = np.sqrt(np.diag(pcov))
+        self.alpha_exc = alpha_exc
+        self.d_exc = d_exc
+        self.alpha_exc_err = perr[0]
+        self.d_exc_err = perr[1]
+        
+        print(alpha_exc)
+        
+        tirf_angle_lambda_factor = self.params.lambda_exc / (4*np.pi)
+        tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / self.d_exc)**2 + self.params.n_s**2))
+        tirf_angle_sin = tirf_angle_sqrt_factor / self.params.n_i
+        tirf_angle_deriv = (1 / np.sqrt(1 - tirf_angle_sin**2)) * (1 / self.params.n_i) * (1/2) * (1 / tirf_angle_sqrt_factor) * tirf_angle_lambda_factor**2 * (2/self.d_exc**3) * (180/np.pi)
+        self.tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
+        self.tirf_angle_err = np.abs(tirf_angle_deriv) * self.d_exc_err
+        
+    def fit_renorm_no_appr_spacer(
+        self,
         p0: tuple[float, float] = (ALPHA_GUESS, D_GUESS, SPACER_GUESS),
     ):
         """Calculate SIMPLER effective params from known z and N.
@@ -519,7 +568,7 @@ class SpatialFit(QObject):
             den = (alpha_exc * np.exp(-(z_0 + spacer) / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z_0 + spacer)
             return num / den
         # Fit
-        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0,0,0],[self.alpha_max, np.inf, np.inf]))
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0,0,0],[self.alpha_max, np.inf, 0.1]))
         alpha_exc, d_exc, spacer = popt
 
         perr = np.sqrt(np.diag(pcov))
@@ -1048,6 +1097,10 @@ class AnalysisWorker(QObject):
                 self.fit.fit_renorm_no_appr()
                 self.fit.fit_N0_no_appr()
                 self.fit.backcalc_glob_param()
+            case 'no_appr_spacer':
+                self.fit.fit_renorm_no_appr_spacer()
+                self.fit.fit_N0_no_appr()
+                self.fit.backcalc_glob_param()    
             case 'no_appr_fix_alpha':
                 self.fit.fit_renorm_no_appr_fix_alpha()
                 self.fit.fit_N0_no_appr()

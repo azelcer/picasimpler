@@ -587,7 +587,7 @@ class Presenter(QObject):
         """
         filepath_str, _ = QFileDialog.getOpenFileName(
             self._view,
-            directory=str(Path.home()), # home directory, OS independent
+            directory=Path("results").name, # result directory
             caption="Select calibration file",
             filter="(*.npy)"
         )

@@ -518,7 +518,12 @@ class SpatialFit(QObject):
         self.alpha_exc_err = perr[0]
         self.d_exc_err = perr[1]
         
-        self.tirf_angle = np.arcsin(np.sqrt(((self.params.lambda_exc/(4*np.pi*self.d_exc))**2 + self.params.n_s**2)/self.params.n_i**2))*180/np.pi
+        tirf_angle_lambda_factor = self.params.lambda_exc / (4*np.pi)
+        tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / self.d_exc)**2 + self.params.n_s**2))
+        tirf_angle_sin = tirf_angle_sqrt_factor / self.params.n_i
+        tirf_angle_deriv = (1 / np.sqrt(1 - tirf_angle_sin**2)) * (1 / self.params.n_i) * (1/2) * (1 / tirf_angle_sqrt_factor) * tirf_angle_lambda_factor**2 * (2/self.d_exc**3) * (180/np.pi)
+        self.tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
+        self.tirf_angle_err = np.abs(tirf_angle_deriv) * self.d_exc_err
         
     def fit_renorm_no_appr_fix_alpha(
         self,

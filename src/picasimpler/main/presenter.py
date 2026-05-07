@@ -670,7 +670,7 @@ class Presenter(QObject):
         self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>F</sub> = {self._analysis_worker.fit.alpha_F:.3g} &plusmn; {self._analysis_worker.fit.alpha_F_err:.3g}")
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>F</sub> = {self._analysis_worker.fit.d_F:.4g} &plusmn; {self._analysis_worker.fit.d_F_err:.4g} nm")
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>EXC</sub> = {self._analysis_worker.fit.d_exc:.4g} &plusmn; {self._analysis_worker.fit.d_exc_err:.4g} nm")
-        self._print_to_ui(MessageType.SIMPLE, f"&theta;<sub>TIRF</sub> = {self._analysis_worker.fit.tirf_angle:.4g}°")
+        self._print_to_ui(MessageType.SIMPLE, f"&theta;<sub>TIRF</sub> = {self._analysis_worker.fit.tirf_angle:.4g} &plusmn; {self._analysis_worker.fit.tirf_angle_err:.3g}°")
         self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.6g} &plusmn; {self._analysis_worker.fit.N_0_std:.6g}")
         self._print_to_ui(MessageType.INFO, "Cluster average sigmas:")
         self._print_to_ui(MessageType.SIMPLE, f"1st site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[0, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 2]:.2g} nm")
@@ -686,6 +686,7 @@ class Presenter(QObject):
             self._analysis_worker.fit.d_exc,
             self._analysis_worker.fit.d_exc_err,
             self._analysis_worker.fit.tirf_angle,
+            self._analysis_worker.fit.tirf_angle_err,
             self._analysis_worker.fit.N_0_avg,
             self._analysis_worker.fit.N_0_std
         )
@@ -693,7 +694,7 @@ class Presenter(QObject):
         if CALIB_MODE=='exp_appr':
             self.save_tirf_angle_plot(filename_base + "_TIRF_angle_plot.png")
 
-    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err, d_exc, d_exc_err, tirf_angle, N_0_avg, N_0_std):
+    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err, d_exc, d_exc_err, tirf_angle, tirf_angle_err, N_0_avg, N_0_std):
         """
         This function saves the results of the SIMPLER calibration in a .json in the result folder
         """
@@ -705,6 +706,7 @@ class Presenter(QObject):
             "d_exc": d_exc,
             "d_exc_err": d_exc_err,
             "TIRF angle": tirf_angle,
+            "TIRF angle error": tirf_angle_err,
             "N_0_avg": N_0_avg,
             "N_0_std": N_0_std
         }

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import logging as _lgn
 import yaml
+import json
 import time as _time
 import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
@@ -199,6 +200,14 @@ class Clusterization:
         """
         return list(zip(*sorted(zip(means, sigmas), key=lambda pair: -pair[0][2])))
 
+    @staticmethod
+    def reorder_clust_idx(means):
+        """
+        This method gives the permutation of indices used to reorder in descending order the means based on the mean of the last coordinate
+        (number of photons). It is used to order clusters from bottom to top
+        """
+        return np.argsort(-means[:, 2])
+
     def pre_clust_denoise_inorig(self, locs: list):
         """
         This function executes pre-clustering de-noising for a single origami
@@ -214,8 +223,18 @@ class Clusterization:
             cluster_selection_epsilon=self.params.preclust_eps,
             allow_single_cluster=True
         ).fit(loc_rescal)
-        if len(locs[hdbsc.labels_!=-1]) > MIN_GOOD_LOC:
-            return hdbsc.labels_
+        if self.params.should_use_n_bounds and all(bound is not None for bound in self.params.n_bounds):
+            labels = np.where(
+                np.logical_and(locs[:, 2] > np.min((self.params.n_bounds[0], self.params.n_bounds[1])),
+                            locs[:, 2] < np.max((self.params.n_bounds[0], self.params.n_bounds[1]))
+                ),
+                hdbsc.labels_,
+                -1
+            )
+        else:
+            labels = hdbsc.labels_
+        if len(locs[labels!=-1]) > MIN_GOOD_LOC:
+            return labels
         else:
             return
 
@@ -260,24 +279,27 @@ class Clusterization:
                             locs[:, 2] < self.params.n_guess[clust_idx] + 2*np.sqrt(self.params.n_guess[clust_idx])
                         )]
                         if len(locs_close_ton) == 0:
-                            return None, None
+                            return None, None, None
                         gmm_guess_arr[clust_idx, 0:2] = np.mean(locs_close_ton[:, 0:2], axis=0)
                         gmm_guess_arr[clust_idx, 2] = self.params.n_guess[clust_idx]
                         gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, means_init=gmm_guess_arr)
                 else:
                     gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
-                gmm.fit(locs)
+                labels = gmm.fit_predict(locs)
                 ref_bic = gmm.bic(locs)
-                clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
+                permut_idx = self.reorder_clust_idx(gmm.means_)
+                clust_means = gmm.means_[permut_idx]
+                clust_covs = gmm.covariances_[permut_idx]
+                labels = np.array([np.where(permut_idx==lab)[0][0] for lab in labels])
+                #clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
             # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
             else:
                 gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
                 gmm.fit(locs)
                 last_bic = gmm.bic(locs)
                 if last_bic < ref_bic:
-                    return None, None
-        return clust_means, clust_covs
-
+                    return None, None, None
+        return clust_means, clust_covs, labels
 
     def do_clust_xyn(self):
         """
@@ -287,13 +309,15 @@ class Clusterization:
         tot_orig_bf_clust = len(self.locs_clust)
         # here we will store all data relative to the clusterization result
         kept_orig_loc_list = []
+        kept_orig_clust_label_list = []
         kept_orig_noise_list = []
         clust_means_list = []
         clust_covs_list = []
         for orig_idx in range(tot_orig_bf_clust):
-            clust_means, clust_covs = self.gmm_clust_inorig(self.locs_clust[orig_idx])
+            clust_means, clust_covs, clust_labels = self.gmm_clust_inorig(self.locs_clust[orig_idx])
             if clust_means is not None:
                 kept_orig_loc_list.append(self.locs_clust[orig_idx])
+                kept_orig_clust_label_list.append(clust_labels)
                 kept_orig_noise_list.append(self.locs_noise[orig_idx])
                 clust_means_list.append(clust_means)
                 clust_covs_list.append(clust_covs)
@@ -301,6 +325,7 @@ class Clusterization:
         self.tot_orig_kept = len(kept_orig_loc_list)
         n_orig_discarded = tot_orig_bf_clust - self.tot_orig_kept
         self.locs_clust = kept_orig_loc_list
+        self.clust_labels = kept_orig_clust_label_list
         self.locs_noise = kept_orig_noise_list
         self.clust_means = np.asarray(clust_means_list, dtype=float)
         self.clust_covs = np.asarray(clust_covs_list, dtype=float)
@@ -326,12 +351,14 @@ class SpatialFit(QObject):
         self.alpha_max = ALPHA_MAX
         self.alpha_fixed = ALPHA_FIXED
         
-    def upd_data_forfit(self, clust_means_forfit):
+    def upd_data_forfit(self, clust_means_forfit, clust_locs, clust_labels):
         """
         This function takes external inputs for the variables needed for the fit (positions in nm of the sites along the origami, and 3D positions of the
         fitted clusters of localizations) and saves them as attributes for later use
         """
-        self.clust_means_forfit = clust_means_forfit
+        self.clust_means = clust_means_forfit
+        self.clust_locs = clust_locs
+        self.clust_labels = clust_labels
         # call functions to update all data needed for fit
         self._calc_tilt_angles()
         self._calc_z_real()
@@ -340,7 +367,7 @@ class SpatialFit(QObject):
         """
         This function computes tilt angles for all the selected origamis based on xy cluster positions and expected z positions of the sites
         """
-        self.tilt_angles = np.array([self._tilts_form_xy(self.z_sites_nm[:-1], o_pos[:-1, 0:2])[0] for o_pos in self.clust_means_forfit])
+        self.tilt_angles = np.array([self._tilts_form_xy(self.z_sites_nm[:-1], o_pos[:-1, 0:2])[0] for o_pos in self.clust_means])
         
     def _calc_z_real(self):
         """
@@ -430,7 +457,7 @@ class SpatialFit(QObject):
         TODO: add z_0 to account for constant linker added distance.
         """
         
-        N_data = self.clust_means_forfit[:, :, 2]
+        N_data = self.clust_means[:, :, 2]
 
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
@@ -471,7 +498,7 @@ class SpatialFit(QObject):
         TODO: add z_0 to account for constant linker added distance.
         """
         self._calc_coll_fl_arr()
-        N_data = self.clust_means_forfit[:, :, 2]
+        N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
@@ -513,7 +540,7 @@ class SpatialFit(QObject):
         TODO: add z_0 to account for constant linker added distance.
         """
         self._calc_coll_fl_arr()
-        N_data = self.clust_means_forfit[:, :, 2]
+        N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
@@ -541,15 +568,15 @@ class SpatialFit(QObject):
         It iterates over all selected origamis and fits N_0 (keeping alpha_F and d_F fixed!)
         for each one.
         """
-        self.N_0_arr = np.zeros(len(self.clust_means_forfit), dtype=float)
+        self.N_0_arr = np.zeros(len(self.clust_means), dtype=float)
         def F(z, N_0):
             return N_0*(self.alpha_F * np.exp(-z / self.d_F) + (1 - self.alpha_F))
-        for orig_idx in range(len(self.clust_means_forfit)):
+        for orig_idx in range(len(self.clust_means)):
             z_data = self.z_real[orig_idx, :]
-            N_data = self.clust_means_forfit[orig_idx, :, 2]
-            N_0_val, N_0_err = curve_fit(F, z_data, N_data, p0=self.clust_means_forfit[orig_idx, 0, 2], bounds=([0],[np.inf]))
+            N_data = self.clust_means[orig_idx, :, 2]
+            N_0_val, N_0_err = curve_fit(F, z_data, N_data, p0=self.clust_means[orig_idx, 0, 2], bounds=([0],[np.inf]))
             self.N_0_arr[orig_idx] = N_0_val
-        self.N_renorm_arr = self.clust_means_forfit[:, :, 2]/self.N_0_arr[:, np.newaxis]
+        self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
         self.N_0_avg = np.mean(self.N_0_arr)
         self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
@@ -562,15 +589,15 @@ class SpatialFit(QObject):
         It iterates over all selected origamis and fits N_0 (keeping alpha_F and d_F fixed!)
         for each one.
         """
-        self.N_0_arr = np.zeros(len(self.clust_means_forfit), dtype=float)
+        self.N_0_arr = np.zeros(len(self.clust_means), dtype=float)
         def F(z, N_0):
             return N_0*(self.alpha_exc * np.exp(-z / self.d_exc) + (1 - self.alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)/interp1d(Z_SIM_DISCR, self.coll_fl_discr)(5)
-        for orig_idx in range(len(self.clust_means_forfit)):
+        for orig_idx in range(len(self.clust_means)):
             z_data = self.z_real[orig_idx, :]
-            N_data = self.clust_means_forfit[orig_idx, :, 2]
-            N_0_val, N_0_err = curve_fit(F, z_data, N_data, p0=self.clust_means_forfit[orig_idx, 0, 2], bounds=([0],[np.inf]))
+            N_data = self.clust_means[orig_idx, :, 2]
+            N_0_val, N_0_err = curve_fit(F, z_data, N_data, p0=self.clust_means[orig_idx, 0, 2], bounds=([0],[np.inf]))
             self.N_0_arr[orig_idx] = N_0_val
-        self.N_renorm_arr = self.clust_means_forfit[:, :, 2]/self.N_0_arr[:, np.newaxis]
+        self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
         self.N_0_avg = np.mean(self.N_0_arr)
         self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
@@ -593,6 +620,9 @@ class SpatialFit(QObject):
         self.tirf_angle = np.arcsin(np.sqrt(((self.params.lambda_exc/(4*np.pi*popt[0]))**2 + self.params.n_s**2)/self.params.n_i**2))*180/np.pi
 
     def backcalc_glob_param(self):
+        """
+        This function approximates the real decay with an exponential to get the global decay parameters
+        """
         self.glob_prof = (self.alpha_exc*np.exp(-Z_SIM_FIT_ARR/self.d_exc) + (1 - self.alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(Z_SIM_FIT_ARR)
         def F_F(z, d_F, alpha_F, norm):
             return norm*(alpha_F*np.exp(-z/d_F) + (1 - alpha_F))
@@ -601,6 +631,41 @@ class SpatialFit(QObject):
         self.d_F_err = pcov[0, 0]
         self.alpha_F = popt[1]
         self.alpha_F_err = pcov[1, 1]
+        
+    def z_from_N(self, n_ph, n_ph_0):
+        """
+        This function computes z from N, given the global decay parameters
+        """
+        return self.d_F*np.log(self.alpha_F/((n_ph/n_ph_0) - (1 - self.alpha_F)))
+        
+    def backcalc_z(self):
+        """
+        This function uses the calibrated parameters to convet N into z
+        """
+        self.spat_locs = []
+        for orig_idx in range(len(self.clust_locs)):
+            self.spat_locs.append(
+                np.concatenate(
+                    (
+                        self.clust_locs[orig_idx][:, :2],
+                        self.z_from_N(self.clust_locs[orig_idx][:, 2], self.N_0_arr[orig_idx, np.newaxis])[:, np.newaxis]  
+                    ), axis = 1
+                )
+            )
+        
+    def calc_spat_sigma_gmm(self):
+        """
+        This function recalculates the spatial 3D sigmas for the localization, converted into x, y, z.
+        """
+        self.spat_covs = np.zeros((len(self.clust_means), N_CLUST_EXP, 3, 3), dtype=float)
+        for orig_idx in range(len(self.clust_means)):
+            for clust_idx in range(N_CLUST_EXP):
+                gmm = GaussianMixture(n_components=1, covariance_type='full', n_init=5, max_iter=300)
+                gmm.fit(np.array(self.spat_locs[orig_idx][self.clust_labels[orig_idx]==clust_idx]))
+                self.spat_covs[orig_idx, clust_idx, :, :] = gmm.covariances_[0]
+        self.spat_sigma_avg = np.mean(np.sqrt(np.diagonal(self.spat_covs, axis1=2, axis2=3)), axis=0)
+        
+
 
 @dataclass
 class Params:
@@ -616,6 +681,8 @@ class Params:
     # photon number guesses
     n_guess: tuple | None = None
     should_use_n_guess: bool = False
+    n_bounds: tuple | None = None
+    should_use_n_bounds: bool = False
     # setup parameters
     lambda_exc: float | None = None
     lambda_em: float | None = None
@@ -684,9 +751,19 @@ class AnalysisWorker(QObject):
         self.params.n_guess = value
         self.share_params()
         
+    @pyqtSlot(object)
+    def upd_n_bounds(self, value):
+        self.params.n_bounds = value
+        self.share_params()
+        
     @pyqtSlot(bool)
     def upd_n_guess_choice(self, value):
         self.params.should_use_n_guess = value
+        self.share_params()
+        
+    @pyqtSlot(bool)
+    def upd_n_bounds_choice(self, value):
+        self.params.should_use_n_bounds = value
         self.share_params()
         
     @pyqtSlot(float)
@@ -855,8 +932,14 @@ class AnalysisWorker(QObject):
         """
         This function saves the array of clusterization results of the selected origamis only as a .npy
         """
+        locs_res_filename = self.picks_data_path.stem + "_locs.json"
+        clust_labels_res_filename = self.picks_data_path.stem + "_labels.json"
         clust_means_res_filename = self.picks_data_path.stem + "_clusters.npy"
         clust_covs_res_filename = self.picks_data_path.stem + "_covs.npy"
+        with open(RES_DIR / Path(locs_res_filename), "w") as f:
+            json.dump([self.clust.locs_clust[idx].tolist() for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val], f)
+        with open(RES_DIR / Path(clust_labels_res_filename), "w") as f:
+            json.dump([self.clust.clust_labels[idx].tolist() for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val], f)  
         np.save(RES_DIR / Path(clust_means_res_filename), self.clust.clust_means[self.clust.selec_orig_list,:,:])
         np.save(RES_DIR / Path(clust_covs_res_filename), self.clust.clust_covs[self.clust.selec_orig_list,:,:,:])
         
@@ -872,13 +955,14 @@ class AnalysisWorker(QObject):
             self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")
             return
         else:
-            new_means, new_covs = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1])
+            new_means, new_covs, new_clust_labels = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1])
             if new_means is None:
                 _lgr.warning("Re-fit failed at GMM clustering step, try changing parameters")
                 self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at GMM clustering step, try changing parameters")
             else:
                 # if new fit passed all steps, update old results with new
                 self.clust.locs_clust[orig_num] = locs_unlabel[new_labels!=-1]
+                self.clust.clust_labels[orig_num] = new_clust_labels
                 self.clust.locs_noise[orig_num] = locs_unlabel[new_labels==-1]
                 self.clust.clust_means[orig_num, :, :] = new_means
                 self.clust.clust_covs[orig_num, :, :, :] = new_covs
@@ -890,27 +974,39 @@ class AnalysisWorker(QObject):
         This function performs the SIMPLER calibration using the results from clusterization and the expected
         z positions, corrected according to the origamin tilt. 
         """
-        self.perform_calib_steps(self.clust.clust_means[self.clust.selec_orig_list, :, :])
+        self.perform_calib_steps(
+            self.clust.clust_means[self.clust.selec_orig_list, :, :],
+            [np.array(self.clust.locs_clust[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val],
+            [np.array(self.clust.clust_labels[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val]
+        )
         self.signals.tell_calib_done.emit('')
         
     @pyqtSlot(Path)
-    def do_calib_fromfile(self, res_path):
+    def do_calib_fromfile(self, clust_path: Path):
         """
         This function performs the SIMPLER calibration using the results from a previous clusterization saved on file, and the expected
         z positions, corrected according to the origamin tilt. 
         """
         try:
-            clust_fromfile = np.load(res_path)
+            clust_locs_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_locs.json"
+            clust_labels_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_labels.json"
+            clust_locs_path = clust_path.parent / Path(clust_locs_filename)
+            clust_label_path = clust_path.parent / Path(clust_labels_filename)
+            with open(clust_locs_path, "r") as f:
+                clust_locs_fromfile = [np.array(a) for a in json.load(f)]
+            with open(clust_label_path, "r") as f:
+                clust_labels_fromfile = [np.array(a) for a in json.load(f)]
+            clust_fromfile = np.load(clust_path)
         except Exception as e:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Cannot open result file because of Exception: {e}")
         if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:3]==(4, 3)) and (len(clust_fromfile.shape)==3):
-            self.perform_calib_steps(clust_fromfile)
+            self.perform_calib_steps(clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
             self.signals.tell_calib_done.emit('from file')
         else:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
 
-    def perform_calib_steps(self, clust_forcalib):
-        self.fit.upd_data_forfit(clust_forcalib)
+    def perform_calib_steps(self, clust_forcalib, clust_locs, clust_labels):
+        self.fit.upd_data_forfit(clust_forcalib, clust_locs, clust_labels)
         match CALIB_MODE:
             case 'no_appr':
                 self.fit.fit_renorm_no_appr()
@@ -924,7 +1020,8 @@ class AnalysisWorker(QObject):
                 self.fit.fit_renorm_exp_appr()
                 self.fit.fit_N0_exp_appr()
                 self.fit.backcalc_tirf_angle()
-
+        self.fit.backcalc_z()
+        self.fit.calc_spat_sigma_gmm()
 
 def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
     y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))

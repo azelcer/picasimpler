@@ -45,8 +45,10 @@ class PresenterSignals(QObject):
     send_spat_tol_toanalysis = pyqtSignal(float)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
-    send_n_guess_toanalysis = pyqtSignal(object)
+    send_n_guess_toanalysis = pyqtSignal(object) # send tuple of N gueses
     send_n_guess_choice_toanalysis = pyqtSignal(bool)
+    send_n_bounds_toanalysis = pyqtSignal(object) # send tuple of N bounds
+    send_n_bounds_choice_toanalysis = pyqtSignal(bool)
     send_lambda_exc_toanalysis = pyqtSignal(float)
     send_lambda_em_toanalysis = pyqtSignal(float)
     send_n_s_toanalysis = pyqtSignal(float)
@@ -157,6 +159,24 @@ class Presenter(QObject):
         self._should_use_n_guess = value
         self.signals.send_n_guess_choice_toanalysis.emit(self._should_use_n_guess)
         
+    @property
+    def n_bounds(self):
+        return self._n_bounds
+    
+    @n_bounds.setter
+    def n_bounds(self, value: float):
+        self._n_bounds = value
+        self.signals.send_n_bounds_toanalysis.emit(self._n_bounds)
+        
+    @property
+    def should_use_n_bounds(self):
+        return self._should_use_n_bounds
+    
+    @should_use_n_bounds.setter
+    def should_use_n_bounds(self, value: bool):
+        self._should_use_n_bounds = value
+        self.signals.send_n_bounds_choice_toanalysis.emit(self._should_use_n_bounds)        
+
     @property
     def lambda_em(self):
         return self._lambda_em
@@ -270,6 +290,23 @@ class Presenter(QObject):
                 self._view.ui.manual_guess_checkbox.isChecked()
             )
         )
+        self._view.ui.n_bound1_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n_bounds_fromui.emit((
+                safe_float_tonone(self._view.ui.n_bound1_lineedit.text()),
+                safe_float_tonone(self._view.ui.n_bound2_lineedit.text())
+            ))
+        )
+        self._view.ui.n_bound2_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n_bounds_fromui.emit((
+                safe_float_tonone(self._view.ui.n_bound1_lineedit.text()),
+                safe_float_tonone(self._view.ui.n_bound2_lineedit.text())
+            ))
+        )
+        self._view.ui.bounds_checkbox.stateChanged.connect(
+            lambda: self._view.signals.send_n_bounds_choice_fromui.emit(
+                self._view.ui.bounds_checkbox.isChecked()
+            )
+        )
         self._view.ui.lambda_exc_lineedit.manual_editing_finished.connect(
             lambda: self._view.signals.send_lambda_exc_fromui.emit(
                 safe_float_to0(self._view.ui.lambda_exc_lineedit.text())
@@ -294,7 +331,9 @@ class Presenter(QObject):
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
         self._view.signals.send_preclust_eps_fromui.connect(self.upd_preclust_eps)
         self._view.signals.send_n_guess_fromui.connect(self.upd_n_guess)
+        self._view.signals.send_n_bounds_fromui.connect(self.upd_n_bounds)
         self._view.signals.send_n_guess_choice_fromui.connect(self.upd_n_guess_choice)
+        self._view.signals.send_n_bounds_choice_fromui.connect(self.upd_n_bounds_choice)
         self._view.signals.send_lambda_exc_fromui.connect(self.upd_lambda_exc)
         self._view.signals.send_lambda_em_fromui.connect(self.upd_lambda_em)
         self._view.signals.send_n_s_fromui.connect(self.upd_n_s)
@@ -315,7 +354,9 @@ class Presenter(QObject):
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
         self.signals.send_n_guess_toanalysis.connect(self._analysis_worker.upd_n_guess)
+        self.signals.send_n_bounds_toanalysis.connect(self._analysis_worker.upd_n_bounds)
         self.signals.send_n_guess_choice_toanalysis.connect(self._analysis_worker.upd_n_guess_choice)
+        self.signals.send_n_bounds_choice_toanalysis.connect(self._analysis_worker.upd_n_bounds_choice)
         self.signals.send_lambda_exc_toanalysis.connect(self._analysis_worker.upd_lambda_exc)
         self.signals.send_lambda_em_toanalysis.connect(self._analysis_worker.upd_lambda_em)
         self.signals.send_n_i_toanalysis.connect(self._analysis_worker.upd_n_i)
@@ -570,9 +611,17 @@ class Presenter(QObject):
     def upd_n_guess(self, values):
         self.n_guess = values
         
+    @pyqtSlot(object)
+    def upd_n_bounds(self, values):
+        self.n_bounds = values
+        
     @pyqtSlot(bool)
     def upd_n_guess_choice(self, value):
         self.should_use_n_guess = value
+        
+    @pyqtSlot(bool)
+    def upd_n_bounds_choice(self, value):
+        self.should_use_n_bounds = value
         
     @pyqtSlot(float)
     def upd_lambda_exc(self, value):
@@ -623,6 +672,11 @@ class Presenter(QObject):
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>EXC</sub> = {self._analysis_worker.fit.d_exc:.4g} &plusmn; {self._analysis_worker.fit.d_exc_err:.4g} nm")
         self._print_to_ui(MessageType.SIMPLE, f"&theta;<sub>TIRF</sub> = {self._analysis_worker.fit.tirf_angle:.4g}°")
         self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.6g} &plusmn; {self._analysis_worker.fit.N_0_std:.6g}")
+        self._print_to_ui(MessageType.INFO, "Cluster average sigmas:")
+        self._print_to_ui(MessageType.SIMPLE, f"1st site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[0, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 2]:.2g} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"2nd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[1, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 2]:.2g} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"3rd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[2, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 2]:.2g} nm")
+        self._print_to_ui(MessageType.SIMPLE, f"4th site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[3, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 2]:.2g} nm")
         self.save_calib_res(
             filename_base + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,

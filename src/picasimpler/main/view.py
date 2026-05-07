@@ -15,8 +15,10 @@ class ViewSignals(QObject):
     send_spat_tol_fromui = pyqtSignal(float)
     send_preclust_gamma_fromui = pyqtSignal(float)
     send_preclust_eps_fromui = pyqtSignal(float)
-    send_n_guess_fromui = pyqtSignal(object)
+    send_n_guess_fromui = pyqtSignal(object) # sending tuple of N guesses
     send_n_guess_choice_fromui = pyqtSignal(bool)
+    send_n_bounds_fromui = pyqtSignal(object) # sending tuple of N bounds
+    send_n_bounds_choice_fromui = pyqtSignal(bool)
     send_lambda_exc_fromui = pyqtSignal(float)
     send_lambda_em_fromui = pyqtSignal(float)
     send_n_s_fromui = pyqtSignal(float)

@@ -355,35 +355,33 @@ SIMPLER</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>180</y>
+       <y>150</y>
        <width>151</width>
-       <height>31</height>
+       <height>21</height>
       </rect>
      </property>
      <property name="text">
-      <string>Use manual guesses
-for photon numbers</string>
+      <string>Use manual guesses</string>
      </property>
     </widget>
     <widget class="QLabel" name="preclust_param_title_label">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>90</y>
+       <y>70</y>
        <width>151</width>
        <height>31</height>
       </rect>
      </property>
      <property name="text">
-      <string>Pre-clustering de-noising
-parameters</string>
+      <string>Pre-clustering parameters</string>
      </property>
     </widget>
     <widget class="QLabel" name="guess_title_label">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>210</y>
+       <y>170</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -396,9 +394,9 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>240</y>
+       <y>190</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -406,9 +404,9 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>240</y>
+       <y>190</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -416,9 +414,9 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>280</y>
+       <y>220</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -426,9 +424,9 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>280</y>
+       <y>220</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -436,9 +434,9 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>140</y>
+       <y>110</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -446,7 +444,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>120</y>
+       <y>90</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -459,7 +457,7 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>120</y>
+       <y>90</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -472,9 +470,9 @@ parameters</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>140</y>
+       <y>110</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -493,12 +491,15 @@ tolerance [nm]:</string>
      </property>
     </widget>
     <widget class="CustomQLineEdit" name="simpler_spat_tol_lineedit">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>50</y>
+       <y>40</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -506,7 +507,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>330</y>
+       <y>355</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -519,7 +520,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>330</y>
+       <y>355</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -532,9 +533,9 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>350</y>
+       <y>375</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -542,9 +543,9 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>350</y>
+       <y>375</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -554,7 +555,7 @@ tolerance [nm]:</string>
        <x>90</x>
        <y>460</y>
        <width>73</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
      <item>
@@ -584,7 +585,7 @@ tolerance [nm]:</string>
        <x>10</x>
        <y>460</y>
        <width>55</width>
-       <height>31</height>
+       <height>21</height>
       </rect>
      </property>
      <property name="text">
@@ -595,7 +596,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>390</y>
+       <y>405</y>
        <width>55</width>
        <height>16</height>
       </rect>
@@ -607,8 +608,8 @@ tolerance [nm]:</string>
     <widget class="QLabel" name="n_s_title_label_2">
      <property name="geometry">
       <rect>
-       <x>20</x>
-       <y>390</y>
+       <x>10</x>
+       <y>405</y>
        <width>55</width>
        <height>16</height>
       </rect>
@@ -621,9 +622,9 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>410</y>
+       <y>425</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
      </property>
     </widget>
@@ -631,10 +632,69 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>410</y>
+       <y>425</y>
        <width>71</width>
-       <height>31</height>
+       <height>26</height>
       </rect>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="bounds_checkbox">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>260</y>
+       <width>151</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Use bounds</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="n_bound1_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>300</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="boun_title_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>280</y>
+       <width>151</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Photon number bounds:</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="n_bound2_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>300</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="setup_param_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>335</y>
+       <width>151</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Setup parameters:</string>
      </property>
     </widget>
    </widget>

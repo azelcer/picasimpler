@@ -30,6 +30,7 @@ from picasimpler.config.config_var import (
     ALPHA_MAX,
     ALPHA_FIXED,
     D_GUESS,
+    SPACER_GUESS,
     CALIB_PLOT_RANGE_NM,
     CALIB_PLOT_PTS,
     Z_SIM_DISCR,
@@ -490,7 +491,7 @@ class SpatialFit(QObject):
         
     def fit_renorm_no_appr(
         self,
-        p0: tuple[float, float] = (ALPHA_GUESS, D_GUESS),
+        p0: tuple[float, float] = (ALPHA_GUESS, D_GUESS, SPACER_GUESS),
     ):
         """Calculate SIMPLER effective params from known z and N.
 
@@ -513,19 +514,22 @@ class SpatialFit(QObject):
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
         z_0 = np.hstack(np.repeat(self.z_real[:, 0], 3))
         # Model function
-        def F(z, alpha_exc, d_exc):
-            num = (alpha_exc * np.exp(-z / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
-            den = (alpha_exc * np.exp(-z_0 / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z_0)
+        def F(z, alpha_exc, d_exc, spacer):
+            num = (alpha_exc * np.exp(-(z + spacer) / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z + spacer)
+            den = (alpha_exc * np.exp(-(z_0 + spacer) / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z_0 + spacer)
             return num / den
         # Fit
-        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0,0],[self.alpha_max, np.inf]))
-        alpha_exc, d_exc = popt
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0,0,0],[self.alpha_max, np.inf, np.inf]))
+        alpha_exc, d_exc, spacer = popt
 
         perr = np.sqrt(np.diag(pcov))
         self.alpha_exc = alpha_exc
         self.d_exc = d_exc
         self.alpha_exc_err = perr[0]
         self.d_exc_err = perr[1]
+        
+        print(spacer)
+        print(alpha_exc)
         
         tirf_angle_lambda_factor = self.params.lambda_exc / (4*np.pi)
         tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / self.d_exc)**2 + self.params.n_s**2))
@@ -574,7 +578,12 @@ class SpatialFit(QObject):
         self.alpha_exc_err = 0
         self.d_exc_err = perr[0]
         
-        self.tirf_angle = np.arcsin(np.sqrt(((self.params.lambda_exc/(4*np.pi*self.d_exc))**2 + self.params.n_s**2)/self.params.n_i**2))*180/np.pi
+        tirf_angle_lambda_factor = self.params.lambda_exc / (4*np.pi)
+        tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / self.d_exc)**2 + self.params.n_s**2))
+        tirf_angle_sin = tirf_angle_sqrt_factor / self.params.n_i
+        tirf_angle_deriv = (1 / np.sqrt(1 - tirf_angle_sin**2)) * (1 / self.params.n_i) * (1/2) * (1 / tirf_angle_sqrt_factor) * tirf_angle_lambda_factor**2 * (2/self.d_exc**3) * (180/np.pi)
+        self.tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
+        self.tirf_angle_err = np.abs(tirf_angle_deriv) * self.d_exc_err
         
     def fit_N0_exp_appr(self):
         """
@@ -605,7 +614,7 @@ class SpatialFit(QObject):
         """
         self.N_0_arr = np.zeros(len(self.clust_means), dtype=float)
         def F(z, N_0):
-            return N_0*(self.alpha_exc * np.exp(-z / self.d_exc) + (1 - self.alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)/interp1d(Z_SIM_DISCR, self.coll_fl_discr)(5)
+            return N_0*(self.alpha_exc * np.exp(-z / self.d_exc) + (1 - self.alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)/interp1d(Z_SIM_DISCR, self.coll_fl_discr)(0)
         for orig_idx in range(len(self.clust_means)):
             z_data = self.z_real[orig_idx, :]
             N_data = self.clust_means[orig_idx, :, 2]
@@ -615,7 +624,7 @@ class SpatialFit(QObject):
         self.N_0_avg = np.mean(self.N_0_arr)
         self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
-        self.z_ax_forplot = np.linspace(5, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
+        self.z_ax_forplot = np.linspace(0, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
         self.fit_func_forplot = F(self.z_ax_forplot, 1)
         
     def backcalc_tirf_angle(self):

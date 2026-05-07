@@ -672,11 +672,12 @@ class Presenter(QObject):
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>EXC</sub> = {self._analysis_worker.fit.d_exc:.4g} &plusmn; {self._analysis_worker.fit.d_exc_err:.4g} nm")
         self._print_to_ui(MessageType.SIMPLE, f"&theta;<sub>TIRF</sub> = {self._analysis_worker.fit.tirf_angle:.4g} &plusmn; {self._analysis_worker.fit.tirf_angle_err:.3g}°")
         self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.6g} &plusmn; {self._analysis_worker.fit.N_0_std:.6g}")
-        self._print_to_ui(MessageType.INFO, "Cluster average sigmas:")
-        self._print_to_ui(MessageType.SIMPLE, f"1st site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[0, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 2]:.2g} nm")
-        self._print_to_ui(MessageType.SIMPLE, f"2nd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[1, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 2]:.2g} nm")
-        self._print_to_ui(MessageType.SIMPLE, f"3rd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[2, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 2]:.2g} nm")
-        self._print_to_ui(MessageType.SIMPLE, f"4th site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[3, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 2]:.2g} nm")
+        if self._analysis_worker.params.should_do_res_analysis:
+            self._print_to_ui(MessageType.INFO, "Cluster average sigmas:")
+            self._print_to_ui(MessageType.SIMPLE, f"1st site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[0, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 2]:.2g} nm")
+            self._print_to_ui(MessageType.SIMPLE, f"2nd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[1, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 2]:.2g} nm")
+            self._print_to_ui(MessageType.SIMPLE, f"3rd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[2, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 2]:.2g} nm")
+            self._print_to_ui(MessageType.SIMPLE, f"4th site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[3, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 2]:.2g} nm")
         self.save_calib_res(
             filename_base + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,

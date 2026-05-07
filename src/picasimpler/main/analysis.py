@@ -351,14 +351,23 @@ class SpatialFit(QObject):
         self.alpha_max = ALPHA_MAX
         self.alpha_fixed = ALPHA_FIXED
         
-    def upd_data_forfit(self, clust_means_forfit, clust_locs, clust_labels):
+    def upd_data_forfit_res_analysis(self, clust_means_forfit, clust_locs, clust_labels):
         """
-        This function takes external inputs for the variables needed for the fit (positions in nm of the sites along the origami, and 3D positions of the
-        fitted clusters of localizations) and saves them as attributes for later use
+        This function takes external inputs for the variables needed for the fit and the resolution analysis (3D positions of the fitted clusters of localizations,
+        the raw localizations and their clusterization labels) and saves them as attributes for later use
         """
         self.clust_means = clust_means_forfit
         self.clust_locs = clust_locs
         self.clust_labels = clust_labels
+        # call functions to update all data needed for fit
+        self._calc_tilt_angles()
+        self._calc_z_real()
+        
+    def upd_data_forfit_no_res_analysis(self, clust_means_forfit):
+        """
+        This function takes external inputs for the variables needed for the fit (3D positions of the fitted clusters of localizations) and saves them as attributes for later use
+        """
+        self.clust_means = clust_means_forfit
         # call functions to update all data needed for fit
         self._calc_tilt_angles()
         self._calc_z_real()
@@ -683,11 +692,13 @@ class Params:
     # pre-clustering parameters
     preclust_gamma: float | None = None
     preclust_eps: float | None = None
-    # photon number guesses
+    # photon number guesses and bounds
     n_guess: tuple | None = None
     should_use_n_guess: bool = False
     n_bounds: tuple | None = None
     should_use_n_bounds: bool = False
+    # should cluster resolution analysis be performed or not
+    should_do_res_analysis: bool = True
     # setup parameters
     lambda_exc: float | None = None
     lambda_em: float | None = None
@@ -979,7 +990,7 @@ class AnalysisWorker(QObject):
         This function performs the SIMPLER calibration using the results from clusterization and the expected
         z positions, corrected according to the origamin tilt. 
         """
-        self.perform_calib_steps(
+        self.perform_calib_steps_res_analysis(
             self.clust.clust_means[self.clust.selec_orig_list, :, :],
             [np.array(self.clust.locs_clust[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val],
             [np.array(self.clust.clust_labels[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val]
@@ -993,6 +1004,11 @@ class AnalysisWorker(QObject):
         z positions, corrected according to the origamin tilt. 
         """
         try:
+            clust_fromfile = np.load(clust_path)
+        except Exception as e:
+            self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Cannot open result file because of Exception: {e}")
+            return
+        try:
             clust_locs_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_locs.json"
             clust_labels_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_labels.json"
             clust_locs_path = clust_path.parent / Path(clust_locs_filename)
@@ -1001,17 +1017,23 @@ class AnalysisWorker(QObject):
                 clust_locs_fromfile = [np.array(a) for a in json.load(f)]
             with open(clust_label_path, "r") as f:
                 clust_labels_fromfile = [np.array(a) for a in json.load(f)]
-            clust_fromfile = np.load(clust_path)
+            self.params.should_do_res_analysis = True
+            self.share_params()
         except Exception as e:
-            self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Cannot open result file because of Exception: {e}")
+            self.signals.send_msg_toprint.emit(MessageType.WARNING, f"Cannot open localization and/or label files because of Exception: {e}. Calibration will be performed, but resolution analysis will be omitted.")
+            self.params.should_do_res_analysis = False
+            self.share_params()
         if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:3]==(4, 3)) and (len(clust_fromfile.shape)==3):
-            self.perform_calib_steps(clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
+            if self.params.should_do_res_analysis:
+                self.perform_calib_steps_res_analysis(clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
+            else:
+                self.perform_calib_steps_no_res_analysis(clust_fromfile)
             self.signals.tell_calib_done.emit('from file')
         else:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
 
-    def perform_calib_steps(self, clust_forcalib, clust_locs, clust_labels):
-        self.fit.upd_data_forfit(clust_forcalib, clust_locs, clust_labels)
+    def perform_calib_steps_res_analysis(self, clust_forcalib, clust_locs, clust_labels):
+        self.fit.upd_data_forfit_res_analysis(clust_forcalib, clust_locs, clust_labels)
         match CALIB_MODE:
             case 'no_appr':
                 self.fit.fit_renorm_no_appr()
@@ -1027,6 +1049,22 @@ class AnalysisWorker(QObject):
                 self.fit.backcalc_tirf_angle()
         self.fit.backcalc_z()
         self.fit.calc_spat_sigma_gmm()
+        
+    def perform_calib_steps_no_res_analysis(self, clust_forcalib):
+        self.fit.upd_data_forfit_no_res_analysis(clust_forcalib)
+        match CALIB_MODE:
+            case 'no_appr':
+                self.fit.fit_renorm_no_appr()
+                self.fit.fit_N0_no_appr()
+                self.fit.backcalc_glob_param()
+            case 'no_appr_fix_alpha':
+                self.fit.fit_renorm_no_appr_fix_alpha()
+                self.fit.fit_N0_no_appr()
+                self.fit.backcalc_glob_param()
+            case 'exp_appr':
+                self.fit.fit_renorm_exp_appr()
+                self.fit.fit_N0_exp_appr()
+                self.fit.backcalc_tirf_angle()
 
 def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
     y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))

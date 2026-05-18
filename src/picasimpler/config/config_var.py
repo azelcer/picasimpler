@@ -33,8 +33,9 @@ NS_DEF = 1.333
 # result directory
 RES_DIR = Path("results")
 # initial guesses and bounds for calibration fit
-ALPHA_GUESS = 0.8
-ALPHA_MAX = 1.0
+ANGLE_FIXED = 66.9
+ALPHA_GUESS = 0.9
+ALPHA_MAX = 1
 ALPHA_FIXED = 0.9
 D_GUESS = 100
 SPACER_GUESS = 0
@@ -42,7 +43,8 @@ SPACER_GUESS = 0
 CALIB_PLOT_RANGE_NM = 150
 CALIB_PLOT_PTS = 2000
 # calibration method
-CALIB_MODE = 'no_appr'
+#CALIB_MODE = 'no_appr'
+CALIB_MODE = 'no_appr_fix_angle'
 #CALIB_MODE = 'no_appr_spacer'
 #CALIB_MODE = 'no_appr_fix_alpha'
 #CALIB_MODE = 'exp_appr'

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
 from pathlib import Path
 from scipy.spatial import distance
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, fsolve
 from scipy.interpolate import interp1d
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import HDBSCAN
@@ -30,6 +30,7 @@ from picasimpler.config.config_var import (
     ALPHA_GUESS,
     ALPHA_MAX,
     ALPHA_FIXED,
+    ANGLE_FIXED,
     D_GUESS,
     SPACER_GUESS,
     CALIB_PLOT_RANGE_NM,
@@ -350,6 +351,7 @@ class SpatialFit(QObject):
         self.signals = signals
         self.z_sites_nm = np.array(Z_SITES_NM)
         self.params = Params()
+        self.angle_fixed_deg = ANGLE_FIXED
         self.alpha_max = ALPHA_MAX
         self.alpha_fixed = ALPHA_FIXED
         
@@ -418,7 +420,13 @@ class SpatialFit(QObject):
         A, B = coeffs[1]  # coefs[0] holds (x, y) of the origami at z=0
 
         phi = np.arctan2(B, A)
-        theta = np.arccos(A / np.cos(np.radians(phi)))
+        # formula 1
+        #theta = np.arccos(A / np.cos(np.radians(phi)))
+        # formula 2
+        #theta = np.arccos(A / np.cos(phi))
+        # formula 3
+        theta = np.arctan2(1, np.sqrt(A**2 + B**2))
+
         return theta, phi
 
     def _z_from_tilt(self, theta: float, sites_distances: np.ndarray):
@@ -587,6 +595,75 @@ class SpatialFit(QObject):
         self.tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
         self.tirf_angle_err = np.abs(tirf_angle_deriv) * self.d_exc_err
         
+    def fit_renorm_no_appr_fix_angle(
+        self,
+        p0: tuple[float] = (ALPHA_GUESS,),
+    ):
+        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.angle_fixed_deg))**2 - self.params.n_s**2)
+        self._calc_coll_fl_arr()
+        N_data = self.clust_means[:, :, 2]
+        flat_z = self.z_real[:, 1:].ravel()
+        # Normalize datal
+        F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], 3))
+        # Model function
+        def F(z, alpha):
+            num = (alpha * np.exp(-z / d_exc) + (1 - alpha))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
+            den = (alpha * np.exp(-z_0 / d_exc) + (1 - alpha))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z_0)
+            return num / den
+        # Fit
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0],[ALPHA_MAX]))
+        alpha_exc = popt[0]
+
+        perr = np.sqrt(np.diag(pcov))
+        self.alpha_exc = alpha_exc
+        self.d_exc = d_exc
+        self.alpha_exc_err = perr[0]
+        self.d_exc_err = 0
+        
+        tirf_angle_lambda_factor = self.params.lambda_exc / (4*np.pi)
+        tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / self.d_exc)**2 + self.params.n_s**2))
+        tirf_angle_sin = tirf_angle_sqrt_factor / self.params.n_i
+        tirf_angle_deriv = (1 / np.sqrt(1 - tirf_angle_sin**2)) * (1 / self.params.n_i) * (1/2) * (1 / tirf_angle_sqrt_factor) * tirf_angle_lambda_factor**2 * (2/self.d_exc**3) * (180/np.pi)
+        self.tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
+        self.tirf_angle_err = np.abs(tirf_angle_deriv) * self.d_exc_err  
+        
+    def fit_renorm_no_appr_fix_angle_spacer(
+        self,
+        p0: tuple[float] = (ALPHA_GUESS,),
+    ):
+        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.angle_fixed_deg))**2 - self.params.n_s**2)
+        print(d_exc)
+        self._calc_coll_fl_arr()
+        N_data = self.clust_means[:, :, 2]
+        flat_z = self.z_real[:, 1:].ravel()
+        # Normalize datal
+        F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], 3))
+        # Model function
+        def F(z, alpha):
+            num = (alpha * np.exp(-z / d_exc) + (1 - alpha))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
+            den = (alpha * np.exp(-z_0 / d_exc) + (1 - alpha))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z_0)
+            return num / den
+        # Fit
+        popt, pcov = curve_fit(F, flat_z, F_data, p0=p0, bounds=([0],[ALPHA_MAX]))
+        alpha_exc = popt[0]
+        print(alpha_exc)
+
+        perr = np.sqrt(np.diag(pcov))
+        self.alpha_exc = alpha_exc
+        self.d_exc = d_exc
+        self.alpha_exc_err = perr[0]
+        self.d_exc_err = 0
+        
+        tirf_angle_lambda_factor = self.params.lambda_exc / (4*np.pi)
+        tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / self.d_exc)**2 + self.params.n_s**2))
+        tirf_angle_sin = tirf_angle_sqrt_factor / self.params.n_i
+        tirf_angle_deriv = (1 / np.sqrt(1 - tirf_angle_sin**2)) * (1 / self.params.n_i) * (1/2) * (1 / tirf_angle_sqrt_factor) * tirf_angle_lambda_factor**2 * (2/self.d_exc**3) * (180/np.pi)
+        self.tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
+        self.tirf_angle_err = np.abs(tirf_angle_deriv) * self.d_exc_err  
+        
+        
     def fit_renorm_no_appr_fix_alpha(
         self,
         p0: tuple[float] = (D_GUESS,),
@@ -704,11 +781,31 @@ class SpatialFit(QObject):
         self.alpha_F = popt[1]
         self.alpha_F_err = pcov[1, 1]
         
-    def z_from_N(self, n_ph, n_ph_0):
+    def z_from_N_appr(self, n_ph, n_ph_0):
         """
         This function computes z from N, given the global decay parameters
         """
         return self.d_F*np.log(self.alpha_F/((n_ph/n_ph_0) - (1 - self.alpha_F)))
+         
+    def z_from_N_no_appr(self, n_ph, n_ph_0):
+        """
+        This function computes z from N, from the real, not approximated, not exponential decay curve
+        """
+        coll_fl_fn = interp1d(Z_SIM_DISCR, self.coll_fl_discr,
+                        bounds_error=False, fill_value='extrapolate')
+
+        n_ph   = np.atleast_1d(np.squeeze(n_ph))
+        n_ph_0 = np.atleast_1d(np.squeeze(n_ph_0))
+
+        results = np.empty_like(n_ph, dtype=float)
+        for i, (a, b) in enumerate(np.broadcast(n_ph, n_ph_0)):
+            def f(z, a=a, b=b):   # default args capture current values
+                return (a / b
+                        - coll_fl_fn(z) * (self.alpha_exc * np.exp(-z / self.d_exc)
+                        + (1 - self.alpha_exc)))
+            results[i] = fsolve(f, x0=50)[0]
+
+        return results
         
     def backcalc_z(self):
         """
@@ -720,7 +817,7 @@ class SpatialFit(QObject):
                 np.concatenate(
                     (
                         self.clust_locs[orig_idx][:, :2],
-                        self.z_from_N(self.clust_locs[orig_idx][:, 2], self.N_0_arr[orig_idx, np.newaxis])[:, np.newaxis]  
+                        self.z_from_N_no_appr(self.clust_locs[orig_idx][:, 2], self.N_0_arr[orig_idx, np.newaxis])[:, np.newaxis]  
                     ), axis = 1
                 )
             )
@@ -1097,6 +1194,10 @@ class AnalysisWorker(QObject):
                 self.fit.fit_renorm_no_appr()
                 self.fit.fit_N0_no_appr()
                 self.fit.backcalc_glob_param()
+            case 'no_appr_fix_angle':
+                self.fit.fit_renorm_no_appr_fix_angle()
+                self.fit.fit_N0_no_appr()
+                self.fit.backcalc_glob_param()
             case 'no_appr_spacer':
                 self.fit.fit_renorm_no_appr_spacer()
                 self.fit.fit_N0_no_appr()
@@ -1117,6 +1218,10 @@ class AnalysisWorker(QObject):
         match CALIB_MODE:
             case 'no_appr':
                 self.fit.fit_renorm_no_appr()
+                self.fit.fit_N0_no_appr()
+                self.fit.backcalc_glob_param()
+            case 'no_appr_fix_angle':
+                self.fit.fit_renorm_no_appr_fix_angle()
                 self.fit.fit_N0_no_appr()
                 self.fit.backcalc_glob_param()
             case 'no_appr_fix_alpha':

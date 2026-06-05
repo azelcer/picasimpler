@@ -8,6 +8,7 @@ from pathlib import Path
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
 from functools import wraps
+from matplotlib import rcParams
 
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
@@ -34,6 +35,7 @@ _lgn.basicConfig()
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.INFO)
 
+rcParams.update({'font.size': 18})
 
 class PresenterSignals(QObject):
     request_load_data = pyqtSignal(object, object)
@@ -45,10 +47,14 @@ class PresenterSignals(QObject):
     send_spat_tol_toanalysis = pyqtSignal(float)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
-    send_n_guess_toanalysis = pyqtSignal(object) # send tuple of N gueses
+    send_n_guess_toanalysis = pyqtSignal(object) # send tuple of N guesses
     send_n_guess_choice_toanalysis = pyqtSignal(bool)
     send_n_bounds_toanalysis = pyqtSignal(object) # send tuple of N bounds
     send_n_bounds_choice_toanalysis = pyqtSignal(bool)
+    send_x_bounds_toanalysis = pyqtSignal(object) # send tuple of x bounds
+    send_x_bounds_choice_toanalysis = pyqtSignal(bool)
+    send_y_bounds_toanalysis = pyqtSignal(object) # send tuple of y bounds
+    send_y_bounds_choice_toanalysis = pyqtSignal(bool)
     send_lambda_exc_toanalysis = pyqtSignal(float)
     send_lambda_em_toanalysis = pyqtSignal(float)
     send_n_s_toanalysis = pyqtSignal(float)
@@ -169,6 +175,24 @@ class Presenter(QObject):
         self.signals.send_n_bounds_toanalysis.emit(self._n_bounds)
         
     @property
+    def x_bounds(self):
+        return self._x_bounds
+    
+    @x_bounds.setter
+    def x_bounds(self, value: float):
+        self._x_bounds = value
+        self.signals.send_x_bounds_toanalysis.emit(self._x_bounds)
+        
+    @property
+    def y_bounds(self):
+        return self._y_bounds
+    
+    @y_bounds.setter
+    def y_bounds(self, value: float):
+        self._y_bounds = value
+        self.signals.send_y_bounds_toanalysis.emit(self._y_bounds)
+        
+    @property
     def should_use_n_bounds(self):
         return self._should_use_n_bounds
     
@@ -176,6 +200,24 @@ class Presenter(QObject):
     def should_use_n_bounds(self, value: bool):
         self._should_use_n_bounds = value
         self.signals.send_n_bounds_choice_toanalysis.emit(self._should_use_n_bounds)        
+
+    @property
+    def should_use_x_bounds(self):
+        return self._should_use_x_bounds
+    
+    @should_use_x_bounds.setter
+    def should_use_x_bounds(self, value: bool):
+        self._should_use_x_bounds = value
+        self.signals.send_x_bounds_choice_toanalysis.emit(self._should_use_x_bounds)    
+        
+    @property
+    def should_use_y_bounds(self):
+        return self._should_use_y_bounds
+    
+    @should_use_y_bounds.setter
+    def should_use_y_bounds(self, value: bool):
+        self._should_use_y_bounds = value
+        self.signals.send_y_bounds_choice_toanalysis.emit(self._should_use_y_bounds)    
 
     @property
     def lambda_em(self):
@@ -258,7 +300,8 @@ class Presenter(QObject):
                 safe_float_tonone(self._view.ui.n1_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n2_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n3_guess_lineedit.text()),
-                safe_float_tonone(self._view.ui.n4_guess_lineedit.text())    
+                safe_float_tonone(self._view.ui.n4_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n5_guess_lineedit.text()),    
             ))
         )
         self._view.ui.n2_guess_lineedit.manual_editing_finished.connect(
@@ -266,7 +309,8 @@ class Presenter(QObject):
                 safe_float_tonone(self._view.ui.n1_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n2_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n3_guess_lineedit.text()),
-                safe_float_tonone(self._view.ui.n4_guess_lineedit.text())    
+                safe_float_tonone(self._view.ui.n4_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n5_guess_lineedit.text()),    
             ))
         )
         self._view.ui.n3_guess_lineedit.manual_editing_finished.connect(
@@ -274,7 +318,8 @@ class Presenter(QObject):
                 safe_float_tonone(self._view.ui.n1_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n2_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n3_guess_lineedit.text()),
-                safe_float_tonone(self._view.ui.n4_guess_lineedit.text())    
+                safe_float_tonone(self._view.ui.n4_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n5_guess_lineedit.text()),    
             ))
         )
         self._view.ui.n4_guess_lineedit.manual_editing_finished.connect(
@@ -282,7 +327,17 @@ class Presenter(QObject):
                 safe_float_tonone(self._view.ui.n1_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n2_guess_lineedit.text()),
                 safe_float_tonone(self._view.ui.n3_guess_lineedit.text()),
-                safe_float_tonone(self._view.ui.n4_guess_lineedit.text())    
+                safe_float_tonone(self._view.ui.n4_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n5_guess_lineedit.text()) 
+            ))
+        )
+        self._view.ui.n5_guess_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_n_guess_fromui.emit((
+                safe_float_tonone(self._view.ui.n1_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n2_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n3_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n4_guess_lineedit.text()),
+                safe_float_tonone(self._view.ui.n5_guess_lineedit.text()) 
             ))
         )
         self._view.ui.manual_guess_checkbox.stateChanged.connect(
@@ -302,9 +357,43 @@ class Presenter(QObject):
                 safe_float_tonone(self._view.ui.n_bound2_lineedit.text())
             ))
         )
-        self._view.ui.bounds_checkbox.stateChanged.connect(
+        self._view.ui.n_bounds_checkbox.stateChanged.connect(
             lambda: self._view.signals.send_n_bounds_choice_fromui.emit(
-                self._view.ui.bounds_checkbox.isChecked()
+                self._view.ui.n_bounds_checkbox.isChecked()
+            )
+        )
+        self._view.ui.x_bound1_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_x_bounds_fromui.emit((
+                safe_float_tonone(self._view.ui.x_bound1_lineedit.text()),
+                safe_float_tonone(self._view.ui.x_bound2_lineedit.text())
+            ))
+        )
+        self._view.ui.x_bound2_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_x_bounds_fromui.emit((
+                safe_float_tonone(self._view.ui.x_bound1_lineedit.text()),
+                safe_float_tonone(self._view.ui.x_bound2_lineedit.text())
+            ))
+        )
+        self._view.ui.x_bounds_checkbox.stateChanged.connect(
+            lambda: self._view.signals.send_x_bounds_choice_fromui.emit(
+                self._view.ui.x_bounds_checkbox.isChecked()
+            )
+        )
+        self._view.ui.y_bound1_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_y_bounds_fromui.emit((
+                safe_float_tonone(self._view.ui.y_bound1_lineedit.text()),
+                safe_float_tonone(self._view.ui.y_bound2_lineedit.text())
+            ))
+        )
+        self._view.ui.y_bound2_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_y_bounds_fromui.emit((
+                safe_float_tonone(self._view.ui.y_bound1_lineedit.text()),
+                safe_float_tonone(self._view.ui.y_bound2_lineedit.text())
+            ))
+        )
+        self._view.ui.y_bounds_checkbox.stateChanged.connect(
+            lambda: self._view.signals.send_y_bounds_choice_fromui.emit(
+                self._view.ui.y_bounds_checkbox.isChecked()
             )
         )
         self._view.ui.lambda_exc_lineedit.manual_editing_finished.connect(
@@ -332,8 +421,12 @@ class Presenter(QObject):
         self._view.signals.send_preclust_eps_fromui.connect(self.upd_preclust_eps)
         self._view.signals.send_n_guess_fromui.connect(self.upd_n_guess)
         self._view.signals.send_n_bounds_fromui.connect(self.upd_n_bounds)
+        self._view.signals.send_x_bounds_fromui.connect(self.upd_x_bounds)
+        self._view.signals.send_y_bounds_fromui.connect(self.upd_y_bounds)
         self._view.signals.send_n_guess_choice_fromui.connect(self.upd_n_guess_choice)
         self._view.signals.send_n_bounds_choice_fromui.connect(self.upd_n_bounds_choice)
+        self._view.signals.send_x_bounds_choice_fromui.connect(self.upd_x_bounds_choice)
+        self._view.signals.send_y_bounds_choice_fromui.connect(self.upd_y_bounds_choice)
         self._view.signals.send_lambda_exc_fromui.connect(self.upd_lambda_exc)
         self._view.signals.send_lambda_em_fromui.connect(self.upd_lambda_em)
         self._view.signals.send_n_s_fromui.connect(self.upd_n_s)
@@ -355,8 +448,12 @@ class Presenter(QObject):
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
         self.signals.send_n_guess_toanalysis.connect(self._analysis_worker.upd_n_guess)
         self.signals.send_n_bounds_toanalysis.connect(self._analysis_worker.upd_n_bounds)
+        self.signals.send_x_bounds_toanalysis.connect(self._analysis_worker.upd_x_bounds)
+        self.signals.send_y_bounds_toanalysis.connect(self._analysis_worker.upd_y_bounds)
         self.signals.send_n_guess_choice_toanalysis.connect(self._analysis_worker.upd_n_guess_choice)
         self.signals.send_n_bounds_choice_toanalysis.connect(self._analysis_worker.upd_n_bounds_choice)
+        self.signals.send_x_bounds_choice_toanalysis.connect(self._analysis_worker.upd_x_bounds_choice)
+        self.signals.send_y_bounds_choice_toanalysis.connect(self._analysis_worker.upd_y_bounds_choice)
         self.signals.send_lambda_exc_toanalysis.connect(self._analysis_worker.upd_lambda_exc)
         self.signals.send_lambda_em_toanalysis.connect(self._analysis_worker.upd_lambda_em)
         self.signals.send_n_i_toanalysis.connect(self._analysis_worker.upd_n_i)
@@ -615,6 +712,14 @@ class Presenter(QObject):
     def upd_n_bounds(self, values):
         self.n_bounds = values
         
+    @pyqtSlot(object)
+    def upd_x_bounds(self, values):
+        self.x_bounds = values
+        
+    @pyqtSlot(object)
+    def upd_y_bounds(self, values):
+        self.y_bounds = values
+        
     @pyqtSlot(bool)
     def upd_n_guess_choice(self, value):
         self.should_use_n_guess = value
@@ -622,6 +727,14 @@ class Presenter(QObject):
     @pyqtSlot(bool)
     def upd_n_bounds_choice(self, value):
         self.should_use_n_bounds = value
+        
+    @pyqtSlot(bool)
+    def upd_x_bounds_choice(self, value):
+        self.should_use_x_bounds = value
+        
+    @pyqtSlot(bool)
+    def upd_y_bounds_choice(self, value):
+        self.should_use_y_bounds = value
         
     @pyqtSlot(float)
     def upd_lambda_exc(self, value):
@@ -722,10 +835,11 @@ class Presenter(QObject):
         plt.close()
         plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.N_renorm_arr.ravel(), ".", ms=8, label="Data")
         plt.plot(self._analysis_worker.fit.z_ax_forplot, self._analysis_worker.fit.fit_func_forplot.ravel(), label="Fit")
-        plt.ylabel("Relative Intensity")
-        plt.xlabel("z")
+        plt.ylabel(r"$N/N_{0}$")
+        plt.xlabel("z [nm]")
         plt.legend()
         plt.grid()
+        plt.tight_layout()
         plt.savefig(self.res_dir / Path(calib_plot_filename))
         
     def save_tirf_angle_plot(self, tirf_angle_plotname):

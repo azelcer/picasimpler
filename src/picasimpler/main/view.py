@@ -19,6 +19,10 @@ class ViewSignals(QObject):
     send_n_guess_choice_fromui = pyqtSignal(bool)
     send_n_bounds_fromui = pyqtSignal(object) # sending tuple of N bounds
     send_n_bounds_choice_fromui = pyqtSignal(bool)
+    send_x_bounds_fromui = pyqtSignal(object) # sending tuple of x bounds
+    send_x_bounds_choice_fromui = pyqtSignal(bool)
+    send_y_bounds_fromui = pyqtSignal(object) # sending tuple of y bounds
+    send_y_bounds_choice_fromui = pyqtSignal(bool)
     send_lambda_exc_fromui = pyqtSignal(float)
     send_lambda_em_fromui = pyqtSignal(float)
     send_n_s_fromui = pyqtSignal(float)
@@ -63,11 +67,21 @@ class View(QMainWindow):
         # pre-clustering de-noising parameter must be positive, finite and no scientfic notation allowed
         self.ui.preclust_gamma_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         self.ui.preclust_eps_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
-        # photon numbers must be integer, positive, finite and no scientfic notation allowed
+        # photon number guesses must be integer, positive, finite and no scientfic notation allowed
         self.ui.n1_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         self.ui.n2_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         self.ui.n3_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         self.ui.n4_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.n5_guess_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        # photon number bounds must be integer, positive, finite and no scientfic notation allowed
+        self.ui.n_bound1_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.n_bound2_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        # x bounds must be integer, positive, finite and no scientfic notation allowed
+        self.ui.x_bound1_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.x_bound2_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        # y bounds must be integer, positive, finite and no scientfic notation allowed
+        self.ui.y_bound1_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        self.ui.y_bound2_lineedit.setValidator(NumberValidators.INT_NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         # wavelengths must be positive, finite and no scientfic notation allowed
         self.ui.lambda_exc_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         self.ui.lambda_em_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1212</width>
-    <height>692</height>
+    <height>752</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -67,9 +67,9 @@ dataset</string>
    <widget class="QPushButton" name="prev_orig_button">
     <property name="geometry">
      <rect>
-      <x>740</x>
-      <y>520</y>
-      <width>81</width>
+      <x>20</x>
+      <y>660</y>
+      <width>171</width>
       <height>61</height>
      </rect>
     </property>
@@ -82,9 +82,9 @@ origami
    <widget class="QPushButton" name="next_orig_button">
     <property name="geometry">
      <rect>
-      <x>830</x>
-      <y>520</y>
-      <width>81</width>
+      <x>200</x>
+      <y>660</y>
+      <width>171</width>
       <height>61</height>
      </rect>
     </property>
@@ -107,9 +107,9 @@ origami
    <widget class="QPushButton" name="disc_selec_orig_button">
     <property name="geometry">
      <rect>
-      <x>740</x>
-      <y>590</y>
-      <width>81</width>
+      <x>380</x>
+      <y>660</y>
+      <width>171</width>
       <height>61</height>
      </rect>
     </property>
@@ -296,9 +296,9 @@ sites</string>
    <widget class="QPushButton" name="refit_origami">
     <property name="geometry">
      <rect>
-      <x>830</x>
-      <y>590</y>
-      <width>81</width>
+      <x>560</x>
+      <y>660</y>
+      <width>171</width>
       <height>61</height>
      </rect>
     </property>
@@ -342,7 +342,7 @@ SIMPLER</string>
       <x>740</x>
       <y>10</y>
       <width>171</width>
-      <height>501</height>
+      <height>711</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -368,7 +368,7 @@ SIMPLER</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>70</y>
+       <y>60</y>
        <width>151</width>
        <height>31</height>
       </rect>
@@ -507,7 +507,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>355</y>
+       <y>555</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -520,7 +520,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>355</y>
+       <y>555</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -533,7 +533,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>375</y>
+       <y>575</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -543,7 +543,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>375</y>
+       <y>575</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -553,7 +553,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>460</y>
+       <y>660</y>
        <width>73</width>
        <height>26</height>
       </rect>
@@ -583,7 +583,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>460</y>
+       <y>660</y>
        <width>55</width>
        <height>21</height>
       </rect>
@@ -596,7 +596,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>405</y>
+       <y>605</y>
        <width>55</width>
        <height>16</height>
       </rect>
@@ -609,7 +609,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>405</y>
+       <y>605</y>
        <width>55</width>
        <height>16</height>
       </rect>
@@ -622,7 +622,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>425</y>
+       <y>625</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -632,40 +632,40 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>425</y>
+       <y>625</y>
        <width>71</width>
        <height>26</height>
       </rect>
      </property>
     </widget>
-    <widget class="QCheckBox" name="bounds_checkbox">
+    <widget class="QCheckBox" name="n_bounds_checkbox">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>260</y>
+       <y>290</y>
        <width>151</width>
        <height>21</height>
       </rect>
      </property>
      <property name="text">
-      <string>Use bounds</string>
+      <string>Use bounds on N</string>
      </property>
     </widget>
     <widget class="CustomQLineEdit" name="n_bound1_lineedit">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>300</y>
+       <y>330</y>
        <width>71</width>
        <height>26</height>
       </rect>
      </property>
     </widget>
-    <widget class="QLabel" name="boun_title_label">
+    <widget class="QLabel" name="n_bound_title_label">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>280</y>
+       <y>310</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -678,7 +678,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>300</y>
+       <y>330</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -688,13 +688,115 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>335</y>
+       <y>535</y>
        <width>151</width>
        <height>21</height>
       </rect>
      </property>
      <property name="text">
       <string>Setup parameters:</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="n5_guess_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>250</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="x_bounds_checkbox">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>370</y>
+       <width>151</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Use bounds on x</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="x_bound_title_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>390</y>
+       <width>151</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>x bounds:</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="x_bound1_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>410</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="x_bound2_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>410</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="y_bound1_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>490</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="y_bound2_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>490</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="y_bounds_checkbox">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>450</y>
+       <width>151</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Use bounds on y</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="y_bound_title_label_2">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>470</y>
+       <width>151</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>y bounds:</string>
      </property>
     </widget>
    </widget>
@@ -719,7 +821,7 @@ from file (.npy)</string>
       <x>920</x>
       <y>10</y>
       <width>271</width>
-      <height>641</height>
+      <height>711</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -747,7 +849,7 @@ from file (.npy)</string>
        <x>10</x>
        <y>40</y>
        <width>251</width>
-       <height>591</height>
+       <height>661</height>
       </rect>
      </property>
     </widget>
@@ -810,6 +912,16 @@ from file (.npy)</string>
   <tabstop>n2_guess_lineedit</tabstop>
   <tabstop>n3_guess_lineedit</tabstop>
   <tabstop>n4_guess_lineedit</tabstop>
+  <tabstop>n5_guess_lineedit</tabstop>
+  <tabstop>n_bounds_checkbox</tabstop>
+  <tabstop>n_bound1_lineedit</tabstop>
+  <tabstop>n_bound2_lineedit</tabstop>
+  <tabstop>x_bounds_checkbox</tabstop>
+  <tabstop>x_bound1_lineedit</tabstop>
+  <tabstop>x_bound2_lineedit</tabstop>
+  <tabstop>y_bounds_checkbox</tabstop>
+  <tabstop>y_bound1_lineedit</tabstop>
+  <tabstop>y_bound2_lineedit</tabstop>
   <tabstop>lambda_exc_lineedit</tabstop>
   <tabstop>lambda_em_lineedit</tabstop>
   <tabstop>n_s_lineedit</tabstop>

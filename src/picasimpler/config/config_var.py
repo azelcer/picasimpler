@@ -10,13 +10,23 @@ MIN_LAST_FRAME_PERC = 0.66
 FRAME_MEDIAN_PERC_RANGE = [0.33, 0.66]
 MAX_ON_FRAMES_PERC = 0.8
 # origami structure
-Z_SITES_NM = [7, 41.6, 76.9, 113.5]
+HB_Z_0 = 8.3
+HB_Z_DIST_NM = [38.7, 41.0, 56.4, 54.1]
+Z_SITES_NM = [
+    HB_Z_0,
+    HB_Z_0 + HB_Z_DIST_NM[0],
+    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1],
+    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2],
+    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2] + HB_Z_DIST_NM[3],
+]
+#Z_SITES_NM = [7, 41.6, 76.9, 113.5]
 # clustering
-PRECLUST_GAMMA_DEF = 0.1
-PRECLUST_EPS_DEF = 20
+PRECLUST_GAMMA_DEF = 0.05
+PRECLUST_EPS_DEF = 40
 MAX_PRECLUST_GAMMA = 1/len(Z_SITES_NM)
 MIN_GOOD_LOC = 100
-N_CLUST_EXP = 4
+#N_CLUST_EXP = 4
+N_CLUST_EXP = 5
 DF_REF_VAL_NM = 120
 # setup parameters
 LAMDBA_EXC_DEF = 560
@@ -33,18 +43,22 @@ NS_DEF = 1.333
 # result directory
 RES_DIR = Path("results")
 # initial guesses and bounds for calibration fit
-ANGLE_FIXED = 66.9
+ANGLE_FIXED = 69.2
 ALPHA_GUESS = 0.9
-ALPHA_MAX = 1
+ALPHA_MAX = 10000
 ALPHA_FIXED = 0.9
 D_GUESS = 100
 SPACER_GUESS = 0
+D_LONG_GUESS = 1500
 # parameters for calibration plot
-CALIB_PLOT_RANGE_NM = 150
+CALIB_PLOT_RANGE_NM = 250
 CALIB_PLOT_PTS = 2000
 # calibration method
 #CALIB_MODE = 'no_appr'
-CALIB_MODE = 'no_appr_fix_angle'
+#CALIB_MODE = 'no_appr_fix_angle'
+CALIB_MODE = 'no_appr_fix_angle_each_orig'
+#CALIB_MODE = 'no_appr_fix_angle_biexp'
+#CALIB_MODE = 'no_appr_fix_angle_biexp_each_orig'
 #CALIB_MODE = 'no_appr_spacer'
 #CALIB_MODE = 'no_appr_fix_alpha'
 #CALIB_MODE = 'exp_appr'

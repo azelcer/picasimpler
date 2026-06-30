@@ -216,6 +216,8 @@ class Clusterization:
         """
         This function executes pre-clustering de-noising for a single origami
         """
+        if len(locs) < MIN_GOOD_LOC:
+            return
         min_clust_size = int(self.params.preclust_gamma*len(locs))
         loc_rescal = np.stack(
             (locs[:, 0],

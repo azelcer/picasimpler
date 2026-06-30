@@ -12,21 +12,21 @@ MAX_ON_FRAMES_PERC = 0.8
 # origami structure
 HB_Z_0 = 8.3
 HB_Z_DIST_NM = [38.7, 41.0, 56.4, 54.1]
-Z_SITES_NM = [
-    HB_Z_0,
-    HB_Z_0 + HB_Z_DIST_NM[0],
-    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1],
-    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2],
-    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2] + HB_Z_DIST_NM[3],
-]
-#Z_SITES_NM = [7, 41.6, 76.9, 113.5]
+#Z_SITES_NM = [
+#    HB_Z_0,
+#    HB_Z_0 + HB_Z_DIST_NM[0],
+#    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1],
+#    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2],
+#    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2] + HB_Z_DIST_NM[3],
+#]
+Z_SITES_NM = [7, 41.6, 76.9, 113.5]
 # clustering
 PRECLUST_GAMMA_DEF = 0.05
 PRECLUST_EPS_DEF = 40
 MAX_PRECLUST_GAMMA = 1/len(Z_SITES_NM)
 MIN_GOOD_LOC = 100
-#N_CLUST_EXP = 4
-N_CLUST_EXP = 5
+N_CLUST_EXP = 4
+#N_CLUST_EXP = 5
 DF_REF_VAL_NM = 120
 # setup parameters
 LAMDBA_EXC_DEF = 560

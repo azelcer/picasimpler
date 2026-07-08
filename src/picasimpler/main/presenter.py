@@ -44,6 +44,8 @@ class PresenterSignals(QObject):
     request_calibration = pyqtSignal()
     request_calibration_fromfile = pyqtSignal(object)
     request_refit_origami = pyqtSignal(int)
+    send_sampletype_toanalysis = pyqtSignal(str)
+    send_orientation_toanalysis = pyqtSignal(str)
     send_spat_tol_toanalysis = pyqtSignal(float)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
@@ -90,6 +92,8 @@ class Presenter(QObject):
         self.res_dir: Path = RES_DIR
         self._view.ui.NA_combobox.setCurrentIndex(NA_IDX_DEF)
         self._view.ui.NA_combobox.activated.emit(self._view.ui.NA_combobox.currentIndex())
+        self._view.ui.sampletype_combobox.activated.emit(self._view.ui.sampletype_combobox.currentIndex())
+        self._view.ui.orientation_combobox.activated.emit(self._view.ui.orientation_combobox.currentIndex())
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -432,6 +436,8 @@ class Presenter(QObject):
         self._view.signals.send_n_s_fromui.connect(self.upd_n_s)
         self._view.signals.send_n_i_fromui.connect(self.upd_n_i)
         self._view.ui.NA_combobox.activated.connect(self.upd_NA)
+        self._view.ui.sampletype_combobox.activated.connect(self.upd_sampletype)
+        self._view.ui.orientation_combobox.activated.connect(self.upd_orientation)
         
     def _make_analysis_connect(self):
         """
@@ -443,6 +449,8 @@ class Presenter(QObject):
         self.signals.request_start_clustering.connect(self._analysis_worker.do_clust)
         self.signals.request_calibration.connect(self._analysis_worker.do_calib)
         self.signals.request_calibration_fromfile.connect(self._analysis_worker.do_calib_fromfile)
+        self.signals.send_sampletype_toanalysis.connect(self._analysis_worker.upd_sampletype)
+        self.signals.send_orientation_toanalysis.connect(self._analysis_worker.upd_orientation)
         self.signals.send_spat_tol_toanalysis.connect(self._analysis_worker.upd_spat_tol)
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
@@ -769,6 +777,22 @@ class Presenter(QObject):
                 coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA149.txt")
         self.signals.send_coll_fl_tab_toanalysis.emit(coll_fl_tab)
         
+    @pyqtSlot()
+    def upd_sampletype(self):
+        match self._view.ui.sampletype_combobox.currentText():
+            case '12HB (5 points)':
+                self.signals.send_sampletype_toanalysis.emit('12HB (5 points)')
+            case 'Rifle (4 points)':    
+                self.signals.send_sampletype_toanalysis.emit('Rifle (4 points)')
+                
+    @pyqtSlot()
+    def upd_orientation(self):
+        match self._view.ui.orientation_combobox.currentText():
+            case '12HB (5 points)':
+                self.signals.send_orientation_toanalysis.emit('12HB (5 points)')
+            case 'Rifle (4 points)':    
+                self.signals.send_orientation_toanalysis.emit('Rifle (4 points)')
+                
     @pyqtSlot(str)
     def _on_calib_done(self, mode=''):
         """
@@ -805,7 +829,7 @@ class Presenter(QObject):
             self._analysis_worker.fit.N_0_avg,
             self._analysis_worker.fit.N_0_std
         )
-        self.save_calib_plot(filename_base + "_calib_res.png")
+        self.save_calib_plot(filename_base)
         if CALIB_MODE=='exp_appr':
             self.save_tirf_angle_plot(filename_base + "_TIRF_angle_plot.png")
 
@@ -828,19 +852,37 @@ class Presenter(QObject):
         with open(self.res_dir / Path(calib_res_filename), "w") as f:
             json.dump(calib_res_dict, f, indent=4)
         
-    def save_calib_plot(self, calib_plot_filename):
+    def save_calib_plot(self, calib_plot_filename_base):
         """
         This function saves the plot of the SIMPLER calibration as a .png in the result folder
         """
         plt.close()
-        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.N_renorm_arr.ravel(), ".", ms=8, label="Data")
+        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.N_renorm_arr.ravel(), ".", ms=8, label="Data", alpha=0.2)
         plt.plot(self._analysis_worker.fit.z_ax_forplot, self._analysis_worker.fit.fit_func_forplot.ravel(), label="Fit")
         plt.ylabel(r"$N/N_{0}$")
         plt.xlabel("z [nm]")
         plt.legend()
         plt.grid()
         plt.tight_layout()
-        plt.savefig(self.res_dir / Path(calib_plot_filename))
+        plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_calib_res.png"))
+        
+        plt.close()
+        plt.plot(self._analysis_worker.fit.z_real.ravel(), self._analysis_worker.fit.N_renorm_arr.ravel(), ".", ms=8, label="Data", alpha=0.2)
+        plt.plot(self._analysis_worker.fit.z_ax_forplot, self._analysis_worker.fit.fit_func_forplot.ravel(), label="Fit")
+        plt.ylabel(r"$N/N_{0}$")
+        plt.xlabel("z [nm]")
+        plt.legend()
+        plt.grid()
+        plt.tight_layout()
+        plt.yscale('log')
+        plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_calib_res_logscale.png"))
+        
+        plt.close()
+        plt.hist(self._analysis_worker.fit.alpha_arr, 20)
+        plt.ylabel("Frequency")
+        plt.xlabel(r"$\alpha_{EXC}$")
+        plt.tight_layout()
+        plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_alphaexc_distr.png"))
         
     def save_tirf_angle_plot(self, tirf_angle_plotname):
         """

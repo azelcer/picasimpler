@@ -22,9 +22,11 @@ from picasimpler.config.config_var import (
     FRAME_MEDIAN_PERC_RANGE,
     MAX_ON_FRAMES_PERC,
     MIN_GOOD_LOC,
-    N_CLUST_EXP,
+    RIFLE_N_CLUST_EXP,
+    HB_N_CLUST_EXP,
     Z_BASELINE_NM,
-    Z_SITES_NM,
+    RIFLE_Z_SITES_NM,
+    HB_Z_SITES_NM,
     DF_REF_VAL_NM,
     RES_DIR,
     ALPHA_GUESS,
@@ -290,11 +292,11 @@ class Clusterization:
         """
         This function use GMM to cluster data in a single origami
         """
-        for n_clust in range(N_CLUST_EXP, 0, -1):
-            if n_clust == N_CLUST_EXP:
+        for n_clust in range(self.params.n_clust_exp, 0, -1):
+            if n_clust == self.params.n_clust_exp:
                 if self.params.should_use_n_guess and all(guess is not None for guess in self.params.n_guess):
-                    gmm_guess_arr = np.zeros((N_CLUST_EXP, 3), dtype=float)
-                    for clust_idx in range(N_CLUST_EXP):
+                    gmm_guess_arr = np.zeros((self.params.n_clust_exp, 3), dtype=float)
+                    for clust_idx in range(self.params.n_clust_exp):
                         locs_close_ton = locs[np.logical_and(
                             locs[:, 2] > self.params.n_guess[clust_idx] - 2*np.sqrt(self.params.n_guess[clust_idx]),
                             locs[:, 2] < self.params.n_guess[clust_idx] + 2*np.sqrt(self.params.n_guess[clust_idx])
@@ -367,7 +369,6 @@ class SpatialFit(QObject):
     def __init__(self, signals):
         super().__init__()
         self.signals = signals
-        self.z_sites_nm = np.array(Z_SITES_NM)
         self.params = Params()
         self.angle_fixed_deg = ANGLE_FIXED
         self.alpha_max = ALPHA_MAX
@@ -398,13 +399,13 @@ class SpatialFit(QObject):
         """
         This function computes tilt angles for all the selected origamis based on xy cluster positions and expected z positions of the sites
         """
-        self.tilt_angles = np.array([self._tilts_form_xy(self.z_sites_nm, o_pos[:, 0:2])[0] for o_pos in self.clust_means])
+        self.tilt_angles = np.array([self._tilts_form_xy(self.params.z_nm_arr, o_pos[:, 0:2])[0] for o_pos in self.clust_means])
         
     def _calc_z_real(self):
         """
         This function computes the real expected z positions of the sites, taking into account the tilt angle of each origami
         """
-        self.z_real = self._z_from_tilt(self.tilt_angles, self.z_sites_nm)
+        self.z_real = self._z_from_tilt(self.tilt_angles, self.params.z_nm_arr)
         
     def _tilts_form_xy(self, origami_positions: np.ndarray, xy_positions: np.ndarray):
         """
@@ -427,7 +428,6 @@ class SpatialFit(QObject):
         phi : float
             angle with the x axis in rad
         """
-
         if origami_positions.shape[0] != xy_positions.shape[0]:
             raise ValueError("Length of the z and (x,y) positions of the origami sites do not coincide")
 
@@ -493,7 +493,7 @@ class SpatialFit(QObject):
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
-        z_0 = np.hstack(np.repeat(self.z_real[:, 0], N_CLUST_EXP - 1))
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], self.params.n_clust_exp - 1))
 
         # Model function
         def F(z, alpha_F, d_F):
@@ -533,7 +533,7 @@ class SpatialFit(QObject):
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
-        z_0 = np.hstack(np.repeat(self.z_real[:, 0], N_CLUST_EXP - 1))
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], self.params.n_clust_exp - 1))
         # Model function
         def F(z, alpha_exc, d_exc):
             num = (alpha_exc * np.exp(-(z) / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
@@ -579,7 +579,7 @@ class SpatialFit(QObject):
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
-        z_0 = np.hstack(np.repeat(self.z_real[:, 0], N_CLUST_EXP - 1))
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], self.params.n_clust_exp - 1))
         # Model function
         def F(z, alpha_exc, d_exc, spacer):
             num = (alpha_exc * np.exp(-(z + spacer) / d_exc) + (1 - alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z + spacer)
@@ -614,7 +614,7 @@ class SpatialFit(QObject):
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
-        z_0 = np.hstack(np.repeat(self.z_real[:, 0], N_CLUST_EXP - 1))
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], self.params.n_clust_exp - 1))
         # Model function
         def F(z, alpha):
             num = (alpha * np.exp(-z / d_exc) + (1 - alpha))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
@@ -677,7 +677,7 @@ class SpatialFit(QObject):
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
-        z_0 = np.hstack(np.repeat(self.z_real[:, 0], N_CLUST_EXP - 1))
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], self.params.n_clust_exp - 1))
         # Model function
         def F(z, alpha, d_long):
             num = (alpha * np.exp(-z / d_exc) + (1 - alpha) * np.exp(-z / d_long))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
@@ -764,7 +764,7 @@ class SpatialFit(QObject):
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
         F_data = (N_data / N_data[:, 0, np.newaxis])[:, 1:].ravel()
-        z_0 = np.hstack(np.repeat(self.z_real[:, 0], N_CLUST_EXP - 1))
+        z_0 = np.hstack(np.repeat(self.z_real[:, 0], self.params.n_clust_exp - 1))
         # Model function
         def F(z, d_exc):
             num = (self.alpha_fixed * np.exp(-z / d_exc) + (1 - self.alpha_fixed))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)
@@ -932,22 +932,24 @@ class SpatialFit(QObject):
         """
         This function recalculates the spatial 3D sigmas for the localization, converted into x, y, z.
         """
-        self.spat_covs = np.zeros((len(self.clust_means), N_CLUST_EXP, 3, 3), dtype=float)
+        self.spat_covs = np.zeros((len(self.clust_means), self.params.n_clust_exp, 3, 3), dtype=float)
         for orig_idx in range(len(self.clust_means)):
-            for clust_idx in range(N_CLUST_EXP):
+            for clust_idx in range(self.params.n_clust_exp):
                 gmm = GaussianMixture(n_components=1, covariance_type='full', n_init=5, max_iter=300)
                 gmm.fit(np.array(self.spat_locs[orig_idx][self.clust_labels[orig_idx]==clust_idx]))
                 self.spat_covs[orig_idx, clust_idx, :, :] = gmm.covariances_[0]
         self.spat_sigma_avg = np.mean(np.sqrt(np.diagonal(self.spat_covs, axis1=2, axis2=3)), axis=0)
         
-
-
 @dataclass
 class Params:
     """
     dataclass containing the parameters for the calibration
     """
-
+    # sample parameters
+    sampletype: str | None = None
+    orientation: str | None = None
+    n_clust_exp: int | None = None
+    z_nm_arr: np.ndarray | None = None
     # SIMPLER filtering parameters
     spat_tol_nm: float | None = None # how far can two locs be to be considered the same event
     # pre-clustering parameters
@@ -1011,6 +1013,23 @@ class AnalysisWorker(QObject):
         self.simpler.params = self.params
         self.clust.params = self.params
         self.fit.params = self.params
+
+    @pyqtSlot(str)
+    def upd_sampletype(self, value):
+        self.params.sampletype = value
+        match self.params.sampletype:
+            case '12HB (5 points)':
+                self.params.n_clust_exp = HB_N_CLUST_EXP
+                self.params.z_nm_arr = HB_Z_SITES_NM
+            case 'Rifle (4 points)':
+                self.params.n_clust_exp = RIFLE_N_CLUST_EXP
+                self.params.z_nm_arr = RIFLE_Z_SITES_NM
+        self.share_params()
+
+    @pyqtSlot(str)
+    def upd_orientation(self, value):
+        self.params.orientation = value
+        self.share_params()
 
     @pyqtSlot(float)
     def upd_spat_tol(self, value):
@@ -1277,11 +1296,14 @@ class AnalysisWorker(QObject):
         This function performs the SIMPLER calibration using the results from clusterization and the expected
         z positions, corrected according to the origamin tilt. 
         """
-        self.perform_calib_steps_res_analysis(
-            self.clust.clust_means[self.clust.selec_orig_list, :, :],
-            [np.array(self.clust.locs_clust[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val],
-            [np.array(self.clust.clust_labels[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val]
-        )
+        if self.params.n_clust_exp==self.clust.clust_means.shape[1]:
+            self.perform_calib_steps_res_analysis(
+                self.clust.clust_means[self.clust.selec_orig_list, :, :],
+                [np.array(self.clust.locs_clust[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val],
+                [np.array(self.clust.clust_labels[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val]
+            )
+        else:
+            self.signals.send_msg_toprint(MessageType.ERROR, 'Mismatch between number of expected and detected clusters, change origami type')
         self.signals.tell_calib_done.emit('')
         
     @pyqtSlot(Path)
@@ -1310,7 +1332,7 @@ class AnalysisWorker(QObject):
             self.signals.send_msg_toprint.emit(MessageType.WARNING, f"Cannot open localization and/or label files because of Exception: {e}. Calibration will be performed, but resolution analysis will be omitted.")
             self.params.should_do_res_analysis = False
             self.share_params()
-        if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:]==(N_CLUST_EXP, 3)) and (len(clust_fromfile.shape)==3):
+        if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:]==(self.params.n_clust_exp, 3)) and (len(clust_fromfile.shape)==3):
             if self.params.should_do_res_analysis:
                 self.perform_calib_steps_res_analysis(clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
             else:
@@ -1406,7 +1428,7 @@ if __name__ == "__main__":
     # clust_means [#origami, # site, (x, y, N)]
     clus.clust_means = np.load("../../../results/R2_2_MMStack_Pos0.ome_locs_picked_standing_clusters.npy")
     clus.clust_covs = np.load("../../../results/R2_2_MMStack_Pos0.ome_locs_picked_standing_covs.npy")
-    positions = np.array(Z_SITES_NM)
+    positions = np.array(RIFLE_Z_SITES_NM)
     angles = np.array([clus.tilts_form_xy(positions, o_pos[:, 0:2])[0] for o_pos in clus.clust_means])
     z = clus.z_from_tilt(angles, positions)
     alpha_F, d_F, errors = clus.fit_N(z, clus.clust_means[:, :, 2])

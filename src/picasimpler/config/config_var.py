@@ -12,25 +12,25 @@ MAX_ON_FRAMES_PERC = 0.8
 # origami structure
 HB_Z_0 = 8.3
 HB_Z_DIST_NM = [38.7, 41.0, 56.4, 54.1]
-#Z_SITES_NM = [
-#    HB_Z_0,
-#    HB_Z_0 + HB_Z_DIST_NM[0],
-#    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1],
-#    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2],
-#    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2] + HB_Z_DIST_NM[3],
-#]
-Z_SITES_NM = [7, 41.6, 76.9, 113.5]
+HB_Z_SITES_NM = np.array([
+    HB_Z_0,
+    HB_Z_0 + HB_Z_DIST_NM[0],
+    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1],
+    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2],
+    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2] + HB_Z_DIST_NM[3],
+])
+RIFLE_Z_SITES_NM = np.array([7, 41.6, 76.9, 113.5])
 # clustering
 PRECLUST_GAMMA_DEF = 0.05
 PRECLUST_EPS_DEF = 40
-MAX_PRECLUST_GAMMA = 1/len(Z_SITES_NM)
+MAX_PRECLUST_GAMMA = 0.2
 MIN_GOOD_LOC = 100
-N_CLUST_EXP = 4
-#N_CLUST_EXP = 5
+RIFLE_N_CLUST_EXP = 4
+HB_N_CLUST_EXP = 5
 DF_REF_VAL_NM = 120
 # setup parameters
 LAMDBA_EXC_DEF = 560
-LAMBDA_EM_DEF = 570
+LAMBDA_EM_DEF = 590
 LAMBDA_MIN = 480
 NA_IDX_DEF = 2
 # objetive collection efficiency simulation parameters
@@ -43,9 +43,9 @@ NS_DEF = 1.333
 # result directory
 RES_DIR = Path("results")
 # initial guesses and bounds for calibration fit
-ANGLE_FIXED = 69.2
+ANGLE_FIXED = 70
 ALPHA_GUESS = 0.9
-ALPHA_MAX = 10000
+ALPHA_MAX = 1
 ALPHA_FIXED = 0.9
 D_GUESS = 100
 SPACER_GUESS = 0

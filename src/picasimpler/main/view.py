@@ -12,6 +12,7 @@ from picasimpler.helpers.validators import NumberValidators
 _translate = QCoreApplication.translate
 
 class ViewSignals(QObject):
+    send_tirf_angle_fromui = pyqtSignal(float)
     send_spat_tol_fromui = pyqtSignal(float)
     send_preclust_gamma_fromui = pyqtSignal(float)
     send_preclust_eps_fromui = pyqtSignal(float)
@@ -143,6 +144,9 @@ class View(QMainWindow):
         """
         self.ui.dir_label.setText(str(data_path.parent))            
         self.ui.filename_label.setText(data_path.stem)
+        
+    def upd_tirf_angle_onui(self, tirf_angle):
+        self.ui.angle_lineEdit.setText(str(tirf_angle))
         
     def upd_analysis_status_onui(self, analysis_status: AnalysisStatus):
         """

@@ -883,7 +883,7 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>10</y>
+       <y>0</y>
        <width>81</width>
        <height>21</height>
       </rect>
@@ -896,7 +896,7 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>40</y>
+       <y>20</y>
        <width>121</width>
        <height>22</height>
       </rect>
@@ -916,7 +916,7 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>70</y>
+       <y>45</y>
        <width>81</width>
        <height>21</height>
       </rect>
@@ -929,7 +929,7 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>100</y>
+       <y>65</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -939,13 +939,26 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>100</y>
+       <y>67</y>
        <width>41</width>
        <height>21</height>
       </rect>
      </property>
      <property name="text">
       <string>Fix</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="res_analysis_checkBox">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>100</y>
+       <width>131</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Resolution analysis</string>
      </property>
     </widget>
    </widget>

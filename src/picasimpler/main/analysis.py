@@ -32,7 +32,6 @@ from picasimpler.config.config_var import (
     ALPHA_GUESS,
     ALPHA_MAX,
     ALPHA_FIXED,
-    ANGLE_FIXED,
     D_GUESS,
     SPACER_GUESS,
     D_LONG_GUESS,
@@ -370,7 +369,6 @@ class SpatialFit(QObject):
         super().__init__()
         self.signals = signals
         self.params = Params()
-        self.angle_fixed_deg = ANGLE_FIXED
         self.alpha_max = ALPHA_MAX
         self.alpha_fixed = ALPHA_FIXED
         
@@ -608,7 +606,7 @@ class SpatialFit(QObject):
         self,
         p0: tuple[float] = (ALPHA_GUESS,),
     ):
-        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.angle_fixed_deg))**2 - self.params.n_s**2)
+        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
         self._calc_coll_fl_arr()
         N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
@@ -630,13 +628,13 @@ class SpatialFit(QObject):
         self.alpha_exc_err = perr[0]
         self.d_exc_err = 0
 
-        self.tirf_angle = self.angle_fixed_deg
+        self.tirf_angle = self.params.tirf_angle
         self.tirf_angle_err = 0 
         
     def fit_no_appr_fix_angle_each_orig(
         self
     ):
-        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.angle_fixed_deg))**2 - self.params.n_s**2)
+        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
         self._calc_coll_fl_arr()
         # Model function
         def N(z, alpha, N0):
@@ -657,7 +655,7 @@ class SpatialFit(QObject):
         self.d_exc = d_exc
         self.d_exc_err = 0
 
-        self.tirf_angle = self.angle_fixed_deg
+        self.tirf_angle = self.params.tirf_angle
         self.tirf_angle_err = 0
         
         self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
@@ -671,7 +669,7 @@ class SpatialFit(QObject):
         self,
         p0: tuple[float] = (ALPHA_GUESS, D_LONG_GUESS),
     ):
-        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.angle_fixed_deg))**2 - self.params.n_s**2)
+        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
         self._calc_coll_fl_arr()
         N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
@@ -696,13 +694,13 @@ class SpatialFit(QObject):
 
         print(self.d_long)
 
-        self.tirf_angle = self.angle_fixed_deg
+        self.tirf_angle = self.params.tirf_angle
         self.tirf_angle_err = 0 
         
     def fit_no_appr_fix_angle_biexp_each_orig(
         self
     ):
-        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.angle_fixed_deg))**2 - self.params.n_s**2)
+        d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
         self._calc_coll_fl_arr()
         # Model function
         def N(z, alpha, N0, d_long):
@@ -726,7 +724,7 @@ class SpatialFit(QObject):
         self.d_exc = d_exc
         self.d_exc_err = 0
 
-        self.tirf_angle = self.angle_fixed_deg
+        self.tirf_angle = self.params.tirf_angle
         self.tirf_angle_err = 0
         
         self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
@@ -949,6 +947,10 @@ class Params:
     sampletype: str | None = None
     n_clust_exp: int | None = None
     z_nm_arr: np.ndarray | None = None
+    # fit parameters
+    tirf_angle: float | None = None
+    fix_angle_choice : bool = False
+    res_analysis_choice : bool = False
     # SIMPLER filtering parameters
     spat_tol_nm: float | None = None # how far can two locs be to be considered the same event
     # pre-clustering parameters
@@ -1023,6 +1025,21 @@ class AnalysisWorker(QObject):
             case 'Rifle (4 points)':
                 self.params.n_clust_exp = RIFLE_N_CLUST_EXP
                 self.params.z_nm_arr = RIFLE_Z_SITES_NM
+        self.share_params()
+
+    @pyqtSlot(float)
+    def upd_fix_angle(self, value):
+        self.params.tirf_angle = value
+        self.share_params()
+        
+    @pyqtSlot(bool)
+    def upd_fix_angle_choice(self, value):
+        self.params.fix_angle_choice = value
+        self.share_params()
+        
+    @pyqtSlot(bool)
+    def upd_res_analysis_choice(self, value):
+        self.params.res_analysis_choice = value
         self.share_params()
 
     @pyqtSlot(float)
@@ -1291,11 +1308,17 @@ class AnalysisWorker(QObject):
         z positions, corrected according to the origamin tilt. 
         """
         if self.params.n_clust_exp==self.clust.clust_means.shape[1]:
-            self.perform_calib_steps_res_analysis(
-                self.clust.clust_means[self.clust.selec_orig_list, :, :],
-                [np.array(self.clust.locs_clust[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val],
-                [np.array(self.clust.clust_labels[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val]
-            )
+            if self.params.res_analysis_choice:
+                self.perform_calib_steps(
+                    True,
+                    self.clust.clust_means[self.clust.selec_orig_list, :, :],
+                    [np.array(self.clust.locs_clust[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val],
+                    [np.array(self.clust.clust_labels[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val]
+                )
+            else:
+                self.perform_calib_steps_no_res_analysis(
+                    self.clust.clust_means[self.clust.selec_orig_list, :, :]
+                )
         else:
             self.signals.send_msg_toprint(MessageType.ERROR, 'Mismatch between number of expected and detected clusters, change origami type')
         self.signals.tell_calib_done.emit('')
@@ -1311,32 +1334,45 @@ class AnalysisWorker(QObject):
         except Exception as e:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Cannot open result file because of Exception: {e}")
             return
-        try:
-            clust_locs_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_locs.json"
-            clust_labels_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_labels.json"
-            clust_locs_path = clust_path.parent / Path(clust_locs_filename)
-            clust_label_path = clust_path.parent / Path(clust_labels_filename)
-            with open(clust_locs_path, "r") as f:
-                clust_locs_fromfile = [np.array(a) for a in json.load(f)]
-            with open(clust_label_path, "r") as f:
-                clust_labels_fromfile = [np.array(a) for a in json.load(f)]
-            self.params.should_do_res_analysis = True
-            self.share_params()
-        except Exception as e:
-            self.signals.send_msg_toprint.emit(MessageType.WARNING, f"Cannot open localization and/or label files because of Exception: {e}. Calibration will be performed, but resolution analysis will be omitted.")
+        if self.params.res_analysis_choice:
+            try:
+                clust_locs_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_locs.json"
+                clust_labels_filename = clust_path.stem[:clust_path.stem.rfind("_clusters")] + "_labels.json"
+                clust_locs_path = clust_path.parent / Path(clust_locs_filename)
+                clust_label_path = clust_path.parent / Path(clust_labels_filename)
+                with open(clust_locs_path, "r") as f:
+                    clust_locs_fromfile = [np.array(a) for a in json.load(f)]
+                with open(clust_label_path, "r") as f:
+                    clust_labels_fromfile = [np.array(a) for a in json.load(f)]
+                self.params.should_do_res_analysis = True
+                self.share_params()
+            except Exception as e:
+                self.signals.send_msg_toprint.emit(MessageType.WARNING, f"Cannot open localization and/or label files because of Exception: {e}. Calibration will be performed, but resolution analysis will be omitted.")
+                clust_locs_fromfile = None
+                clust_labels_fromfile = None
+                self.params.should_do_res_analysis = False
+                self.share_params()
+        else:
+            clust_locs_fromfile = None
+            clust_labels_fromfile = None
             self.params.should_do_res_analysis = False
             self.share_params()
         if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:]==(self.params.n_clust_exp, 3)) and (len(clust_fromfile.shape)==3):
-            if self.params.should_do_res_analysis:
-                self.perform_calib_steps_res_analysis(clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
-            else:
-                self.perform_calib_steps_no_res_analysis(clust_fromfile)
+            self.perform_calib_steps(self.params.should_do_res_analysis, clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
             self.signals.tell_calib_done.emit('from file')
         else:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
 
-    def perform_calib_steps_res_analysis(self, clust_forcalib, clust_locs, clust_labels):
+    def perform_calib_steps(self, should_do_res_analysis, clust_forcalib, clust_locs, clust_labels):
         self.fit.upd_data_forfit_res_analysis(clust_forcalib, clust_locs, clust_labels)
+        if self.params.fix_angle_choice and self.params.tirf_angle is not None:
+            self.fit.fit_no_appr_fix_angle_each_orig()
+            self.fit.backcalc_glob_param()
+        else:
+            self.fit.fit_renorm_no_appr()
+            self.fit.fit_N0_no_appr()
+            self.fit.backcalc_glob_param()
+        '''
         match CALIB_MODE:
             case 'no_appr':
                 self.fit.fit_renorm_no_appr()
@@ -1368,42 +1404,10 @@ class AnalysisWorker(QObject):
                 self.fit.fit_renorm_exp_appr()
                 self.fit.fit_N0_exp_appr()
                 self.fit.backcalc_tirf_angle()
-        self.fit.backcalc_z()
-        self.fit.calc_spat_sigma_gmm()
-        
-    def perform_calib_steps_no_res_analysis(self, clust_forcalib):
-        self.fit.upd_data_forfit_no_res_analysis(clust_forcalib)
-        match CALIB_MODE:
-            case 'no_appr':
-                self.fit.fit_renorm_no_appr()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param()
-            case 'no_appr_fix_angle':
-                self.fit.fit_renorm_no_appr_fix_angle()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param()
-            case 'no_appr_fix_angle_each_orig':
-                self.fit.fit_no_appr_fix_angle_each_orig()
-                self.fit.backcalc_glob_param()
-            case 'no_appr_fix_angle_biexp':
-                self.fit.fit_renorm_no_appr_fix_angle_biexp()
-                self.fit.fit_N0_no_appr_biexp()
-                self.fit.backcalc_glob_param_biexp()
-            case 'no_appr_fix_angle_biexp_each_orig':
-                self.fit.fit_no_appr_fix_angle_biexp_each_orig()
-                self.fit.backcalc_glob_param_biexp()   
-            case 'no_appr_spacer':
-                self.fit.fit_renorm_no_appr_spacer()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param() 
-            case 'no_appr_fix_alpha':
-                self.fit.fit_renorm_no_appr_fix_alpha()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param()
-            case 'exp_appr':
-                self.fit.fit_renorm_exp_appr()
-                self.fit.fit_N0_exp_appr()
-                self.fit.backcalc_tirf_angle()
+    '''
+        if should_do_res_analysis and (clust_locs is not None) and (clust_labels is not None):
+            self.fit.backcalc_z()
+            self.fit.calc_spat_sigma_gmm()
 
 def plot_origami_fit(z_values: np.ndarray, N_values: np.ndarray, alpha_F: float, d_F: float):
     y_values = (alpha_F * np.exp(-z_values / d_F) + (1 - alpha_F)) / (alpha_F * np.exp(-z_values[:, 0, np.newaxis] / d_F) + (1 - alpha_F))

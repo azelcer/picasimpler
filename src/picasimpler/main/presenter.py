@@ -28,7 +28,10 @@ from picasimpler.config.config_var import (
     NS_DEF,
     RES_DIR,
     Z_SIM_FIT_ARR,
-    CALIB_MODE
+    CALIB_MODE,
+    ANGLE_FIXED_DEF,
+    ANGLE_FIXED_MIN,
+    ANGLE_FIXED_MAX
 )
 
 _lgn.basicConfig()
@@ -61,6 +64,9 @@ class PresenterSignals(QObject):
     send_n_s_toanalysis = pyqtSignal(float)
     send_n_i_toanalysis = pyqtSignal(float)
     send_coll_fl_tab_toanalysis = pyqtSignal(object)
+    send_fix_angle_choice_toanalysis = pyqtSignal(bool)
+    send_fix_angle_toanalysis = pyqtSignal(float)
+    send_res_analysis_choice_toanalysis = pyqtSignal(bool)
 
 class Presenter(QObject):
     """
@@ -79,7 +85,8 @@ class Presenter(QObject):
         self.tot_elem_curr_analysis_step: int | None = None
         self.curr_displ_orig_num: int | None = None
         self.analysis_status: AnalysisStatus = AnalysisStatus.PRE_ANALYSIS
-        self.simpler_tol:float = SPAT_TOL_NM_DEF
+        self.tirf_angle: float = ANGLE_FIXED_DEF
+        self.simpler_tol: float = SPAT_TOL_NM_DEF
         self.preclust_gamma: float = PRECLUST_GAMMA_DEF
         self.preclust_eps: float = PRECLUST_EPS_DEF
         self.n_guess = (None, None, None, None)
@@ -89,6 +96,7 @@ class Presenter(QObject):
         self.n_s: float = NS_DEF
         self.n_i: float = NI_DEF
         self.res_dir: Path = RES_DIR
+        self._view.ui.fix_angle_checkBox.setChecked(True)
         self._view.ui.NA_combobox.setCurrentIndex(NA_IDX_DEF)
         self._view.ui.NA_combobox.activated.emit(self._view.ui.NA_combobox.currentIndex())
         self._view.ui.sampletype_combobox.activated.emit(self._view.ui.sampletype_combobox.currentIndex())
@@ -118,6 +126,16 @@ class Presenter(QObject):
     def analysis_status(self, status: AnalysisStatus):
         self._analysis_status = status
         self._view.upd_analysis_status_onui(status)
+        
+    @property
+    def tirf_angle(self):
+        return self._tirf_angle
+    
+    @tirf_angle.setter
+    def tirf_angle(self, value: float):
+        self._tirf_angle = min((max((value, ANGLE_FIXED_MIN)), ANGLE_FIXED_MAX))
+        self.signals.send_fix_angle_toanalysis.emit(self._tirf_angle)
+        self._view.upd_tirf_angle_onui(self._tirf_angle)
         
     @property
     def simpler_tol(self):
@@ -269,6 +287,22 @@ class Presenter(QObject):
         this functions makes all the connection with the signals coming from the UI
         """
         # connect signals from UI to presenter
+        # calibration fit settings
+        self._view.ui.fix_angle_checkBox.stateChanged.connect(
+            lambda: self.signals.send_fix_angle_choice_toanalysis.emit(
+                self._view.ui.fix_angle_checkBox.isChecked()
+            )
+        )
+        self._view.ui.angle_lineEdit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_tirf_angle_fromui.emit(
+                safe_float_tonone(self._view.ui.angle_lineEdit.text())
+            )
+        )
+        self._view.ui.res_analysis_checkBox.stateChanged.connect(
+            lambda: self.signals.send_res_analysis_choice_toanalysis.emit(
+                self._view.ui.res_analysis_checkBox.isChecked()
+            )
+        )
         # analysis buttons
         self._view.ui.browse_file_button.clicked.connect(self._browse_file)
         self._view.ui.filter_button.clicked.connect(self._start_filtering)
@@ -418,6 +452,7 @@ class Presenter(QObject):
                 safe_float_to0(self._view.ui.n_i_lineedit.text())
             )
         )
+        self._view.signals.send_tirf_angle_fromui.connect(self.upd_tirf_angle)
         self._view.signals.send_spat_tol_fromui.connect(self.upd_spat_tol)
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
         self._view.signals.send_preclust_eps_fromui.connect(self.upd_preclust_eps)
@@ -463,6 +498,9 @@ class Presenter(QObject):
         self.signals.send_n_i_toanalysis.connect(self._analysis_worker.upd_n_i)
         self.signals.send_n_s_toanalysis.connect(self._analysis_worker.upd_n_s)
         self.signals.send_coll_fl_tab_toanalysis.connect(self._analysis_worker.upd_coll_fl_tab)
+        self.signals.send_fix_angle_choice_toanalysis.connect(self._analysis_worker.upd_fix_angle_choice)
+        self.signals.send_fix_angle_toanalysis.connect(self._analysis_worker.upd_fix_angle)
+        self.signals.send_res_analysis_choice_toanalysis.connect(self._analysis_worker.upd_res_analysis_choice)
         
         # connect signals from analysis worker to presenter
         self._analysis_worker.signals.tell_data_loaded.connect(self._on_data_loaded)
@@ -697,6 +735,10 @@ class Presenter(QObject):
             self.signals.request_calibration_fromfile.emit(self.clust_res_filepath)
         
     @pyqtSlot(float)
+    def upd_tirf_angle(self, value):
+        self.tirf_angle = value
+        
+    @pyqtSlot(float)
     def upd_spat_tol(self, value):
         self.simpler_tol = value
         
@@ -800,10 +842,8 @@ class Presenter(QObject):
         self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.6g} &plusmn; {self._analysis_worker.fit.N_0_std:.6g}")
         if self._analysis_worker.params.should_do_res_analysis:
             self._print_to_ui(MessageType.INFO, "Cluster average sigmas:")
-            self._print_to_ui(MessageType.SIMPLE, f"1st site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[0, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[0, 2]:.2g} nm")
-            self._print_to_ui(MessageType.SIMPLE, f"2nd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[1, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[1, 2]:.2g} nm")
-            self._print_to_ui(MessageType.SIMPLE, f"3rd site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[2, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[2, 2]:.2g} nm")
-            self._print_to_ui(MessageType.SIMPLE, f"4th site [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[3, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[3, 2]:.2g} nm")
+            for clust_idx in range(self._analysis_worker.params.n_clust_exp):
+                self._print_to_ui(MessageType.SIMPLE, f"site #{clust_idx + 1} [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[clust_idx, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[clust_idx, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[clust_idx, 2]:.2g} nm")
         self.save_calib_res(
             filename_base + "_calib_res.json",
             self._analysis_worker.fit.alpha_F,

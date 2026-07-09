@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1212</width>
+    <width>1382</width>
     <height>752</height>
    </rect>
   </property>
@@ -31,7 +31,7 @@ dataset</string>
    <widget class="PlotWidget" name="yn_widget" native="true">
     <property name="geometry">
      <rect>
-      <x>380</x>
+      <x>720</x>
       <y>300</y>
       <width>331</width>
       <height>331</height>
@@ -97,7 +97,7 @@ origami
    <widget class="PlotWidget" name="xn_widget" native="true">
     <property name="geometry">
      <rect>
-      <x>40</x>
+      <x>380</x>
       <y>300</y>
       <width>331</width>
       <height>331</height>
@@ -282,7 +282,7 @@ sites</string>
      <rect>
       <x>20</x>
       <y>280</y>
-      <width>711</width>
+      <width>1051</width>
       <height>371</height>
      </rect>
     </property>
@@ -292,6 +292,16 @@ sites</string>
     <property name="frameShadow">
      <enum>QFrame::Raised</enum>
     </property>
+    <widget class="PlotWidget" name="xy_widget" native="true">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>20</y>
+       <width>331</width>
+       <height>331</height>
+      </rect>
+     </property>
+    </widget>
    </widget>
    <widget class="QPushButton" name="refit_origami">
     <property name="geometry">
@@ -341,8 +351,8 @@ SIMPLER</string>
      <rect>
       <x>740</x>
       <y>10</y>
-      <width>171</width>
-      <height>711</height>
+      <width>621</width>
+      <height>261</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -354,23 +364,23 @@ SIMPLER</string>
     <widget class="QCheckBox" name="manual_guess_checkbox">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>150</y>
-       <width>151</width>
+       <x>270</x>
+       <y>10</y>
+       <width>231</width>
        <height>21</height>
       </rect>
      </property>
      <property name="text">
-      <string>Use manual guesses</string>
+      <string>Use manual guesses for photon numbers</string>
      </property>
     </widget>
     <widget class="QLabel" name="preclust_param_title_label">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>60</y>
-       <width>151</width>
-       <height>31</height>
+       <x>110</x>
+       <y>10</y>
+       <width>131</width>
+       <height>21</height>
       </rect>
      </property>
      <property name="text">
@@ -380,8 +390,8 @@ SIMPLER</string>
     <widget class="QLabel" name="guess_title_label">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>170</y>
+       <x>270</x>
+       <y>30</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -393,9 +403,9 @@ SIMPLER</string>
     <widget class="CustomQLineEdit" name="n1_guess_lineedit">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>190</y>
-       <width>71</width>
+       <x>270</x>
+       <y>50</y>
+       <width>61</width>
        <height>26</height>
       </rect>
      </property>
@@ -403,9 +413,9 @@ SIMPLER</string>
     <widget class="CustomQLineEdit" name="n2_guess_lineedit">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>190</y>
-       <width>71</width>
+       <x>340</x>
+       <y>50</y>
+       <width>61</width>
        <height>26</height>
       </rect>
      </property>
@@ -413,9 +423,9 @@ SIMPLER</string>
     <widget class="CustomQLineEdit" name="n3_guess_lineedit">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>220</y>
-       <width>71</width>
+       <x>410</x>
+       <y>50</y>
+       <width>61</width>
        <height>26</height>
       </rect>
      </property>
@@ -423,9 +433,9 @@ SIMPLER</string>
     <widget class="CustomQLineEdit" name="n4_guess_lineedit">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>220</y>
-       <width>71</width>
+       <x>480</x>
+       <y>50</y>
+       <width>61</width>
        <height>26</height>
       </rect>
      </property>
@@ -433,9 +443,9 @@ SIMPLER</string>
     <widget class="CustomQLineEdit" name="preclust_gamma_lineedit">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>110</y>
-       <width>71</width>
+       <x>110</x>
+       <y>50</y>
+       <width>61</width>
        <height>26</height>
       </rect>
      </property>
@@ -443,8 +453,8 @@ SIMPLER</string>
     <widget class="QLabel" name="preclust_gamma_title_label">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>90</y>
+       <x>110</x>
+       <y>30</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -456,8 +466,8 @@ SIMPLER</string>
     <widget class="QLabel" name="preclust_eps_title_label">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>90</y>
+       <x>180</x>
+       <y>30</y>
        <width>47</width>
        <height>13</height>
       </rect>
@@ -469,9 +479,9 @@ SIMPLER</string>
     <widget class="CustomQLineEdit" name="preclust_eps_lineedit">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>110</y>
-       <width>71</width>
+       <x>180</x>
+       <y>50</y>
+       <width>61</width>
        <height>26</height>
       </rect>
      </property>
@@ -481,7 +491,7 @@ SIMPLER</string>
       <rect>
        <x>10</x>
        <y>10</y>
-       <width>151</width>
+       <width>91</width>
        <height>31</height>
       </rect>
      </property>
@@ -497,7 +507,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>40</y>
+       <y>50</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -507,7 +517,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>555</y>
+       <y>200</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -520,7 +530,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>555</y>
+       <y>200</y>
        <width>71</width>
        <height>16</height>
       </rect>
@@ -533,7 +543,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>575</y>
+       <y>220</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -543,7 +553,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>575</y>
+       <y>220</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -552,8 +562,8 @@ tolerance [nm]:</string>
     <widget class="QComboBox" name="NA_combobox">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>660</y>
+       <x>390</x>
+       <y>220</y>
        <width>73</width>
        <height>26</height>
       </rect>
@@ -582,8 +592,8 @@ tolerance [nm]:</string>
     <widget class="QLabel" name="NA_label">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>660</y>
+       <x>390</x>
+       <y>200</y>
        <width>55</width>
        <height>21</height>
       </rect>
@@ -595,8 +605,8 @@ tolerance [nm]:</string>
     <widget class="QLabel" name="n_i_title_label">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>605</y>
+       <x>280</x>
+       <y>200</y>
        <width>55</width>
        <height>16</height>
       </rect>
@@ -608,8 +618,8 @@ tolerance [nm]:</string>
     <widget class="QLabel" name="n_s_title_label_2">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>605</y>
+       <x>200</x>
+       <y>200</y>
        <width>55</width>
        <height>16</height>
       </rect>
@@ -621,8 +631,8 @@ tolerance [nm]:</string>
     <widget class="CustomQLineEdit" name="n_i_lineedit">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>625</y>
+       <x>280</x>
+       <y>220</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -631,8 +641,8 @@ tolerance [nm]:</string>
     <widget class="CustomQLineEdit" name="n_s_lineedit">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>625</y>
+       <x>200</x>
+       <y>220</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -642,7 +652,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>290</y>
+       <y>100</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -655,7 +665,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>330</y>
+       <y>140</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -665,7 +675,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>310</y>
+       <y>120</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -678,7 +688,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>90</x>
-       <y>330</y>
+       <y>140</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -688,7 +698,7 @@ tolerance [nm]:</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>535</y>
+       <y>180</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -700,9 +710,9 @@ tolerance [nm]:</string>
     <widget class="CustomQLineEdit" name="n5_guess_lineedit">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>250</y>
-       <width>71</width>
+       <x>550</x>
+       <y>50</y>
+       <width>61</width>
        <height>26</height>
       </rect>
      </property>
@@ -710,8 +720,8 @@ tolerance [nm]:</string>
     <widget class="QCheckBox" name="x_bounds_checkbox">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>370</y>
+       <x>200</x>
+       <y>100</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -723,8 +733,8 @@ tolerance [nm]:</string>
     <widget class="QLabel" name="x_bound_title_label">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>390</y>
+       <x>200</x>
+       <y>120</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -736,8 +746,8 @@ tolerance [nm]:</string>
     <widget class="CustomQLineEdit" name="x_bound1_lineedit">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>410</y>
+       <x>200</x>
+       <y>140</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -746,8 +756,8 @@ tolerance [nm]:</string>
     <widget class="CustomQLineEdit" name="x_bound2_lineedit">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>410</y>
+       <x>280</x>
+       <y>140</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -756,8 +766,8 @@ tolerance [nm]:</string>
     <widget class="CustomQLineEdit" name="y_bound1_lineedit">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>490</y>
+       <x>390</x>
+       <y>140</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -766,8 +776,8 @@ tolerance [nm]:</string>
     <widget class="CustomQLineEdit" name="y_bound2_lineedit">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>490</y>
+       <x>470</x>
+       <y>140</y>
        <width>71</width>
        <height>26</height>
       </rect>
@@ -776,8 +786,8 @@ tolerance [nm]:</string>
     <widget class="QCheckBox" name="y_bounds_checkbox">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>450</y>
+       <x>390</x>
+       <y>100</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -789,8 +799,8 @@ tolerance [nm]:</string>
     <widget class="QLabel" name="y_bound_title_label_2">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>470</y>
+       <x>390</x>
+       <y>120</y>
        <width>151</width>
        <height>21</height>
       </rect>
@@ -818,10 +828,10 @@ from file (.npy)</string>
    <widget class="QFrame" name="msg_frame">
     <property name="geometry">
      <rect>
-      <x>920</x>
-      <y>10</y>
-      <width>271</width>
-      <height>711</height>
+      <x>1080</x>
+      <y>280</y>
+      <width>281</width>
+      <height>441</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -847,9 +857,9 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>40</y>
-       <width>251</width>
-       <height>661</height>
+       <y>30</y>
+       <width>261</width>
+       <height>401</height>
       </rect>
      </property>
     </widget>
@@ -857,9 +867,9 @@ from file (.npy)</string>
    <widget class="QFrame" name="sample_frame">
     <property name="geometry">
      <rect>
-      <x>510</x>
+      <x>580</x>
       <y>9</y>
-      <width>221</width>
+      <width>151</width>
       <height>131</height>
      </rect>
     </property>
@@ -885,8 +895,8 @@ from file (.npy)</string>
     <widget class="QComboBox" name="sampletype_combobox">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>10</y>
+       <x>10</x>
+       <y>40</y>
        <width>121</width>
        <height>22</height>
       </rect>
@@ -899,39 +909,6 @@ from file (.npy)</string>
      <item>
       <property name="text">
        <string>Rifle (4 points)</string>
-      </property>
-     </item>
-    </widget>
-    <widget class="QLabel" name="orientation_title_label">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>40</y>
-       <width>81</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Orientation:</string>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="orientation_combobox">
-     <property name="geometry">
-      <rect>
-       <x>90</x>
-       <y>40</y>
-       <width>121</width>
-       <height>22</height>
-      </rect>
-     </property>
-     <item>
-      <property name="text">
-       <string>Vertical</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>Horizontal</string>
       </property>
      </item>
     </widget>
@@ -951,24 +928,11 @@ from file (.npy)</string>
     <widget class="CustomQLineEdit" name="angle_lineEdit">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>70</y>
-       <width>121</width>
-       <height>26</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QLabel" name="fix_angle_title_label">
-     <property name="geometry">
-      <rect>
        <x>10</x>
        <y>100</y>
-       <width>81</width>
-       <height>21</height>
+       <width>71</width>
+       <height>26</height>
       </rect>
-     </property>
-     <property name="text">
-      <string>Fix angle:</string>
      </property>
     </widget>
     <widget class="QCheckBox" name="fix_angle_checkBox">
@@ -976,12 +940,12 @@ from file (.npy)</string>
       <rect>
        <x>90</x>
        <y>100</y>
-       <width>81</width>
+       <width>41</width>
        <height>21</height>
       </rect>
      </property>
      <property name="text">
-      <string/>
+      <string>Fix</string>
      </property>
     </widget>
    </widget>

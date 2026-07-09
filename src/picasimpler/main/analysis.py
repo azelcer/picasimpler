@@ -947,7 +947,6 @@ class Params:
     """
     # sample parameters
     sampletype: str | None = None
-    orientation: str | None = None
     n_clust_exp: int | None = None
     z_nm_arr: np.ndarray | None = None
     # SIMPLER filtering parameters
@@ -1024,11 +1023,6 @@ class AnalysisWorker(QObject):
             case 'Rifle (4 points)':
                 self.params.n_clust_exp = RIFLE_N_CLUST_EXP
                 self.params.z_nm_arr = RIFLE_Z_SITES_NM
-        self.share_params()
-
-    @pyqtSlot(str)
-    def upd_orientation(self, value):
-        self.params.orientation = value
         self.share_params()
 
     @pyqtSlot(float)

@@ -34,7 +34,7 @@ LAMBDA_EM_DEF = 590
 LAMBDA_MIN = 480
 NA_IDX_DEF = 2
 # objetive collection efficiency simulation parameters
-Z_BASELINE_NM = 0
+Z_BASELINE_NM = 10
 Z_SIM_DISCR = [0, 5, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
 Z_SIM_FIT_ARR = np.arange(0, 500, 0.5)
 LAMBDA_EM_DISCR = [500, 530, 560, 590, 620, 670, 700, 720]

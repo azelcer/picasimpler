@@ -45,7 +45,6 @@ class PresenterSignals(QObject):
     request_calibration_fromfile = pyqtSignal(object)
     request_refit_origami = pyqtSignal(int)
     send_sampletype_toanalysis = pyqtSignal(str)
-    send_orientation_toanalysis = pyqtSignal(str)
     send_spat_tol_toanalysis = pyqtSignal(float)
     send_preclust_gamma_toanalysis = pyqtSignal(float)
     send_preclust_eps_toanalysis = pyqtSignal(float)
@@ -93,7 +92,6 @@ class Presenter(QObject):
         self._view.ui.NA_combobox.setCurrentIndex(NA_IDX_DEF)
         self._view.ui.NA_combobox.activated.emit(self._view.ui.NA_combobox.currentIndex())
         self._view.ui.sampletype_combobox.activated.emit(self._view.ui.sampletype_combobox.currentIndex())
-        self._view.ui.orientation_combobox.activated.emit(self._view.ui.orientation_combobox.currentIndex())
         
     def check_analysis_status(ref_analysis_status: AnalysisStatus):
         """
@@ -437,7 +435,6 @@ class Presenter(QObject):
         self._view.signals.send_n_i_fromui.connect(self.upd_n_i)
         self._view.ui.NA_combobox.activated.connect(self.upd_NA)
         self._view.ui.sampletype_combobox.activated.connect(self.upd_sampletype)
-        self._view.ui.orientation_combobox.activated.connect(self.upd_orientation)
         
     def _make_analysis_connect(self):
         """
@@ -450,7 +447,6 @@ class Presenter(QObject):
         self.signals.request_calibration.connect(self._analysis_worker.do_calib)
         self.signals.request_calibration_fromfile.connect(self._analysis_worker.do_calib_fromfile)
         self.signals.send_sampletype_toanalysis.connect(self._analysis_worker.upd_sampletype)
-        self.signals.send_orientation_toanalysis.connect(self._analysis_worker.upd_orientation)
         self.signals.send_spat_tol_toanalysis.connect(self._analysis_worker.upd_spat_tol)
         self.signals.send_preclust_gamma_toanalysis.connect(self._analysis_worker.upd_preclust_gamma)
         self.signals.send_preclust_eps_toanalysis.connect(self._analysis_worker.upd_preclust_eps)
@@ -784,14 +780,6 @@ class Presenter(QObject):
                 self.signals.send_sampletype_toanalysis.emit('12HB (5 points)')
             case 'Rifle (4 points)':    
                 self.signals.send_sampletype_toanalysis.emit('Rifle (4 points)')
-                
-    @pyqtSlot()
-    def upd_orientation(self):
-        match self._view.ui.orientation_combobox.currentText():
-            case '12HB (5 points)':
-                self.signals.send_orientation_toanalysis.emit('12HB (5 points)')
-            case 'Rifle (4 points)':    
-                self.signals.send_orientation_toanalysis.emit('Rifle (4 points)')
                 
     @pyqtSlot(str)
     def _on_calib_done(self, mode=''):

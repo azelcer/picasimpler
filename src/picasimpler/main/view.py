@@ -62,6 +62,8 @@ class View(QMainWindow):
         """
         This function set validators for QLineEdits, establishing which numbers can be written
         """
+        # Fixed TIRF angle must be positive, finite and no scientfic notation allowed
+        self.ui.angle_lineEdit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         # SIMPLER spatial tolerance must be positive, finite and no scientfic notation allowed
         self.ui.simpler_spat_tol_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         # pre-clustering de-noising parameter must be positive, finite and no scientfic notation allowed
@@ -103,10 +105,13 @@ class View(QMainWindow):
         """
         self.ui.xn_widget.invertY(True)
         self.ui.yn_widget.invertY(True)
+        self.ui.xy_widget.setLabel("left", "y [nm]")
+        self.ui.xy_widget.setLabel("bottom", "x [nm]")
         self.ui.xn_widget.setLabel("left", "N")
         self.ui.xn_widget.setLabel("bottom", "x [nm]")
         self.ui.yn_widget.setLabel("left", "N")
         self.ui.yn_widget.setLabel("bottom", "y [nm]")
+        self._xy_plot = self.ui.xy_widget.getPlotItem()
         self._xn_plot = self.ui.xn_widget.getPlotItem()
         self._yn_plot = self.ui.yn_widget.getPlotItem()
         
@@ -168,8 +173,10 @@ class View(QMainWindow):
         """
         This function empties the xN and yN plots on the UI
         """
+        self._xy_plot.clear()
         self._xn_plot.clear()
         self._yn_plot.clear()
+        self._xy_plot.enableAutoRange()
         self._xn_plot.enableAutoRange()
         self._yn_plot.enableAutoRange()
         
@@ -178,6 +185,12 @@ class View(QMainWindow):
         This function plots the xN and yN projections of all the localization of the chosen origami
         """
         self.reset_plots()
+        xy_scatter = pg.ScatterPlotItem(
+            simpler.get_loc_x(orig_num),
+            simpler.get_loc_y(orig_num),
+            brush=UIColor.V.brush,
+            pen=UIColor.V.pen
+        )
         xn_scatter = pg.ScatterPlotItem(
             simpler.get_loc_x(orig_num),
             simpler.get_loc_n(orig_num),
@@ -190,6 +203,7 @@ class View(QMainWindow):
             brush=UIColor.V.brush,
             pen=UIColor.V.pen
         )
+        self._xy_plot.addItem(xy_scatter)
         self._xn_plot.addItem(xn_scatter)
         self._yn_plot.addItem(yn_scatter)
         self.set_color_frame(UIColor.GRAY)
@@ -200,6 +214,12 @@ class View(QMainWindow):
         superimposed with the corresponding clusterization results
         """
         self.reset_plots()
+        xy_scatter_clust = pg.ScatterPlotItem(
+            clust.get_clust_x(orig_num),
+            clust.get_clust_y(orig_num),
+            brush=UIColor.IND.brush,
+            pen=UIColor.IND.pen
+        )
         xn_scatter_clust = pg.ScatterPlotItem(
             clust.get_clust_x(orig_num),
             clust.get_clust_n(orig_num),
@@ -211,6 +231,12 @@ class View(QMainWindow):
             clust.get_clust_n(orig_num),
             brush=UIColor.IND.brush,
             pen=UIColor.IND.pen
+        )
+        xy_scatter_noise = pg.ScatterPlotItem(
+            clust.get_noise_x(orig_num),
+            clust.get_noise_y(orig_num),
+            brush=UIColor.LB.brush,
+            pen=UIColor.LB.pen
         )
         xn_scatter_noise = pg.ScatterPlotItem(
             clust.get_noise_x(orig_num),
@@ -224,6 +250,12 @@ class View(QMainWindow):
             brush=UIColor.LB.brush,
             pen=UIColor.LB.pen
         )
+        xy_clust_centers = pg.ScatterPlotItem(
+            clust.clust_means[orig_num, :, 0],
+            clust.clust_means[orig_num, :, 1],
+            brush=UIColor.Y.brush,
+            pen=UIColor.Y.pen
+        )
         xn_clust_centers = pg.ScatterPlotItem(
             clust.clust_means[orig_num, :, 0],
             clust.clust_means[orig_num, :, 2],
@@ -236,10 +268,13 @@ class View(QMainWindow):
             brush=UIColor.Y.brush,
             pen=UIColor.Y.pen
         )
+        self._xy_plot.addItem(xy_scatter_clust)
         self._xn_plot.addItem(xn_scatter_clust)
         self._yn_plot.addItem(yn_scatter_clust)
+        self._xy_plot.addItem(xy_scatter_noise)
         self._xn_plot.addItem(xn_scatter_noise)
         self._yn_plot.addItem(yn_scatter_noise)
+        self._xy_plot.addItem(xy_clust_centers)
         self._xn_plot.addItem(xn_clust_centers)
         self._yn_plot.addItem(yn_clust_centers)
         if is_selected:

@@ -867,9 +867,9 @@ from file (.npy)</string>
    <widget class="QFrame" name="sample_frame">
     <property name="geometry">
      <rect>
-      <x>580</x>
+      <x>470</x>
       <y>9</y>
-      <width>151</width>
+      <width>261</width>
       <height>131</height>
      </rect>
     </property>
@@ -883,7 +883,7 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>0</y>
+       <y>10</y>
        <width>81</width>
        <height>21</height>
       </rect>
@@ -896,7 +896,7 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>20</y>
+       <y>30</y>
        <width>121</width>
        <height>22</height>
       </rect>
@@ -916,7 +916,7 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>45</y>
+       <y>60</y>
        <width>81</width>
        <height>21</height>
       </rect>
@@ -929,8 +929,8 @@ from file (.npy)</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>65</y>
-       <width>71</width>
+       <y>88</y>
+       <width>51</width>
        <height>26</height>
       </rect>
      </property>
@@ -938,8 +938,8 @@ from file (.npy)</string>
     <widget class="QCheckBox" name="fix_angle_checkBox">
      <property name="geometry">
       <rect>
-       <x>90</x>
-       <y>67</y>
+       <x>70</x>
+       <y>90</y>
        <width>41</width>
        <height>21</height>
       </rect>
@@ -951,15 +951,49 @@ from file (.npy)</string>
     <widget class="QCheckBox" name="res_analysis_checkBox">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>100</y>
-       <width>131</width>
-       <height>20</height>
+       <x>150</x>
+       <y>80</y>
+       <width>91</width>
+       <height>41</height>
       </rect>
      </property>
      <property name="text">
-      <string>Resolution analysis</string>
+      <string>Resolution
+analysis</string>
      </property>
+    </widget>
+    <widget class="QLabel" name="label">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>10</y>
+       <width>81</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Orientation:</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="orientation_combobox">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>30</y>
+       <width>101</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <item>
+      <property name="text">
+       <string>Vertical</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Horizontal</string>
+      </property>
+     </item>
     </widget>
    </widget>
    <zorder>color_frame</zorder>

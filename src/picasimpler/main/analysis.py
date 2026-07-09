@@ -322,6 +322,27 @@ class Clusterization:
                 if last_bic < ref_bic:
                     return None, None, None
         return clust_means, clust_covs, labels
+    
+    def gmm_clust_inorig_2D(self, locs: np.ndarray):
+        """
+        This function use GMM to cluster data in a single origami, considering only x and y coordinates
+        """
+        for n_clust in range(self.params.n_clust_exp, 0, -1):
+            if n_clust == self.params.n_clust_exp:
+                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
+                labels = gmm.fit_predict(locs[:, 0:2])
+                ref_bic = gmm.bic(locs[:, 0:2])
+                clust_means = np.concatenate((gmm.means_, (np.mean(locs[:, 2])*np.ones(self.params.n_clust_exp)).reshape(-1, 1)), axis=1)
+                clust_covs = np.concatenate((np.concatenate((gmm.covariances_, np.zeros((self.params.n_clust_exp, 1, 2))), axis=1), np.zeros((self.params.n_clust_exp, 3, 1))), axis=2)
+                #clust_means, clust_covs = self.reorder_clust(gmm.means_, gmm.covariances_)
+            # now we decrease the number of clusters and as soon as one gives better result, we discard the origami and exit the loop
+            else:
+                gmm = GaussianMixture(n_components=n_clust, covariance_type='full', n_init=5, max_iter=300, init_params='k-means++')
+                gmm.fit(locs[:, 0:2])
+                last_bic = gmm.bic(locs[:, 0:2])
+                if last_bic < ref_bic:
+                    return None, None, None
+        return clust_means, clust_covs, labels
 
     def do_clust_xyn(self):
         """
@@ -336,7 +357,10 @@ class Clusterization:
         clust_means_list = []
         clust_covs_list = []
         for orig_idx in range(tot_orig_bf_clust):
-            clust_means, clust_covs, clust_labels = self.gmm_clust_inorig(self.locs_clust[orig_idx])
+            if self.params.orientation=='vertical':
+                clust_means, clust_covs, clust_labels = self.gmm_clust_inorig(self.locs_clust[orig_idx])
+            elif self.params.orientation=='horizontal':
+                clust_means, clust_covs, clust_labels = self.gmm_clust_inorig_2D(self.locs_clust[orig_idx])
             if clust_means is not None:
                 kept_orig_loc_list.append(self.locs_clust[orig_idx])
                 kept_orig_clust_label_list.append(clust_labels)
@@ -945,6 +969,7 @@ class Params:
     """
     # sample parameters
     sampletype: str | None = None
+    orientation: str | None = None
     n_clust_exp: int | None = None
     z_nm_arr: np.ndarray | None = None
     # fit parameters
@@ -1025,6 +1050,11 @@ class AnalysisWorker(QObject):
             case 'Rifle (4 points)':
                 self.params.n_clust_exp = RIFLE_N_CLUST_EXP
                 self.params.z_nm_arr = RIFLE_Z_SITES_NM
+        self.share_params()
+        
+    @pyqtSlot(str)
+    def upd_orientation(self, value):
+        self.params.orientation = value
         self.share_params()
 
     @pyqtSlot(float)
@@ -1288,7 +1318,10 @@ class AnalysisWorker(QObject):
             self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at pre-clustering de-noising step, try changing parameters")
             return
         else:
-            new_means, new_covs, new_clust_labels = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1])
+            if self.params.orientation=='vertical':
+                new_means, new_covs, new_clust_labels = self.clust.gmm_clust_inorig(locs_unlabel[new_labels!=-1])
+            elif self.params.orientation=='horizontal':
+                new_means, new_covs, new_clust_labels = self.clust.gmm_clust_inorig_2D(locs_unlabel[new_labels!=-1])
             if new_means is None:
                 _lgr.warning("Re-fit failed at GMM clustering step, try changing parameters")
                 self.signals.send_msg_toprint.emit(MessageType.WARNING, "Re-fit failed at GMM clustering step, try changing parameters")

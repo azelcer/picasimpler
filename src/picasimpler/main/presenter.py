@@ -65,6 +65,7 @@ class PresenterSignals(QObject):
     send_n_s_toanalysis = pyqtSignal(float)
     send_n_i_toanalysis = pyqtSignal(float)
     send_coll_fl_tab_toanalysis = pyqtSignal(object)
+    send_na_toanalysis = pyqtSignal(float)
     send_fix_angle_choice_toanalysis = pyqtSignal(bool)
     send_fix_angle_toanalysis = pyqtSignal(float)
     send_res_analysis_choice_toanalysis = pyqtSignal(bool)
@@ -502,6 +503,7 @@ class Presenter(QObject):
         self.signals.send_n_i_toanalysis.connect(self._analysis_worker.upd_n_i)
         self.signals.send_n_s_toanalysis.connect(self._analysis_worker.upd_n_s)
         self.signals.send_coll_fl_tab_toanalysis.connect(self._analysis_worker.upd_coll_fl_tab)
+        self.signals.send_na_toanalysis.connect(self._analysis_worker.upd_na)
         self.signals.send_fix_angle_choice_toanalysis.connect(self._analysis_worker.upd_fix_angle_choice)
         self.signals.send_fix_angle_toanalysis.connect(self._analysis_worker.upd_fix_angle)
         self.signals.send_res_analysis_choice_toanalysis.connect(self._analysis_worker.upd_res_analysis_choice)
@@ -811,13 +813,18 @@ class Presenter(QObject):
         match self._view.ui.NA_combobox.currentText():
             case '1.40':
                 coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA140.txt")
+                na = 1.4
             case '1.42':
                 coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA142.txt")
+                na = 1.42
             case '1.45':
                 coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA145.txt")
+                na = 1.45
             case '1.49':
                 coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA149.txt")
+                na = 1.49
         self.signals.send_coll_fl_tab_toanalysis.emit(coll_fl_tab)
+        self.signals.send_na_toanalysis.emit(na)
         
     @pyqtSlot()
     def upd_sampletype(self):
@@ -929,7 +936,7 @@ class Presenter(QObject):
         This function saves the plot of the various functions needed to backcalculate the TIRF angle
         """
         plt.close()
-        plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.params.coll_fl_interp, label='CF interpolation')
+        plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.params.coll_fl_interp_grid, label='CF interpolation')
         plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.simpler_prof, label='SIMPLER profile')
         plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.exc_prof, label='excitation profile')
         plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.exc_fit, label='excitation fit')

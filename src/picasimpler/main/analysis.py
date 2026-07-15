@@ -16,6 +16,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
     
 from picasimpler.helpers.status import AnalysisStatus, MessageType
 from picasimpler.helpers.utils import px_to_nm
+from picasimpler.helpers.cf_calc import SimulQ
 from picasimpler.config.config_var import (
     MAX_FIRST_FRAME_PERC,
     MIN_LAST_FRAME_PERC,
@@ -171,6 +172,8 @@ class Clusterization:
         self.clust_means: np.ndarray | None = None
         self.clust_covs: np.ndarray | None = None
         self.selec_orig_list: list[bool] | None = None
+        self.tilt_angles: np.ndarray | None = None
+        self.z_real: np.ndarray | None = None
         self.params = Params()
 
     def get_clust_x(self, orig_num):
@@ -212,6 +215,14 @@ class Clusterization:
         (number of photons). It is used to order clusters from bottom to top
         """
         return np.argsort(-means[:, 2])
+
+    def upd_clust_fromfile(self, clust_fromfile, clust_locs_fromfile, clust_labels_fromfile):
+        """
+        This function updates the clusterization result variable using data from file
+        """
+        self.clust_means = clust_fromfile
+        self.locs_clust = clust_locs_fromfile
+        self.clust_labels = clust_labels_fromfile
 
     def pre_clust_denoise_inorig(self, locs: list):
         """
@@ -384,46 +395,13 @@ class Clusterization:
             end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust  
         ))
 
-class SpatialFitSignals(QObject):
-    tell_analysis_elem_done = pyqtSignal(int)
-    send_msg_toprint = pyqtSignal(object, str)
-
-class SpatialFit(QObject):
-    def __init__(self, signals):
-        super().__init__()
-        self.signals = signals
-        self.params = Params()
-        self.alpha_max = ALPHA_MAX
-        self.alpha_fixed = ALPHA_FIXED
-        
-    def upd_data_forfit_res_analysis(self, clust_means_forfit, clust_locs, clust_labels):
-        """
-        This function takes external inputs for the variables needed for the fit and the resolution analysis (3D positions of the fitted clusters of localizations,
-        the raw localizations and their clusterization labels) and saves them as attributes for later use
-        """
-        self.clust_means = clust_means_forfit
-        self.clust_locs = clust_locs
-        self.clust_labels = clust_labels
-        # call functions to update all data needed for fit
-        self._calc_tilt_angles()
-        self._calc_z_real()
-        
-    def upd_data_forfit_no_res_analysis(self, clust_means_forfit):
-        """
-        This function takes external inputs for the variables needed for the fit (3D positions of the fitted clusters of localizations) and saves them as attributes for later use
-        """
-        self.clust_means = clust_means_forfit
-        # call functions to update all data needed for fit
-        self._calc_tilt_angles()
-        self._calc_z_real()
-        
-    def _calc_tilt_angles(self):
+    def calc_tilt_angles(self):
         """
         This function computes tilt angles for all the selected origamis based on xy cluster positions and expected z positions of the sites
         """
         self.tilt_angles = np.array([self._tilts_form_xy(self.params.z_nm_arr, o_pos[:, 0:2])[0] for o_pos in self.clust_means])
         
-    def _calc_z_real(self):
+    def calc_z_real(self):
         """
         This function computes the real expected z positions of the sites, taking into account the tilt angle of each origami
         """
@@ -460,7 +438,7 @@ class SpatialFit(QObject):
         A, B = coeffs[1]  # coefs[0] holds (x, y) of the origami at z=0
 
         phi = np.arctan2(B, A)
-        theta = np.arccos(np.min((1, A / np.cos(phi))))
+        theta = np.arccos(np.min((1, np.sqrt(A**2 + B**2))))
         return theta, phi
 
     def _z_from_tilt(self, theta: float, sites_distances: np.ndarray):
@@ -479,7 +457,30 @@ class SpatialFit(QObject):
         """
         return sites_distances * np.sin(theta)[:, np.newaxis] + Z_BASELINE_NM
 
-    def _calc_coll_fl_arr(self):
+class SpatialFitSignals(QObject):
+    tell_analysis_elem_done = pyqtSignal(int)
+    send_msg_toprint = pyqtSignal(object, str)
+
+class SpatialFit(QObject):
+    def __init__(self, signals):
+        super().__init__()
+        self.signals = signals
+        self.params = Params()
+        self.alpha_max = ALPHA_MAX
+        self.alpha_fixed = ALPHA_FIXED
+        
+    def upd_data_forfit(self, clust_means_forfit, clust_locs, clust_labels, tilt_angles, z_real):
+        """
+        This function takes external inputs for the variables needed for the fit and the resolution analysis (3D positions of the fitted clusters of localizations,
+        the raw localizations and their clusterization labels, tilt angles and real z) and saves them as attributes for later use
+        """
+        self.clust_means = clust_means_forfit
+        self.clust_locs = clust_locs
+        self.clust_labels = clust_labels
+        self.tilt_angles = tilt_angles
+        self.z_real = z_real
+
+    def _calc_coll_fl_arr_fromtable(self):
         """
         This function computes the collection efficiency of the objective depending on the emission wavelength and z.
         It extract the values corresponding to the value of simulated emission lambda which is the closest to the value
@@ -489,7 +490,23 @@ class SpatialFit(QObject):
         self.coll_fl_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
         if len(self.coll_fl_discr)!=len(Z_SIM_DISCR):
             raise ValueError("Arrays of simulated z and d_F have different length!")
-        self.params.coll_fl_interp = interp1d(Z_SIM_DISCR, self.coll_fl_discr)(Z_SIM_FIT_ARR)
+        self.coll_fl_interp = interp1d(Z_SIM_DISCR, self.coll_fl_discr)
+        self.params.coll_fl_interp_grid = self.coll_fl_interp(Z_SIM_FIT_ARR)
+        
+    def _calc_coll_fl_arr_axelrod(self):
+        """
+        This function computes the collection efficiency of the objective depending on the emission wavelength and z.
+        It simulates the collected fluorescence for the actual value of NA, ni and ns, and lambda of emission.
+        It follows the theory from the Axelrod paper from 1987.
+        """
+        self.simul_q = SimulQ(
+            self.params.lambda_em,
+            self.params.n_s,
+            self.params.n_i,
+            self.params.na
+        )
+        self.coll_fl_interp = self.simul_q.calc_q()
+        self.params.coll_fl_interp_grid = self.coll_fl_interp(Z_SIM_FIT_ARR)
 
     def fit_renorm_exp_appr(
         self,
@@ -550,7 +567,7 @@ class SpatialFit(QObject):
 
         TODO: add z_0 to account for constant linker added distance.
         """
-        self._calc_coll_fl_arr()
+        self._calc_coll_fl_arr_axelrod()
         N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
@@ -596,7 +613,7 @@ class SpatialFit(QObject):
 
         TODO: add z_0 to account for constant linker added distance.
         """
-        self._calc_coll_fl_arr()
+        self._calc_coll_fl_arr_axelrod()
         N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
@@ -631,7 +648,7 @@ class SpatialFit(QObject):
         p0: tuple[float] = (ALPHA_GUESS,),
     ):
         d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
-        self._calc_coll_fl_arr()
+        self._calc_coll_fl_arr_axelrod()
         N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
@@ -659,17 +676,17 @@ class SpatialFit(QObject):
         self
     ):
         d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
-        self._calc_coll_fl_arr()
+        self._calc_coll_fl_arr_axelrod()
         # Model function
         def N(z, alpha, N0):
-            return N0*(alpha*np.exp(-z/d_exc) + (1 - alpha))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)/interp1d(Z_SIM_DISCR, self.coll_fl_discr)(0)
+            return N0*(alpha*np.exp(-z/d_exc) + (1 - alpha))*self.coll_fl_interp(z)/self.coll_fl_interp(0)
         # Fit
         self.alpha_arr = np.zeros(len(self.clust_means))
         self.N_0_arr = np.zeros(len(self.clust_means))
         for orig_idx in range(len(self.clust_means)):
             N_data = self.clust_means[orig_idx, :, 2].ravel()
             flat_z = self.z_real[orig_idx, :].ravel()
-            p0 = (ALPHA_GUESS, flat_z[0])
+            p0 = (ALPHA_GUESS, N_data[0])
             popt, pcov = curve_fit(N, flat_z, N_data, p0=p0, bounds=([0, 0],[ALPHA_MAX, np.inf]))
             self.alpha_arr[orig_idx] = popt[0]
             self.N_0_arr[orig_idx] = popt[1]
@@ -694,7 +711,7 @@ class SpatialFit(QObject):
         p0: tuple[float] = (ALPHA_GUESS, D_LONG_GUESS),
     ):
         d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
-        self._calc_coll_fl_arr()
+        self._calc_coll_fl_arr_axelrod()
         N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
@@ -725,7 +742,7 @@ class SpatialFit(QObject):
         self
     ):
         d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
-        self._calc_coll_fl_arr()
+        self._calc_coll_fl_arr_axelrod()
         # Model function
         def N(z, alpha, N0, d_long):
             return N0*(alpha*np.exp(-z/d_exc) + (1 - alpha)*np.exp(-z/d_long))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(z)/interp1d(Z_SIM_DISCR, self.coll_fl_discr)(0)
@@ -781,7 +798,7 @@ class SpatialFit(QObject):
 
         TODO: add z_0 to account for constant linker added distance.
         """
-        self._calc_coll_fl_arr()
+        self._calc_coll_fl_arr_axelrod()
         N_data = self.clust_means[:, :, 2]
         flat_z = self.z_real[:, 1:].ravel()
         # Normalize datal
@@ -873,8 +890,8 @@ class SpatialFit(QObject):
         This function infers, from the global decay curve, the TIRF angle, using information about emission wavelength and objective NA
         """
         self.simpler_prof = self.alpha_F*np.exp(-Z_SIM_FIT_ARR/self.d_F) + (1 - self.alpha_F)
-        self._calc_coll_fl_arr()
-        self.exc_prof = self.simpler_prof / self.params.coll_fl_interp
+        self._calc_coll_fl_arr_axelrod()
+        self.exc_prof = self.simpler_prof / self.params.coll_fl_interp_grid
         def F_exc(x, d_exc, b, c):
             return b * np.exp(-x/d_exc) + c                           
         popt, pcov = curve_fit(F_exc, Z_SIM_FIT_ARR, self.exc_prof, p0 = [200, 0.9, 0.1])
@@ -887,7 +904,7 @@ class SpatialFit(QObject):
         """
         This function approximates the real decay with an exponential to get the global decay parameters
         """
-        self.glob_prof = (self.alpha_exc*np.exp(-Z_SIM_FIT_ARR/self.d_exc) + (1 - self.alpha_exc))*interp1d(Z_SIM_DISCR, self.coll_fl_discr)(Z_SIM_FIT_ARR)
+        self.glob_prof = (self.alpha_exc*np.exp(-Z_SIM_FIT_ARR/self.d_exc) + (1 - self.alpha_exc))*self.params.coll_fl_interp_grid
         def F_F(z, d_F, alpha_F, norm):
             return norm*(alpha_F*np.exp(-z/d_F) + (1 - alpha_F))
         popt, pcov = curve_fit(F_F, Z_SIM_FIT_ARR, self.glob_prof, p0 = [200, 0.9, 0.1], bounds=([0, 0, 0],[np.inf, np.inf, np.inf]))
@@ -997,9 +1014,10 @@ class Params:
     lambda_em: float | None = None
     n_s: float | None = None
     n_i: float | None = None
+    na: float | None = None
     # Collection efficiencies
     coll_fl_tab: np.ndarray | None = None
-    coll_fl_interp: np.ndarray | None = None
+    coll_fl_interp_grid: np.ndarray | None = None
     # movie parameters
     n_frames: int | None = None  # number of frames in movie
     exp_time_ms: float | None = None  # exposure time in ms
@@ -1147,6 +1165,11 @@ class AnalysisWorker(QObject):
         self.params.n_s = value
         self.share_params()
         
+    @pyqtSlot(float)
+    def upd_na(self, value):
+        self.params.na = value
+        self.share_params()
+        
     @pyqtSlot(object)
     def upd_coll_fl_tab(self, coll_fl_tab):
         """
@@ -1286,6 +1309,8 @@ class AnalysisWorker(QObject):
         self.clust.pre_clust_denoise(self.simpler.locs)
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
         self.clust.do_clust_xyn()
+        self.clust.calc_tilt_angles()
+        self.clust.calc_z_real()
         if self.simpler.locs:
             self.signals.tell_clust_done.emit(True)
         else:
@@ -1349,8 +1374,11 @@ class AnalysisWorker(QObject):
                     [np.array(self.clust.clust_labels[idx]) for idx, truth_val in enumerate(self.clust.selec_orig_list) if truth_val]
                 )
             else:
-                self.perform_calib_steps_no_res_analysis(
-                    self.clust.clust_means[self.clust.selec_orig_list, :, :]
+                self.perform_calib_steps(
+                    False,
+                    self.clust.clust_means[self.clust.selec_orig_list, :, :],
+                    None,
+                    None
                 )
         else:
             self.signals.send_msg_toprint(MessageType.ERROR, 'Mismatch between number of expected and detected clusters, change origami type')
@@ -1364,6 +1392,7 @@ class AnalysisWorker(QObject):
         """
         try:
             clust_fromfile = np.load(clust_path)
+            _lgr.info(f"Result array shape: {clust_fromfile.shape}")
         except Exception as e:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, f"Cannot open result file because of Exception: {e}")
             return
@@ -1391,13 +1420,19 @@ class AnalysisWorker(QObject):
             self.params.should_do_res_analysis = False
             self.share_params()
         if (clust_fromfile.dtype==float) and (clust_fromfile.shape[1:]==(self.params.n_clust_exp, 3)) and (len(clust_fromfile.shape)==3):
+            self.clust.upd_clust_fromfile(clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
             self.perform_calib_steps(self.params.should_do_res_analysis, clust_fromfile, clust_locs_fromfile, clust_labels_fromfile)
             self.signals.tell_calib_done.emit('from file')
         else:
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
 
     def perform_calib_steps(self, should_do_res_analysis, clust_forcalib, clust_locs, clust_labels):
-        self.fit.upd_data_forfit_res_analysis(clust_forcalib, clust_locs, clust_labels)
+        self.clust.calc_tilt_angles()
+        self.clust.calc_z_real()
+        if should_do_res_analysis:
+            self.fit.upd_data_forfit(clust_forcalib, clust_locs, clust_labels, self.clust.tilt_angles, self.clust.z_real)
+        else:
+            self.fit.upd_data_forfit(clust_forcalib, None, None, self.clust.tilt_angles, self.clust.z_real)
         if self.params.fix_angle_choice and self.params.tirf_angle is not None:
             self.fit.fit_no_appr_fix_angle_each_orig()
             self.fit.backcalc_glob_param()
@@ -1466,7 +1501,7 @@ if __name__ == "__main__":
     plot_origami_fit(z, clus.clust_means[:, :, 2], alpha_F, d_F)
 
 
-if __name__ == "__main__X":
+if __name__ == "__main__":
     filepath_str = r"X:\messdaten\Giovanni_A\SIMPLER\260313\Rifle_4pts_R2_40gain_500pMCy3B_200mW_100ms_23TIRF\R2\R2_2_MMStack_Pos0.ome_locs_picked_standing.hdf5"
     data_path = Path(filepath_str)
     metadata_path = data_path.parent / Path(data_path.stem + ".yaml")

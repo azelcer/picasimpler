@@ -75,7 +75,7 @@ class SimulQ():
         for zz_idx, zz in enumerate(self.z_arr):
             self.q_arr[zz_idx] = self.q_final(zz)
             
-        self.q_interp = interp1d(self.z_arr, self.q_arr)
+        self.q_interp = interp1d(self.z_arr, self.q_arr, fill_value='extrapolate')
         return self.q_interp
         
     def plot_q(self):

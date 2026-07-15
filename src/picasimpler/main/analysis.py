@@ -10,12 +10,13 @@ from pathlib import Path
 from scipy.spatial import distance
 from scipy.optimize import curve_fit, fsolve
 from scipy.interpolate import interp1d
+from scipy.stats import norm
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
     
 from picasimpler.helpers.status import AnalysisStatus, MessageType
-from picasimpler.helpers.utils import px_to_nm
+from picasimpler.helpers.utils import cleanup_z_score, calc_tirf_angle_werr, px_to_nm
 from picasimpler.helpers.cf_calc import SimulQ
 from picasimpler.config.config_var import (
     MAX_FIRST_FRAME_PERC,
@@ -527,17 +528,23 @@ class SpatialFit(QObject):
             self.alpha_arr[orig_idx] = popt[0]
             self.N_0_arr[orig_idx] = popt[1]
 
-        self.alpha_exc = np.mean(self.alpha_arr)
-        self.alpha_exc_err = np.std(self.alpha_arr)
+        self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
+
+        self.alpha_arr = cleanup_z_score(self.alpha_arr)
+        self.N_0_arr = cleanup_z_score(self.N_0_arr)
+
+        self.alpha_exc, self.alpha_exc_err = norm.fit(self.alpha_arr)
+        #self.alpha_exc = np.mean(self.alpha_arr)
+        #self.alpha_exc_err = np.std(self.alpha_arr)
         self.d_exc = d_exc
         self.d_exc_err = 0
 
         self.tirf_angle = self.params.tirf_angle
         self.tirf_angle_err = 0
         
-        self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
-        self.N_0_avg = np.mean(self.N_0_arr)
-        self.N_0_std = np.std(self.N_0_arr)
+        self.N_0_avg, self.N_0_std = norm.fit(self.N_0_arr)
+        #self.N_0_avg = np.mean(self.N_0_arr)
+        #self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
         self.z_ax_forplot = np.linspace(0, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
         self.fit_func_forplot = N(self.z_ax_forplot, self.alpha_exc, 1)
@@ -562,21 +569,24 @@ class SpatialFit(QObject):
             self.alpha_arr[orig_idx] = popt[1]
             self.N_0_arr[orig_idx] = popt[2]
 
-        self.d_exc = np.mean(self.d_exc_arr)
-        self.d_exc_err = np.std(self.d_exc_arr)
-        self.alpha_exc = np.mean(self.alpha_arr)
-        self.alpha_exc_err = np.std(self.alpha_arr)
-
-        tirf_angle_lambda_factor = self.params.lambda_exc / (4*np.pi)
-        tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / self.d_exc)**2 + self.params.n_s**2))
-        tirf_angle_sin = tirf_angle_sqrt_factor / self.params.n_i
-        tirf_angle_deriv = (1 / np.sqrt(1 - tirf_angle_sin**2)) * (1 / self.params.n_i) * (1/2) * (1 / tirf_angle_sqrt_factor) * tirf_angle_lambda_factor**2 * (2/self.d_exc**3) * (180/np.pi)
-        self.tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
-        self.tirf_angle_err = np.abs(tirf_angle_deriv) * self.d_exc_err
-        
         self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
-        self.N_0_avg = np.mean(self.N_0_arr)
-        self.N_0_std = np.std(self.N_0_arr)
+
+        self.d_exc_arr = cleanup_z_score(self.d_exc_arr)
+        self.alpha_arr = cleanup_z_score(self.alpha_arr)
+        self.N_0_arr = cleanup_z_score(self.N_0_arr)
+
+        self.d_exc, self.d_exc_err = norm.fit(self.d_exc_arr)
+        #self.d_exc = np.mean(self.d_exc_arr)
+        #self.d_exc_err = np.std(self.d_exc_arr)
+        self.alpha_exc, self.alpha_exc_err = norm.fit(self.alpha_arr)
+        #self.alpha_exc = np.mean(self.alpha_arr)
+        #self.alpha_exc_err = np.std(self.alpha_arr)
+
+        self.tirf_angle, self.tirf_angle_err = calc_tirf_angle_werr(self.d_exc, self.d_exc_err)
+        
+        self.N_0_avg, self.N_0_std = norm.fit(self.N_0_arr)
+        #self.N_0_avg = np.mean(self.N_0_arr)
+        #self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
         self.z_ax_forplot = np.linspace(0, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
         self.fit_func_forplot = N(self.z_ax_forplot, self.d_exc, self.alpha_exc, 1)
@@ -586,8 +596,8 @@ class SpatialFit(QObject):
         This function approximates the real decay with an exponential to get the global decay parameters
         """
         self.glob_prof = (self.alpha_exc*np.exp(-Z_SIM_FIT_ARR/self.d_exc) + (1 - self.alpha_exc))*self.params.coll_fl_interp_grid
-        def F_F(z, d_F, alpha_F, norm):
-            return norm*(alpha_F*np.exp(-z/d_F) + (1 - alpha_F))
+        def F_F(z, d_F, alpha_F, norm_fact):
+            return norm_fact*(alpha_F*np.exp(-z/d_F) + (1 - alpha_F))
         popt, pcov = curve_fit(F_F, Z_SIM_FIT_ARR, self.glob_prof, p0 = [200, 0.9, 0.1], bounds=([0, 0, 0],[np.inf, np.inf, np.inf]))
         self.d_F = popt[0]
         self.d_F_err = pcov[0, 0]

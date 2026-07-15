@@ -16,7 +16,7 @@ from sklearn.cluster import HDBSCAN
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
     
 from picasimpler.helpers.status import AnalysisStatus, MessageType
-from picasimpler.helpers.utils import cleanup_z_score, calc_tirf_angle_werr, px_to_nm
+from picasimpler.helpers.utils import z_score_test, calc_tirf_angle_werr, px_to_nm
 from picasimpler.helpers.cf_calc import SimulQ
 from picasimpler.config.config_var import (
     MAX_FIRST_FRAME_PERC,
@@ -529,9 +529,17 @@ class SpatialFit(QObject):
             self.N_0_arr[orig_idx] = popt[1]
 
         self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
+        self.mean_pos_arr = np.mean(self.clust_means[:, :, :2], axis=1)
 
-        self.alpha_arr = cleanup_z_score(self.alpha_arr)
-        self.N_0_arr = cleanup_z_score(self.N_0_arr)
+        alpha_cleanup_idx = z_score_test(self.alpha_arr)
+        N_0_cleanup_idx = z_score_test(self.N_0_arr)
+        cleanup_idx = np.logical_and(alpha_cleanup_idx, N_0_cleanup_idx)
+        
+        self.alpha_arr = self.alpha_arr[cleanup_idx]
+        self.N_0_arr = self.N_0_arr[cleanup_idx]
+        self.N_renorm_arr = self.N_renorm_arr[cleanup_idx]
+        self.z_real = self.z_real[cleanup_idx]
+        self.mean_pos_arr = self.mean_pos_arr[cleanup_idx]
 
         self.alpha_exc, self.alpha_exc_err = norm.fit(self.alpha_arr)
         #self.alpha_exc = np.mean(self.alpha_arr)
@@ -542,7 +550,7 @@ class SpatialFit(QObject):
         self.tirf_angle = self.params.tirf_angle
         self.tirf_angle_err = 0
         
-        self.N_0_avg, self.N_0_std = norm.fit(self.N_0_arr)
+        self.N_0_avg, self.N_0_err = norm.fit(self.N_0_arr)
         #self.N_0_avg = np.mean(self.N_0_arr)
         #self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
@@ -570,10 +578,19 @@ class SpatialFit(QObject):
             self.N_0_arr[orig_idx] = popt[2]
 
         self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
+        self.mean_pos_arr = np.mean(self.clust_means[:, :, :2], axis=1)
 
-        self.d_exc_arr = cleanup_z_score(self.d_exc_arr)
-        self.alpha_arr = cleanup_z_score(self.alpha_arr)
-        self.N_0_arr = cleanup_z_score(self.N_0_arr)
+        d_exc_cleanup_idx = z_score_test(self.d_exc_arr)
+        alpha_cleanup_idx = z_score_test(self.alpha_arr)
+        N_0_cleanup_idx = z_score_test(self.N_0_arr)
+        cleanup_idx = np.logical_and(d_exc_cleanup_idx, alpha_cleanup_idx, N_0_cleanup_idx)
+        
+        self.d_exc_arr = self.d_exc_arr[cleanup_idx]
+        self.alpha_arr = self.alpha_arr[cleanup_idx]
+        self.N_0_arr = self.N_0_arr[cleanup_idx]
+        self.N_renorm_arr = self.N_renorm_arr[cleanup_idx]
+        self.z_real = self.z_real[cleanup_idx]
+        self.mean_pos_arr = self.mean_pos_arr[cleanup_idx]
 
         self.d_exc, self.d_exc_err = norm.fit(self.d_exc_arr)
         #self.d_exc = np.mean(self.d_exc_arr)
@@ -582,9 +599,9 @@ class SpatialFit(QObject):
         #self.alpha_exc = np.mean(self.alpha_arr)
         #self.alpha_exc_err = np.std(self.alpha_arr)
 
-        self.tirf_angle, self.tirf_angle_err = calc_tirf_angle_werr(self.d_exc, self.d_exc_err)
+        self.tirf_angle, self.tirf_angle_err = calc_tirf_angle_werr(self.d_exc, self.d_exc_err, self.params.lambda_exc, self.params.n_i, self.params.n_s)
         
-        self.N_0_avg, self.N_0_std = norm.fit(self.N_0_arr)
+        self.N_0_avg, self.N_0_err = norm.fit(self.N_0_arr)
         #self.N_0_avg = np.mean(self.N_0_arr)
         #self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
@@ -716,6 +733,7 @@ class AnalysisWorker(QObject):
         self.clust: Clusterization = Clusterization(self.clust_signals)
         self.fit: SpatialFit = SpatialFit(self.fit_signals)
         self.params = Params()
+        self.is_analysis_done_with_free_angle = False
 
     def share_params(self):
         """
@@ -1103,42 +1121,11 @@ class AnalysisWorker(QObject):
         if self.params.fix_angle_choice and self.params.tirf_angle is not None:
             self.fit.fit_no_appr_fix_angle_each_orig()
             self.fit.backcalc_glob_param()
+            self.is_analysis_done_with_free_angle = False
         else:
             self.fit.fit_no_appr_each_orig()
             self.fit.backcalc_glob_param()
-        '''
-        match CALIB_MODE:
-            case 'no_appr':
-                self.fit.fit_renorm_no_appr()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param()
-            case 'no_appr_fix_angle':
-                self.fit.fit_renorm_no_appr_fix_angle()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param()
-            case 'no_appr_fix_angle_each_orig':
-                self.fit.fit_no_appr_fix_angle_each_orig()
-                self.fit.backcalc_glob_param()
-            case 'no_appr_fix_angle_biexp':
-                self.fit.fit_renorm_no_appr_fix_angle_biexp()
-                self.fit.fit_N0_no_appr_biexp()
-                self.fit.backcalc_glob_param()   
-            case 'no_appr_fix_angle_biexp_each_orig':
-                self.fit.fit_no_appr_fix_angle_biexp_each_orig()
-                self.fit.backcalc_glob_param()  
-            case 'no_appr_spacer':
-                self.fit.fit_renorm_no_appr_spacer()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param()
-            case 'no_appr_fix_alpha':
-                self.fit.fit_renorm_no_appr_fix_alpha()
-                self.fit.fit_N0_no_appr()
-                self.fit.backcalc_glob_param()
-            case 'exp_appr':
-                self.fit.fit_renorm_exp_appr()
-                self.fit.fit_N0_exp_appr()
-                self.fit.backcalc_tirf_angle()
-    '''
+            self.is_analysis_done_with_free_angle = True
         if should_do_res_analysis and (clust_locs is not None) and (clust_labels is not None):
             self.fit.backcalc_z()
             self.fit.calc_spat_sigma_gmm()

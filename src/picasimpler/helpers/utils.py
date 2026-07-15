@@ -4,13 +4,13 @@ from enum import auto
 def gauss(xx, ampl, mu, sigma):
     return ampl*np.exp(-(xx - mu)**2/(2*sigma**2))/np.sqrt(2*np.pi)/sigma
 
-def cleanup_z_score(data):
+def z_score_test(data):
     median = np.median(data)
     mad = np.median(np.abs(data - median))
     # modified z-score, robust to outliers (using MAD instead of std)
     mod_z = 0.6745 * (data - median) / mad
-    clean_data = data[np.abs(mod_z) < 3.5]  # common threshold
-    return clean_data
+    clean_data_idx = np.asarray([np.abs(mod_z) < 3.5])[0]  # common threshold
+    return clean_data_idx
 
 def calc_tirf_angle_werr(d_exc, d_exc_err, lambda_exc, n_i, n_s):
     tirf_angle_lambda_factor = lambda_exc / (4*np.pi)
@@ -20,6 +20,13 @@ def calc_tirf_angle_werr(d_exc, d_exc_err, lambda_exc, n_i, n_s):
     tirf_angle = np.arcsin(tirf_angle_sin)*180/np.pi
     tirf_angle_err = np.abs(tirf_angle_deriv) * d_exc_err
     return tirf_angle, tirf_angle_err
+
+def safe_calc_tirf_angle(d_exc, lambda_exc, n_i, n_s):
+    tirf_angle_lambda_factor = lambda_exc / (4*np.pi)
+    tirf_angle_sqrt_factor = np.sqrt(((tirf_angle_lambda_factor / d_exc)**2 + n_s**2))
+    tirf_angle_sin = tirf_angle_sqrt_factor / n_i
+    tirf_angle = np.arcsin(np.min((1, tirf_angle_sin)))*180/np.pi
+    return tirf_angle
 
 def px_to_nm(arr_toconv, px_size_nm):
     """

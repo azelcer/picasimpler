@@ -13,7 +13,7 @@ from matplotlib import rcParams
 from picasimpler.main.view import View
 from picasimpler.main.analysis import AnalysisWorker
 from picasimpler.helpers.status import AnalysisStatus, UIColor, MessageType
-from picasimpler.helpers.utils import safe_float_to0, safe_float_tonone
+from picasimpler.helpers.utils import gauss, safe_float_to0, safe_float_tonone
 from picasimpler.config.config_var import (
     SPAT_TOL_NM_DEF,
     SPAT_TOL_NM_MIN,
@@ -858,7 +858,7 @@ class Presenter(QObject):
         self._print_to_ui(MessageType.SIMPLE, f"&alpha;<sub>EXC</sub> = {self._analysis_worker.fit.alpha_exc:.3g} &plusmn; {self._analysis_worker.fit.alpha_exc_err:.3g}")
         self._print_to_ui(MessageType.SIMPLE, f"d<sub>EXC</sub> = {self._analysis_worker.fit.d_exc:.4g} &plusmn; {self._analysis_worker.fit.d_exc_err:.4g} nm")
         self._print_to_ui(MessageType.SIMPLE, f"&theta;<sub>TIRF</sub> = {self._analysis_worker.fit.tirf_angle:.4g} &plusmn; {self._analysis_worker.fit.tirf_angle_err:.3g}°")
-        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.6g} &plusmn; {self._analysis_worker.fit.N_0_std:.6g}")
+        self._print_to_ui(MessageType.SIMPLE, f"&lt;N<sub>0</sub>&gt; = {self._analysis_worker.fit.N_0_avg:.6g} &plusmn; {self._analysis_worker.fit.N_0_err:.6g}")
         if self._analysis_worker.params.should_do_res_analysis:
             self._print_to_ui(MessageType.INFO, "Cluster average sigmas:")
             for clust_idx in range(self._analysis_worker.params.n_clust_exp):
@@ -874,7 +874,7 @@ class Presenter(QObject):
             self._analysis_worker.fit.tirf_angle,
             self._analysis_worker.fit.tirf_angle_err,
             self._analysis_worker.fit.N_0_avg,
-            self._analysis_worker.fit.N_0_std
+            self._analysis_worker.fit.N_0_err
         )
         self.save_calib_plot(filename_base)
         if CALIB_MODE=='exp_appr':
@@ -925,11 +925,67 @@ class Presenter(QObject):
         plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_calib_res_logscale.png"))
         
         plt.close()
-        plt.hist(self._analysis_worker.fit.alpha_arr, 20)
+        plt.plot(Z_SIM_FIT_ARR, self._analysis_worker.fit.coll_fl_interp(Z_SIM_FIT_ARR), color=UIColor.V.value, linewidth=3)
+        plt.ylabel(r"$CF$")
+        plt.xlabel("z [nm]")
+        plt.grid()
+        plt.tight_layout()
+        plt.ylim([0, 1])
+        plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_CF.png"))
+        
+        n_bins_inplots = 20
+        
+        if self._analysis_worker.is_analysis_done_with_free_angle:
+            plt.close()
+            plt.hist(self._analysis_worker.fit.d_exc_arr, n_bins_inplots, color=UIColor.DG.value, alpha=0.5)
+            d_exc_plt_range = np.linspace(self._analysis_worker.fit.d_exc_arr.min(), self._analysis_worker.fit.d_exc_arr.max(), 1000)
+            d_exc_bin_width = (self._analysis_worker.fit.d_exc_arr.max() - self._analysis_worker.fit.d_exc_arr.min())/n_bins_inplots
+            plt.plot(d_exc_plt_range, gauss(d_exc_plt_range, len(self._analysis_worker.fit.d_exc_arr)*d_exc_bin_width, self._analysis_worker.fit.d_exc, self._analysis_worker.fit.d_exc_err), color="black", linewidth=3, linestyle="--")
+            plt.ylabel("Frequency")
+            plt.xlabel(r"$d_{TIRF}$")
+            plt.tight_layout()
+            plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_d_exc_distr.png"))
+            
+            plt.close()
+            plt.scatter(self._analysis_worker.fit.mean_pos_arr[:, 0], self._analysis_worker.fit.mean_pos_arr[:, 1], c=self._analysis_worker.fit.d_exc_arr, cmap='rainbow', s=20)
+            d_exc_color_bar = plt.colorbar(label=r"$d_{EXC} [nm]", orientation="vertical")
+            d_exc_color_bar.solids.set(alpha=1)
+            plt.gca().set_aspect('equal'), plt.xlabel('x (nm)'), plt.ylabel('y (nm)'), plt.tight_layout()
+            plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_d_exc_map.png"))
+            
+        plt.close()
+        plt.hist(self._analysis_worker.fit.alpha_arr, n_bins_inplots, color=UIColor.OG.value, alpha=0.5)
+        alpha_plt_range = np.linspace(self._analysis_worker.fit.alpha_arr.min(), self._analysis_worker.fit.alpha_arr.max(), 1000)
+        alpha_bin_width = (self._analysis_worker.fit.alpha_arr.max() - self._analysis_worker.fit.alpha_arr.min())/n_bins_inplots
+        plt.plot(alpha_plt_range, gauss(alpha_plt_range, len(self._analysis_worker.fit.alpha_arr)*alpha_bin_width, self._analysis_worker.fit.alpha_exc, self._analysis_worker.fit.alpha_exc_err), color="black", linewidth=3, linestyle="--")
         plt.ylabel("Frequency")
         plt.xlabel(r"$\alpha_{EXC}$")
         plt.tight_layout()
         plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_alphaexc_distr.png"))
+        
+        plt.close()
+        plt.scatter(self._analysis_worker.fit.mean_pos_arr[:, 0], self._analysis_worker.fit.mean_pos_arr[:, 1], c=self._analysis_worker.fit.alpha_arr, cmap='rainbow', s=20)
+        alpha_exc_color_bar = plt.colorbar(label=r"$\alpha_{EXC}", orientation="vertical")
+        alpha_exc_color_bar.solids.set(alpha=1)
+        plt.gca().set_aspect('equal'), plt.xlabel('x (nm)'), plt.ylabel('y (nm)'), plt.tight_layout()
+        plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_alpha_exc_map.png"))
+        
+        plt.close()
+        plt.hist(self._analysis_worker.fit.N_0_arr, n_bins_inplots, color=UIColor.LB.value, alpha=0.5)
+        N_0_plt_range = np.linspace(self._analysis_worker.fit.N_0_arr.min(), self._analysis_worker.fit.N_0_arr.max(), 1000)
+        N_0_bin_width = (self._analysis_worker.fit.N_0_arr.max() - self._analysis_worker.fit.N_0_arr.min())/n_bins_inplots
+        plt.plot(N_0_plt_range, gauss(N_0_plt_range, len(self._analysis_worker.fit.N_0_arr)*N_0_bin_width, self._analysis_worker.fit.N_0_avg, self._analysis_worker.fit.N_0_err), color="black", linewidth=3, linestyle="--")
+        plt.ylabel("Frequency")
+        plt.xlabel(r"$N_{0}$")
+        plt.tight_layout()
+        plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_N_0_distr.png"))
+        
+        plt.close()
+        plt.scatter(self._analysis_worker.fit.mean_pos_arr[:, 0], self._analysis_worker.fit.mean_pos_arr[:, 1], c=self._analysis_worker.fit.N_0_arr, cmap='rainbow', s=20)
+        N_0_color_bar = plt.colorbar(label=r"$N_{0}", orientation="vertical")
+        N_0_color_bar.solids.set(alpha=1)
+        plt.gca().set_aspect('equal'), plt.xlabel('x (nm)'), plt.ylabel('y (nm)'), plt.tight_layout()
+        plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_N_0_map.png"))
         
     def save_tirf_angle_plot(self, tirf_angle_plotname):
         """

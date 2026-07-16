@@ -491,7 +491,7 @@ class SpatialFit(QObject):
         self.coll_fl_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
         if len(self.coll_fl_discr)!=len(Z_SIM_DISCR):
             raise ValueError("Arrays of simulated z and d_F have different length!")
-        self.coll_fl_interp = interp1d(Z_SIM_DISCR, self.coll_fl_discr)
+        self.coll_fl_interp = interp1d(Z_SIM_DISCR, self.coll_fl_discr, fill_value='extrapolate')
         self.params.coll_fl_interp_grid = self.coll_fl_interp(Z_SIM_FIT_ARR)
         
     def _calc_coll_fl_arr_axelrod(self):
@@ -513,6 +513,7 @@ class SpatialFit(QObject):
         self
     ):
         d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
+        #self._calc_coll_fl_arr_fromtable()
         self._calc_coll_fl_arr_axelrod()
         # Model function
         def N(z, alpha, N0):
@@ -524,12 +525,23 @@ class SpatialFit(QObject):
             N_data = self.clust_means[orig_idx, :, 2].ravel()
             flat_z = self.z_real[orig_idx, :].ravel()
             p0 = (ALPHA_GUESS, N_data[0])
-            popt, pcov = curve_fit(N, flat_z, N_data, p0=p0, bounds=([0, 0],[ALPHA_MAX, np.inf]))
-            self.alpha_arr[orig_idx] = popt[0]
-            self.N_0_arr[orig_idx] = popt[1]
-
+            try:
+                popt, pcov = curve_fit(N, flat_z, N_data, p0=p0, bounds=([0, 0],[ALPHA_MAX, np.inf]))
+                self.alpha_arr[orig_idx] = popt[0]
+                self.N_0_arr[orig_idx] = popt[1]
+            except Exception as e:
+                print(e)
+                self.alpha_arr[orig_idx] = np.nan
+                self.N_0_arr[orig_idx] = np.nan
+                
         self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
         self.mean_pos_arr = np.mean(self.clust_means[:, :, :2], axis=1)
+
+        self.N_renorm_arr = self.N_renorm_arr[~np.isnan(self.alpha_arr)]
+        self.mean_pos_arr = self.mean_pos_arr[~np.isnan(self.alpha_arr)]
+        self.z_real = self.z_real[~np.isnan(self.alpha_arr)]
+        self.alpha_arr = self.alpha_arr[~np.isnan(self.alpha_arr)]
+        self.N_0_arr = self.N_0_arr[~np.isnan(self.N_0_arr)]
 
         alpha_cleanup_idx = z_score_test(self.alpha_arr)
         N_0_cleanup_idx = z_score_test(self.N_0_arr)
@@ -560,6 +572,7 @@ class SpatialFit(QObject):
     def fit_no_appr_each_orig(
         self
     ):
+        #self._calc_coll_fl_arr_fromtable()
         self._calc_coll_fl_arr_axelrod()
         # Model function
         def N(z, d_exc, alpha, N0):
@@ -572,13 +585,26 @@ class SpatialFit(QObject):
             N_data = self.clust_means[orig_idx, :, 2].ravel()
             flat_z = self.z_real[orig_idx, :].ravel()
             p0 = (D_GUESS, ALPHA_GUESS, N_data[0])
-            popt, pcov = curve_fit(N, flat_z, N_data, p0=p0, bounds=([0, 0, 0],[np.inf, ALPHA_MAX, np.inf]))
-            self.d_exc_arr[orig_idx] = popt[0]
-            self.alpha_arr[orig_idx] = popt[1]
-            self.N_0_arr[orig_idx] = popt[2]
+            try:
+                popt, pcov = curve_fit(N, flat_z, N_data, p0=p0, bounds=([0, 0, 0],[np.inf, ALPHA_MAX, np.inf]))
+                self.d_exc_arr[orig_idx] = popt[0]
+                self.alpha_arr[orig_idx] = popt[1]
+                self.N_0_arr[orig_idx] = popt[2]
+            except Exception as e:
+                print(e)
+                self.d_exc_arr[orig_idx] = np.nan
+                self.alpha_arr[orig_idx] = np.nan
+                self.N_0_arr[orig_idx] = np.nan
 
         self.N_renorm_arr = self.clust_means[:, :, 2]/self.N_0_arr[:, np.newaxis]
         self.mean_pos_arr = np.mean(self.clust_means[:, :, :2], axis=1)
+
+        self.N_renorm_arr = self.N_renorm_arr[~np.isnan(self.d_exc_arr)]
+        self.mean_pos_arr = self.mean_pos_arr[~np.isnan(self.d_exc_arr)]
+        self.z_real = self.z_real[~np.isnan(self.d_exc_arr)]
+        self.d_exc_arr = self.d_exc_arr[~np.isnan(self.d_exc_arr)]
+        self.alpha_arr = self.alpha_arr[~np.isnan(self.alpha_arr)]
+        self.N_0_arr = self.N_0_arr[~np.isnan(self.N_0_arr)]
 
         d_exc_cleanup_idx = z_score_test(self.d_exc_arr)
         alpha_cleanup_idx = z_score_test(self.alpha_arr)

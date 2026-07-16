@@ -84,6 +84,8 @@ class SimulQ():
         plt.plot(self.z_arr, self.q_arr, label="Q")
         plt.xlim([0, Z_END])
         plt.ylim([0, 1])
+        plt.xlabel("z [nm]")
+        plt.ylabel("CF")
         plt.legend()
         plt.show()
 

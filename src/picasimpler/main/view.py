@@ -104,6 +104,7 @@ class View(QMainWindow):
         """
         this function, called at View instatiation, sets up the plots to be filled later on
         """
+        self.ui.xy_widget.setAspectLocked(True, ratio=1)
         self.ui.xn_widget.invertY(True)
         self.ui.yn_widget.invertY(True)
         self.ui.xy_widget.setLabel("left", "y [nm]")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import logging as _lgn
@@ -863,41 +864,51 @@ class Presenter(QObject):
             self._print_to_ui(MessageType.INFO, "Cluster average sigmas:")
             for clust_idx in range(self._analysis_worker.params.n_clust_exp):
                 self._print_to_ui(MessageType.SIMPLE, f"site #{clust_idx + 1} [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[clust_idx, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[clust_idx, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[clust_idx, 2]:.2g} nm")
-        self.save_calib_res(
-            filename_base + "_calib_res.json",
-            self._analysis_worker.fit.alpha_F,
-            self._analysis_worker.fit.alpha_F_err,
-            self._analysis_worker.fit.d_F,
-            self._analysis_worker.fit.d_F_err,
-            self._analysis_worker.fit.d_exc,
-            self._analysis_worker.fit.d_exc_err,
-            self._analysis_worker.fit.tirf_angle,
-            self._analysis_worker.fit.tirf_angle_err,
-            self._analysis_worker.fit.N_0_avg,
-            self._analysis_worker.fit.N_0_err
-        )
+        self.save_calib_res(filename_base)
         self.save_calib_plot(filename_base)
         if CALIB_MODE=='exp_appr':
             self.save_tirf_angle_plot(filename_base + "_TIRF_angle_plot.png")
 
-    def save_calib_res(self, calib_res_filename, alpha_F, alpha_F_err, d_F, d_F_err, d_exc, d_exc_err, tirf_angle, tirf_angle_err, N_0_avg, N_0_std):
+    def save_calib_res(self, calib_res_filename):
         """
         This function saves the results of the SIMPLER calibration in a .json in the result folder
         """
         calib_res_dict = {
-            "alpha_F": alpha_F,
-            "alpha_F_err": alpha_F_err,
-            "d_F": d_F,
-            "d_F_err": d_F_err,
-            "d_exc": d_exc,
-            "d_exc_err": d_exc_err,
-            "TIRF angle": tirf_angle,
-            "TIRF angle error": tirf_angle_err,
-            "N_0_avg": N_0_avg,
-            "N_0_std": N_0_std
+            "alpha_F": self._analysis_worker.fit.alpha_F,
+            "alpha_F_err": self._analysis_worker.fit.alpha_F_err,
+            "d_F": self._analysis_worker.fit.d_F,
+            "d_F_err": self._analysis_worker.fit.d_F_err,
+            "d_exc": self._analysis_worker.fit.d_exc,
+            "d_exc_err": self._analysis_worker.fit.d_exc_err,
+            "TIRF angle": self._analysis_worker.fit.tirf_angle,
+            "TIRF angle error": self._analysis_worker.fit.tirf_angle_err,
+            "N_0_avg": self._analysis_worker.fit.N_0_avg,
+            "N_0_std": self._analysis_worker.fit.N_0_err
         }
-        with open(self.res_dir / Path(calib_res_filename), "w") as f:
+        with open(self.res_dir / Path(calib_res_filename + "_calib_res.json"), "w") as f:
             json.dump(calib_res_dict, f, indent=4)
+        with open(self.res_dir / Path(calib_res_filename + "_raw_datapts.csv"), 'w', newline='') as csvfile: 
+            csv_writer = csv.writer(csvfile, quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            for pt_idx in range(len(self._analysis_worker.fit.z_real.ravel())):
+                csv_writer.writerow([self._analysis_worker.fit.z_real.ravel()[pt_idx], self._analysis_worker.fit.N_renorm_arr.ravel()[pt_idx]])
+        with open(self.res_dir / Path(calib_res_filename + "_calib_params_distrib.csv"), 'w', newline='') as csvfile: 
+            csv_writer = csv.writer(csvfile, quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            if self._analysis_worker.is_analysis_done_with_free_angle:
+                csv_writer.writerow(["N0", "alpha_EXC", "d_EXC"])
+            else:
+                csv_writer.writerow(["N0", "alpha_EXC"])
+            for orig_idx in range(len(self._analysis_worker.fit.N_0_arr)):
+                if self._analysis_worker.is_analysis_done_with_free_angle:
+                    csv_writer.writerow([
+                        self._analysis_worker.fit.N_0_arr[orig_idx],
+                        self._analysis_worker.fit.alpha_arr[orig_idx],
+                        self._analysis_worker.fit.d_exc_arr[orig_idx]
+                    ])
+                else:
+                    csv_writer.writerow([
+                        self._analysis_worker.fit.N_0_arr[orig_idx],
+                        self._analysis_worker.fit.alpha_arr[orig_idx]
+                    ])
         
     def save_calib_plot(self, calib_plot_filename_base):
         """
@@ -942,17 +953,17 @@ class Presenter(QObject):
             d_exc_bin_width = (self._analysis_worker.fit.d_exc_arr.max() - self._analysis_worker.fit.d_exc_arr.min())/n_bins_inplots
             plt.plot(d_exc_plt_range, gauss(d_exc_plt_range, len(self._analysis_worker.fit.d_exc_arr)*d_exc_bin_width, self._analysis_worker.fit.d_exc, self._analysis_worker.fit.d_exc_err), color="black", linewidth=3, linestyle="--")
             plt.ylabel("Frequency")
-            plt.xlabel(r"$d_{TIRF}$")
+            plt.xlabel(r"$d_{EXC}$")
             plt.tight_layout()
             plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_d_exc_distr.png"))
             
             plt.close()
             plt.scatter(self._analysis_worker.fit.mean_pos_arr[:, 0], self._analysis_worker.fit.mean_pos_arr[:, 1], c=self._analysis_worker.fit.d_exc_arr, cmap='rainbow', s=20)
-            d_exc_color_bar = plt.colorbar(label=r"$d_{EXC} [nm]", orientation="vertical")
+            d_exc_color_bar = plt.colorbar(label=r"$d_{EXC}$ [nm]", orientation="vertical")
             d_exc_color_bar.solids.set(alpha=1)
-            plt.gca().set_aspect('equal'), plt.xlabel('x (nm)'), plt.ylabel('y (nm)'), plt.tight_layout()
+            plt.gca().set_aspect('equal'), plt.xlabel('x [nm]'), plt.ylabel('y [nm]'), plt.tight_layout()
             plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_d_exc_map.png"))
-            
+        
         plt.close()
         plt.hist(self._analysis_worker.fit.alpha_arr, n_bins_inplots, color=UIColor.OG.value, alpha=0.5)
         alpha_plt_range = np.linspace(self._analysis_worker.fit.alpha_arr.min(), self._analysis_worker.fit.alpha_arr.max(), 1000)
@@ -965,9 +976,9 @@ class Presenter(QObject):
         
         plt.close()
         plt.scatter(self._analysis_worker.fit.mean_pos_arr[:, 0], self._analysis_worker.fit.mean_pos_arr[:, 1], c=self._analysis_worker.fit.alpha_arr, cmap='rainbow', s=20)
-        alpha_exc_color_bar = plt.colorbar(label=r"$\alpha_{EXC}", orientation="vertical")
+        alpha_exc_color_bar = plt.colorbar(label=r"$\alpha_{EXC}$", orientation="vertical")
         alpha_exc_color_bar.solids.set(alpha=1)
-        plt.gca().set_aspect('equal'), plt.xlabel('x (nm)'), plt.ylabel('y (nm)'), plt.tight_layout()
+        plt.gca().set_aspect('equal'), plt.xlabel('x [nm]'), plt.ylabel('y [nm]'), plt.tight_layout()
         plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_alpha_exc_map.png"))
         
         plt.close()
@@ -982,9 +993,9 @@ class Presenter(QObject):
         
         plt.close()
         plt.scatter(self._analysis_worker.fit.mean_pos_arr[:, 0], self._analysis_worker.fit.mean_pos_arr[:, 1], c=self._analysis_worker.fit.N_0_arr, cmap='rainbow', s=20)
-        N_0_color_bar = plt.colorbar(label=r"$N_{0}", orientation="vertical")
+        N_0_color_bar = plt.colorbar(label=r"$N_{0}$", orientation="vertical")
         N_0_color_bar.solids.set(alpha=1)
-        plt.gca().set_aspect('equal'), plt.xlabel('x (nm)'), plt.ylabel('y (nm)'), plt.tight_layout()
+        plt.gca().set_aspect('equal'), plt.xlabel('x [nm]'), plt.ylabel('y [nm]'), plt.tight_layout()
         plt.savefig(self.res_dir / Path(calib_plot_filename_base + "_N_0_map.png"))
         
     def save_tirf_angle_plot(self, tirf_angle_plotname):

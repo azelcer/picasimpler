@@ -12,13 +12,7 @@ MAX_ON_FRAMES_PERC = 0.8
 # origami structure
 HB_Z_0 = 8.3
 HB_Z_DIST_NM = [38.7, 41.0, 56.4, 54.1]
-HB_Z_SITES_NM = np.array([
-    HB_Z_0,
-    HB_Z_0 + HB_Z_DIST_NM[0],
-    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1],
-    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2],
-    HB_Z_0 + HB_Z_DIST_NM[0] + HB_Z_DIST_NM[1] + HB_Z_DIST_NM[2] + HB_Z_DIST_NM[3],
-])
+HB_Z_SITES_NM = np.array([8.04,  46.17,  87.92,  144.31, 198.47])
 RIFLE_Z_SITES_NM = np.array([7, 41.6, 76.9, 113.5])
 # clustering
 PRECLUST_GAMMA_DEF = 0.05
@@ -30,8 +24,8 @@ HB_N_CLUST_EXP = 5
 DF_REF_VAL_NM = 120
 # setup parameters
 LAMDBA_EXC_DEF = 560
-LAMBDA_EM_DEF = 590
-LAMBDA_MIN = 480
+LAMBDA_EM_DEF = 600
+LAMBDA_MIN = 0
 NA_IDX_DEF = 2
 # objetive collection efficiency simulation parameters
 Z_BASELINE_NM = 0

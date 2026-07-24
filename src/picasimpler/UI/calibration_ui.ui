@@ -559,36 +559,6 @@ tolerance [nm]:</string>
       </rect>
      </property>
     </widget>
-    <widget class="QComboBox" name="NA_combobox">
-     <property name="geometry">
-      <rect>
-       <x>390</x>
-       <y>220</y>
-       <width>73</width>
-       <height>26</height>
-      </rect>
-     </property>
-     <item>
-      <property name="text">
-       <string>1.40</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>1.42</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>1.45</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>1.49</string>
-      </property>
-     </item>
-    </widget>
     <widget class="QLabel" name="NA_label">
      <property name="geometry">
       <rect>
@@ -807,6 +777,16 @@ tolerance [nm]:</string>
      </property>
      <property name="text">
       <string>y bounds:</string>
+     </property>
+    </widget>
+    <widget class="CustomQLineEdit" name="NA_lineedit">
+     <property name="geometry">
+      <rect>
+       <x>390</x>
+       <y>220</y>
+       <width>71</width>
+       <height>26</height>
+      </rect>
      </property>
     </widget>
    </widget>
@@ -1069,7 +1049,6 @@ analysis</string>
   <tabstop>lambda_em_lineedit</tabstop>
   <tabstop>n_s_lineedit</tabstop>
   <tabstop>n_i_lineedit</tabstop>
-  <tabstop>NA_combobox</tabstop>
   <tabstop>prev_orig_button</tabstop>
   <tabstop>next_orig_button</tabstop>
   <tabstop>disc_selec_orig_button</tabstop>

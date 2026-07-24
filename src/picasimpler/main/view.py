@@ -28,7 +28,7 @@ class ViewSignals(QObject):
     send_lambda_em_fromui = pyqtSignal(float)
     send_n_s_fromui = pyqtSignal(float)
     send_n_i_fromui = pyqtSignal(float)
-    send_NA_fromui = pyqtSignal(str)
+    send_NA_fromui = pyqtSignal(float)
 
 class View(QMainWindow):
     """
@@ -88,9 +88,11 @@ class View(QMainWindow):
         # wavelengths must be positive, finite and no scientfic notation allowed
         self.ui.lambda_exc_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         self.ui.lambda_em_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
-        # refractive indices must be positive, finite and no scientfic notation allowed, and n_i must be bigger than n_s
+        # refractive indices must be positive, finite and no scientfic notation allowed
         self.ui.n_s_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         self.ui.n_i_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
+        # numerical aperture must be positive, finite and no scientfic notation allowed
+        self.ui.NA_lineedit.setValidator(NumberValidators.NO_SCI_NOTAT_ONLY_POS_WO_INF.valid)
         
     def reset_ui(self):
         """
@@ -330,3 +332,6 @@ class View(QMainWindow):
         
     def upd_n_i_onui(self, value):
         self.ui.n_i_lineedit.setText(str(value))
+        
+    def upd_na_onui(self, value):
+        self.ui.NA_lineedit.setText(str(value))

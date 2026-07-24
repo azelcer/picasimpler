@@ -35,14 +35,10 @@ from picasimpler.config.config_var import (
     ALPHA_MAX,
     ALPHA_FIXED,
     D_GUESS,
-    SPACER_GUESS,
-    D_LONG_GUESS,
+    Z_MIN_NM,
     CALIB_PLOT_RANGE_NM,
     CALIB_PLOT_PTS,
-    Z_SIM_DISCR,
     Z_SIM_FIT_ARR,
-    LAMBDA_EM_DISCR,
-    CALIB_MODE
 )
 
 _lgn.basicConfig()
@@ -480,21 +476,8 @@ class SpatialFit(QObject):
         self.clust_labels = clust_labels
         self.tilt_angles = tilt_angles
         self.z_real = z_real
-
-    def _calc_coll_fl_arr_fromtable(self):
-        """
-        This function computes the collection efficiency of the objective depending on the emission wavelength and z.
-        It extract the values corresponding to the value of simulated emission lambda which is the closest to the value
-        chosen on UI; then, it interpolates such values to the full z axis and passes the result to the fit class.
-        """
-        idx_closest_lambda_em = np.argmin(abs(LAMBDA_EM_DISCR - np.ones(np.size(LAMBDA_EM_DISCR))*self.params.lambda_em))
-        self.coll_fl_discr = self.params.coll_fl_tab[:, idx_closest_lambda_em]
-        if len(self.coll_fl_discr)!=len(Z_SIM_DISCR):
-            raise ValueError("Arrays of simulated z and d_F have different length!")
-        self.coll_fl_interp = interp1d(Z_SIM_DISCR, self.coll_fl_discr, fill_value='extrapolate')
-        self.params.coll_fl_interp_grid = self.coll_fl_interp(Z_SIM_FIT_ARR)
         
-    def _calc_coll_fl_arr_axelrod(self):
+    def _calc_coll_fl(self):
         """
         This function computes the collection efficiency of the objective depending on the emission wavelength and z.
         It simulates the collected fluorescence for the actual value of NA, ni and ns, and lambda of emission.
@@ -513,8 +496,7 @@ class SpatialFit(QObject):
         self
     ):
         d_exc = self.params.lambda_exc/(4*np.pi)/np.sqrt(self.params.n_i**2*np.sin(np.radians(self.params.tirf_angle))**2 - self.params.n_s**2)
-        #self._calc_coll_fl_arr_fromtable()
-        self._calc_coll_fl_arr_axelrod()
+        self._calc_coll_fl()
         # Model function
         def N(z, alpha, N0):
             return N0*(alpha*np.exp(-z/d_exc) + (1 - alpha))*self.coll_fl_interp(z)/self.coll_fl_interp(0)
@@ -522,8 +504,12 @@ class SpatialFit(QObject):
         self.alpha_arr = np.zeros(len(self.clust_means))
         self.N_0_arr = np.zeros(len(self.clust_means))
         for orig_idx in range(len(self.clust_means)):
-            N_data = self.clust_means[orig_idx, :, 2].ravel()
             flat_z = self.z_real[orig_idx, :].ravel()
+            if np.min(flat_z)<Z_MIN_NM:
+                self.alpha_arr[orig_idx] = np.nan
+                self.N_0_arr[orig_idx] = np.nan
+                continue
+            N_data = self.clust_means[orig_idx, :, 2].ravel()
             p0 = (ALPHA_GUESS, N_data[0])
             try:
                 popt, pcov = curve_fit(N, flat_z, N_data, p0=p0, bounds=([0, 0],[ALPHA_MAX, np.inf]))
@@ -554,8 +540,6 @@ class SpatialFit(QObject):
         self.mean_pos_arr = self.mean_pos_arr[cleanup_idx]
 
         self.alpha_exc, self.alpha_exc_err = norm.fit(self.alpha_arr)
-        #self.alpha_exc = np.mean(self.alpha_arr)
-        #self.alpha_exc_err = np.std(self.alpha_arr)
         self.d_exc = d_exc
         self.d_exc_err = 0
 
@@ -563,8 +547,6 @@ class SpatialFit(QObject):
         self.tirf_angle_err = 0
         
         self.N_0_avg, self.N_0_err = norm.fit(self.N_0_arr)
-        #self.N_0_avg = np.mean(self.N_0_arr)
-        #self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
         self.z_ax_forplot = np.linspace(0, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
         self.fit_func_forplot = N(self.z_ax_forplot, self.alpha_exc, 1)
@@ -572,8 +554,7 @@ class SpatialFit(QObject):
     def fit_no_appr_each_orig(
         self
     ):
-        #self._calc_coll_fl_arr_fromtable()
-        self._calc_coll_fl_arr_axelrod()
+        self._calc_coll_fl()
         # Model function
         def N(z, d_exc, alpha, N0):
             return N0*(alpha*np.exp(-z/d_exc) + (1 - alpha))*self.coll_fl_interp(z)/self.coll_fl_interp(0)
@@ -582,8 +563,13 @@ class SpatialFit(QObject):
         self.alpha_arr = np.zeros(len(self.clust_means))
         self.N_0_arr = np.zeros(len(self.clust_means))
         for orig_idx in range(len(self.clust_means)):
-            N_data = self.clust_means[orig_idx, :, 2].ravel()
             flat_z = self.z_real[orig_idx, :].ravel()
+            if np.min(flat_z)<Z_MIN_NM:
+                self.d_exc_arr[orig_idx] = np.nan
+                self.alpha_arr[orig_idx] = np.nan
+                self.N_0_arr[orig_idx] = np.nan
+                continue
+            N_data = self.clust_means[orig_idx, :, 2].ravel()
             p0 = (D_GUESS, ALPHA_GUESS, N_data[0])
             try:
                 popt, pcov = curve_fit(N, flat_z, N_data, p0=p0, bounds=([0, 0, 0],[np.inf, ALPHA_MAX, np.inf]))
@@ -619,17 +605,11 @@ class SpatialFit(QObject):
         self.mean_pos_arr = self.mean_pos_arr[cleanup_idx]
 
         self.d_exc, self.d_exc_err = norm.fit(self.d_exc_arr)
-        #self.d_exc = np.mean(self.d_exc_arr)
-        #self.d_exc_err = np.std(self.d_exc_arr)
         self.alpha_exc, self.alpha_exc_err = norm.fit(self.alpha_arr)
-        #self.alpha_exc = np.mean(self.alpha_arr)
-        #self.alpha_exc_err = np.std(self.alpha_arr)
 
         self.tirf_angle, self.tirf_angle_err = calc_tirf_angle_werr(self.d_exc, self.d_exc_err, self.params.lambda_exc, self.params.n_i, self.params.n_s)
         
         self.N_0_avg, self.N_0_err = norm.fit(self.N_0_arr)
-        #self.N_0_avg = np.mean(self.N_0_arr)
-        #self.N_0_std = np.std(self.N_0_arr)
         # variables for plot
         self.z_ax_forplot = np.linspace(0, CALIB_PLOT_RANGE_NM, CALIB_PLOT_PTS)
         self.fit_func_forplot = N(self.z_ax_forplot, self.d_exc, self.alpha_exc, 1)
@@ -726,7 +706,6 @@ class Params:
     n_i: float | None = None
     na: float | None = None
     # Collection efficiencies
-    coll_fl_tab: np.ndarray | None = None
     coll_fl_interp_grid: np.ndarray | None = None
     # movie parameters
     n_frames: int | None = None  # number of frames in movie
@@ -879,14 +858,6 @@ class AnalysisWorker(QObject):
     @pyqtSlot(float)
     def upd_na(self, value):
         self.params.na = value
-        self.share_params()
-        
-    @pyqtSlot(object)
-    def upd_coll_fl_tab(self, coll_fl_tab):
-        """
-        This function receives a table of collection efficiencies, corresponding to the value of NA chosen on UI.
-        """
-        self.params.coll_fl_tab = coll_fl_tab
         self.share_params()
                 
     @pyqtSlot(Path, Path)

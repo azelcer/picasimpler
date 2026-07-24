@@ -97,24 +97,24 @@ class SimulQ():
         return np.sqrt(1 - complex(xx)**2)
 
     def alpha(self, theta):
-        return self.compl_sqrt_one_minxsq((N3/N1)*np.sin(theta))
+        return self.compl_sqrt_one_minxsq((self.n3/self.n1)*np.sin(theta))
 
     def refl_fac_p(self, v):
         """
         generalized Fresnel coeff for reflected light, p polarization
         """
         costheta_gen = self.compl_sqrt_one_minxsq(v)
-        return (N3*costheta_gen - N1*self.compl_sqrt_one_minxsq((N1/N3)*v))/(N1*self.compl_sqrt_one_minxsq((N1/N3)*v) + N3*costheta_gen)
+        return (self.n3*costheta_gen - self.n1*self.compl_sqrt_one_minxsq((self.n1/self.n3)*v))/(self.n1*self.compl_sqrt_one_minxsq((self.n1/self.n3)*v) + self.n3*costheta_gen)
 
     def trans_fac_p(self, v):
         """
         generalized Fresnel coeff for transmitted light, p polarization
         """
-        return (1 + self.refl_fac_p(v))*(N1/N3)
+        return (1 + self.refl_fac_p(v))*(self.n1/self.n3)
 
     def refl_fac_s(self, v):
         costheta_gen = self.compl_sqrt_one_minxsq(v)
-        return (N1*costheta_gen - N3*self.compl_sqrt_one_minxsq((N1/N3)*v))/(N1*costheta_gen + N3*self.compl_sqrt_one_minxsq((N1/N3)*v))
+        return (self.n1*costheta_gen - self.n3*self.compl_sqrt_one_minxsq((self.n1/self.n3)*v))/(self.n1*costheta_gen + self.n3*self.compl_sqrt_one_minxsq((self.n1/self.n3)*v))
 
     def trans_fac_s(self, v):
         return 1 + self.refl_fac_s(v)
@@ -153,19 +153,19 @@ class SimulQ():
         """
         Eq 35b
         """
-        return self.k3**4*np.cos(theta)**2*abs(self.trans_fac_p((N3/N1)*np.sin(theta))*np.exp(1j*self.k3*self.alpha(theta)*zz))**2/(self.eps1*self.eps3)
+        return self.k3**4*np.cos(theta)**2*abs(self.trans_fac_p((self.n3/self.n1)*np.sin(theta))*np.exp(1j*self.k3*self.alpha(theta)*zz))**2/(self.eps1*self.eps3)
 
     def e_mu_s_sq(self, zz, theta):
         """
         Eq 36b
         """
-        return self.k3**4*np.cos(theta)**2*abs(self.trans_fac_s((N3/N1)*np.sin(theta))*np.exp(1j*self.k1*self.alpha(theta)*zz))**2/(self.eps1*self.eps3*abs(self.alpha(theta))**2)
+        return self.k3**4*np.cos(theta)**2*abs(self.trans_fac_s((self.n3/self.n1)*np.sin(theta))*np.exp(1j*self.k1*self.alpha(theta)*zz))**2/(self.eps1*self.eps3*abs(self.alpha(theta))**2)
 
     def e_mu_z_sq(self, zz, theta):
         """
         Eq 37b
         """
-        return self.k3**4*np.cos(theta)**2*np.sin(theta)**2*abs(self.trans_fac_p((N3/N1)*np.sin(theta))*np.exp(1j*self.k1*self.alpha(theta)*zz))**2/(self.eps1**2*abs(self.alpha(theta))**2)
+        return self.k3**4*np.cos(theta)**2*np.sin(theta)**2*abs(self.trans_fac_p((self.n3/self.n1)*np.sin(theta))*np.exp(1j*self.k1*self.alpha(theta)*zz))**2/(self.eps1**2*abs(self.alpha(theta))**2)
 
     def s_hat_perp(self, theta, zz):
         """

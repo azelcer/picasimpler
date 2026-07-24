@@ -24,12 +24,11 @@ from picasimpler.config.config_var import (
     LAMDBA_EXC_DEF,
     LAMBDA_EM_DEF,
     LAMBDA_MIN,
-    NA_IDX_DEF,
+    NA_DEF,
     NI_DEF,
     NS_DEF,
     RES_DIR,
     Z_SIM_FIT_ARR,
-    CALIB_MODE,
     ANGLE_FIXED_DEF,
     ANGLE_FIXED_MIN,
     ANGLE_FIXED_MAX
@@ -65,7 +64,6 @@ class PresenterSignals(QObject):
     send_lambda_em_toanalysis = pyqtSignal(float)
     send_n_s_toanalysis = pyqtSignal(float)
     send_n_i_toanalysis = pyqtSignal(float)
-    send_coll_fl_tab_toanalysis = pyqtSignal(object)
     send_na_toanalysis = pyqtSignal(float)
     send_fix_angle_choice_toanalysis = pyqtSignal(bool)
     send_fix_angle_toanalysis = pyqtSignal(float)
@@ -98,10 +96,9 @@ class Presenter(QObject):
         self.lambda_em: float = LAMBDA_EM_DEF
         self.n_s: float = NS_DEF
         self.n_i: float = NI_DEF
+        self.na = NA_DEF
         self.res_dir: Path = RES_DIR
         self._view.ui.fix_angle_checkBox.setChecked(True)
-        self._view.ui.NA_combobox.setCurrentIndex(NA_IDX_DEF)
-        self._view.ui.NA_combobox.activated.emit(self._view.ui.NA_combobox.currentIndex())
         self._view.ui.sampletype_combobox.activated.emit(self._view.ui.sampletype_combobox.currentIndex())
         self._view.ui.orientation_combobox.activated.emit(self._view.ui.orientation_combobox.currentIndex())
         
@@ -282,7 +279,17 @@ class Presenter(QObject):
         self._n_i = max((value, self.n_s + 0.01))
         self.signals.send_n_i_toanalysis.emit(self._n_i)
         self._view.upd_n_i_onui(self._n_i)
-        
+
+    @property
+    def na(self):
+        return self._na
+    
+    @na.setter
+    def na(self, value: float):
+        self._na = value
+        self.signals.send_na_toanalysis.emit(self._na)
+        self._view.upd_na_onui(self._na)
+
     def show_ui(self):
         self._view.show()
         
@@ -456,6 +463,11 @@ class Presenter(QObject):
                 safe_float_to0(self._view.ui.n_i_lineedit.text())
             )
         )
+        self._view.ui.NA_lineedit.manual_editing_finished.connect(
+            lambda: self._view.signals.send_NA_fromui.emit(
+                safe_float_to0(self._view.ui.NA_lineedit.text())
+            )
+        )
         self._view.signals.send_tirf_angle_fromui.connect(self.upd_tirf_angle)
         self._view.signals.send_spat_tol_fromui.connect(self.upd_spat_tol)
         self._view.signals.send_preclust_gamma_fromui.connect(self.upd_preclust_gamma)
@@ -472,7 +484,7 @@ class Presenter(QObject):
         self._view.signals.send_lambda_em_fromui.connect(self.upd_lambda_em)
         self._view.signals.send_n_s_fromui.connect(self.upd_n_s)
         self._view.signals.send_n_i_fromui.connect(self.upd_n_i)
-        self._view.ui.NA_combobox.activated.connect(self.upd_NA)
+        self._view.signals.send_NA_fromui.connect(self.upd_NA)
         self._view.ui.sampletype_combobox.activated.connect(self.upd_sampletype)
         self._view.ui.orientation_combobox.activated.connect(self.upd_orientation)
         
@@ -503,7 +515,6 @@ class Presenter(QObject):
         self.signals.send_lambda_em_toanalysis.connect(self._analysis_worker.upd_lambda_em)
         self.signals.send_n_i_toanalysis.connect(self._analysis_worker.upd_n_i)
         self.signals.send_n_s_toanalysis.connect(self._analysis_worker.upd_n_s)
-        self.signals.send_coll_fl_tab_toanalysis.connect(self._analysis_worker.upd_coll_fl_tab)
         self.signals.send_na_toanalysis.connect(self._analysis_worker.upd_na)
         self.signals.send_fix_angle_choice_toanalysis.connect(self._analysis_worker.upd_fix_angle_choice)
         self.signals.send_fix_angle_toanalysis.connect(self._analysis_worker.upd_fix_angle)
@@ -805,27 +816,9 @@ class Presenter(QObject):
     def upd_n_i(self, value):
         self.n_i = value
         
-    @pyqtSlot()
-    def upd_NA(self):
-        """
-        This function reads the correct file, depending on the NA and emission wavelength chosen on UI,
-        containing the values of the collection efficiency with respect to z
-        """
-        match self._view.ui.NA_combobox.currentText():
-            case '1.40':
-                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA140.txt")
-                na = 1.4
-            case '1.42':
-                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA142.txt")
-                na = 1.42
-            case '1.45':
-                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA145.txt")
-                na = 1.45
-            case '1.49':
-                coll_fl_tab = np.loadtxt(r"src\picasimpler\resources\DF_NA149.txt")
-                na = 1.49
-        self.signals.send_coll_fl_tab_toanalysis.emit(coll_fl_tab)
-        self.signals.send_na_toanalysis.emit(na)
+    @pyqtSlot(float)
+    def upd_NA(self, value):
+        self.na = value
         
     @pyqtSlot()
     def upd_sampletype(self):
@@ -866,8 +859,6 @@ class Presenter(QObject):
                 self._print_to_ui(MessageType.SIMPLE, f"site #{clust_idx + 1} [x-y-z]: {self._analysis_worker.fit.spat_sigma_avg[clust_idx, 0]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[clust_idx, 1]:.2g}-{self._analysis_worker.fit.spat_sigma_avg[clust_idx, 2]:.2g} nm")
         self.save_calib_res(filename_base)
         self.save_calib_plot(filename_base)
-        if CALIB_MODE=='exp_appr':
-            self.save_tirf_angle_plot(filename_base + "_TIRF_angle_plot.png")
 
     def save_calib_res(self, calib_res_filename):
         """
@@ -876,6 +867,8 @@ class Presenter(QObject):
         calib_res_dict = {
             "alpha_F": self._analysis_worker.fit.alpha_F,
             "alpha_F_err": self._analysis_worker.fit.alpha_F_err,
+            "alpha_exc": self._analysis_worker.fit.alpha_exc,
+            "alpha_exc_err": self._analysis_worker.fit.alpha_exc_err,
             "d_F": self._analysis_worker.fit.d_F,
             "d_F_err": self._analysis_worker.fit.d_F_err,
             "d_exc": self._analysis_worker.fit.d_exc,

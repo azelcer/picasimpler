@@ -7,13 +7,13 @@ LIGHT_SPEED = 1
 
 LAMBDA0 = 520
 
-N1 = np.sqrt(1.77)
-N3 = np.sqrt(2.13)
-NUM_AP = 1.4
+N1 = 1.333
+N3 = 1.518
+NUM_AP = 1.45
 
 Z_START = 0
 Z_STEP = 5
-Z_END = Z_STEP + 300
+Z_END = Z_STEP + 250
 
 class SimulQ():
     def __init__(

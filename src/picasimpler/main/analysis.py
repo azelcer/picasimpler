@@ -392,6 +392,42 @@ class Clusterization:
             end - start, n_orig_discarded, tot_orig_bf_clust, 100 * n_orig_discarded / tot_orig_bf_clust  
         ))
 
+class SpatialFitSignals(QObject):
+    tell_analysis_elem_done = pyqtSignal(int)
+    send_msg_toprint = pyqtSignal(object, str)
+
+class SpatialFit(QObject):
+    def __init__(self, signals):
+        super().__init__()
+        self.signals = signals
+        self.params = Params()
+        self.alpha_max = ALPHA_MAX
+        self.alpha_fixed = ALPHA_FIXED
+        
+    def upd_data_forfit(self, clust_means_forfit, clust_locs, clust_labels, tilt_angles, z_real):
+        """
+        This function takes external inputs for the variables needed for the fit and the resolution analysis (3D positions of the fitted clusters of localizations,
+        the raw localizations and their clusterization labels, tilt angles and real z) and saves them as attributes for later use
+        """
+        self.clust_means = clust_means_forfit
+        self.clust_locs = clust_locs
+        self.clust_labels = clust_labels
+        
+    def _calc_coll_fl(self):
+        """
+        This function computes the collection efficiency of the objective depending on the emission wavelength and z.
+        It simulates the collected fluorescence for the actual value of NA, ni and ns, and lambda of emission.
+        It follows the theory from the Axelrod paper from 1987.
+        """
+        self.simul_q = SimulQ(
+            self.params.lambda_em,
+            self.params.n_s,
+            self.params.n_i,
+            self.params.na
+        )
+        self.coll_fl_interp = self.simul_q.calc_q()
+        self.params.coll_fl_interp_grid = self.coll_fl_interp(Z_SIM_FIT_ARR)
+        
     def calc_tilt_angles(self):
         """
         This function computes tilt angles for all the selected origamis based on xy cluster positions and expected z positions of the sites
@@ -454,43 +490,6 @@ class Clusterization:
         """
         return sites_distances * np.sin(theta)[:, np.newaxis] + Z_BASELINE_NM
 
-class SpatialFitSignals(QObject):
-    tell_analysis_elem_done = pyqtSignal(int)
-    send_msg_toprint = pyqtSignal(object, str)
-
-class SpatialFit(QObject):
-    def __init__(self, signals):
-        super().__init__()
-        self.signals = signals
-        self.params = Params()
-        self.alpha_max = ALPHA_MAX
-        self.alpha_fixed = ALPHA_FIXED
-        
-    def upd_data_forfit(self, clust_means_forfit, clust_locs, clust_labels, tilt_angles, z_real):
-        """
-        This function takes external inputs for the variables needed for the fit and the resolution analysis (3D positions of the fitted clusters of localizations,
-        the raw localizations and their clusterization labels, tilt angles and real z) and saves them as attributes for later use
-        """
-        self.clust_means = clust_means_forfit
-        self.clust_locs = clust_locs
-        self.clust_labels = clust_labels
-        self.tilt_angles = tilt_angles
-        self.z_real = z_real
-        
-    def _calc_coll_fl(self):
-        """
-        This function computes the collection efficiency of the objective depending on the emission wavelength and z.
-        It simulates the collected fluorescence for the actual value of NA, ni and ns, and lambda of emission.
-        It follows the theory from the Axelrod paper from 1987.
-        """
-        self.simul_q = SimulQ(
-            self.params.lambda_em,
-            self.params.n_s,
-            self.params.n_i,
-            self.params.na
-        )
-        self.coll_fl_interp = self.simul_q.calc_q()
-        self.params.coll_fl_interp_grid = self.coll_fl_interp(Z_SIM_FIT_ARR)
         
     def fit_no_appr_fix_angle_each_orig(
         self
@@ -991,8 +990,6 @@ class AnalysisWorker(QObject):
         self.clust.pre_clust_denoise(self.simpler.locs)
         self.signals.tell_analysis_step_start.emit(AnalysisStatus.SITE_CLUST, self.clust.tot_orig_kept)
         self.clust.do_clust_xyn()
-        self.clust.calc_tilt_angles()
-        self.clust.calc_z_real()
         if self.simpler.locs:
             self.signals.tell_clust_done.emit(True)
         else:
@@ -1109,12 +1106,12 @@ class AnalysisWorker(QObject):
             self.signals.send_msg_toprint.emit(MessageType.ERROR, "Result file does not have expected structure or content")
 
     def perform_calib_steps(self, should_do_res_analysis, clust_forcalib, clust_locs, clust_labels):
-        self.clust.calc_tilt_angles()
-        self.clust.calc_z_real()
         if should_do_res_analysis:
             self.fit.upd_data_forfit(clust_forcalib, clust_locs, clust_labels, self.clust.tilt_angles, self.clust.z_real)
         else:
             self.fit.upd_data_forfit(clust_forcalib, None, None, self.clust.tilt_angles, self.clust.z_real)
+        self.fit.calc_tilt_angles()
+        self.fit.calc_z_real()
         if self.params.fix_angle_choice and self.params.tirf_angle is not None:
             self.fit.fit_no_appr_fix_angle_each_orig()
             self.fit.backcalc_glob_param()
